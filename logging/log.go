@@ -1,3 +1,21 @@
+/*
+ * Copyright (c) 2022 AlertAvert.com.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Author: Marco Massenzio (marco@alertavert.com)
+ */
+
 package logging
 
 import (
@@ -31,28 +49,28 @@ func (l *Log) SetLevel(level LogLevel) {
 
 func (l *Log) Trace(format string, v ...interface{}) {
 	if l.level <= TRACE {
-		l.SetPrefix("[TRACE] ")
+		format = "[TRACE] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func (l *Log) Debug(format string, v ...interface{}) {
 	if l.level <= DEBUG {
-		l.SetPrefix("[DEBUG] ")
+		format = "[DEBUG] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func (l *Log) Info(format string, v ...interface{}) {
 	if l.level <= INFO {
-		l.SetPrefix("[INFO] ")
+		format = "[INFO] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func (l *Log) Warn(format string, v ...interface{}) {
 	if l.level <= WARN {
-		l.SetPrefix("[WARN] ")
+		format = "[WARN] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 
 	}
@@ -60,14 +78,13 @@ func (l *Log) Warn(format string, v ...interface{}) {
 
 func (l *Log) Error(format string, v ...interface{}) {
 	if l.level <= ERROR {
-		l.SetPrefix("[ERROR] ")
+		format = "[ERROR] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func (l *Log) Fatal(err error) {
-	l.SetPrefix("[FATAL] ")
-	l.Output(2, fmt.Sprintf(err.Error()))
+	l.Output(2, fmt.Sprintf("[FATAL] %s", err.Error()))
 	os.Exit(1)
 }
 
