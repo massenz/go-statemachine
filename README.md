@@ -18,6 +18,15 @@ The code is released under the Apache 2.0 License, see `LICENSE` for details.
 
 `TODO`
 
+# Design
+
+The overall architecture is shown below:
+
+![Architecture](docs/images/statemachine.png)
+
+*System Architecture*
+
+
 # Build & Test
 
 ## Building Protocol Buffers definitions
@@ -37,5 +46,18 @@ See [installation instructions](https://developers.google.com/protocol-buffers/d
 The compiled PBs (`*.pb.go`) will be in the `api/` folder and can be imported with:
 
 ```shell
-import 
+import 	"github.com/massenz/go-statemachine/api"
+
+var config = api.Configuration{
+    StartingState: "one",
+    States:        []string{"S1", "S2", "S3"},
+    Transitions: []*api.Transition{
+        {From: "S1", To: "S2", Event: "go"},
+        {From: "S2", To: "S3", Event: "land"},
+    },
+}
+
+fsm := &api.FiniteStateMachine{}
+fsm.Config = &config
+fsm.State = config.StartingState
 ```

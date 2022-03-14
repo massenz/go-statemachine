@@ -4,6 +4,8 @@
 syntax = "proto3";
 package statemachine.v1;
 
+// This is the Go import package; there is no correlation with the proto `import` above.
+// See: https://developers.google.com/protocol-buffers/docs/reference/go-generated#package
 option go_package = "github.com/massenz/statemachine/api";
 
 message Transition {
@@ -13,9 +15,9 @@ message Transition {
 }
 
 message Configuration {
-  repeated string States = 1;
+  repeated string states = 1;
   repeated Transition transitions = 2;
-  string startingState = 3;
+  string starting_state = 3;
 }
 
 message FiniteStateMachine {
