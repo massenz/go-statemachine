@@ -1,0 +1,25 @@
+// Copyright (c) 2022 AlertAvert.com.  All rights reserved.
+// Created by M. Massenzio, 2022-03-13
+
+syntax = "proto3";
+package statemachine.v1;
+
+option go_package = "github.com/massenz/statemachine/api";
+
+message Transition {
+  string from = 1;
+  string to = 2;
+  string event = 3;
+}
+
+message Configuration {
+  repeated string States = 1;
+  repeated Transition transitions = 2;
+  string startingState = 3;
+}
+
+message FiniteStateMachine {
+  Configuration config = 1;
+  string state = 2;
+  repeated string history = 3;
+}
