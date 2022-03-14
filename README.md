@@ -17,3 +17,25 @@ The code is released under the Apache 2.0 License, see `LICENSE` for details.
 # Usage
 
 `TODO`
+
+# Build & Test
+
+## Building Protocol Buffers definitions
+
+All the base classes are defined in the `protos` folder and are used to (de)serialize state machines for storage in the database.
+
+See [installation instructions](https://developers.google.com/protocol-buffers/docs/gotutorial) for compiling protobufs for Go; then run:
+
+```shell
+└─( mkdir "api"
+└─( protoc --proto_path=protos/ \
+           --go_out=api/ \
+           --go_opt=paths=source_relative \
+           protos/*.proto
+```
+
+The compiled PBs (`*.pb.go`) will be in the `api/` folder and can be imported with:
+
+```shell
+import 
+```

@@ -19,6 +19,7 @@
 package statemachine_test
 
 import (
+	"github.com/massenz/go-statemachine/api"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -59,6 +60,30 @@ var _ = Describe("Finite State Machines", func() {
 		It("can be reset", func() {
 			fsm.Reset()
 			Expect(fsm.State()).To(Equal(sm.State("one")))
+		})
+	})
+})
+
+var _ = Describe("Protocol buffers", func() {
+
+	var config = api.Configuration{
+		StartingState: "one",
+		States:        []string{"one", "two", "three"},
+		Transitions: []*api.Transition{
+			{From: "one", To: "two", Event: "go"},
+			{From: "two", To: "three", Event: "land"},
+		},
+	}
+
+	Context("if well defined", func() {
+		fsm := &api.FiniteStateMachine{}
+		fsm.Config = &config
+		fsm.State = config.StartingState
+
+		It("should be created without errors", func() {
+			Expect(fsm).ShouldNot(BeNil())
+			Expect(fsm.State).Should(Equal("one"))
+			Expect(fsm.History).Should(BeEmpty())
 		})
 	})
 })
