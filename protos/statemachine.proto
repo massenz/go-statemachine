@@ -4,6 +4,8 @@
 syntax = "proto3";
 package statemachine.v1;
 
+import "google/protobuf/timestamp.proto";
+
 // This is the Go import package; there is no correlation with the proto `import` above.
 // See: https://developers.google.com/protocol-buffers/docs/reference/go-generated#package
 option go_package = "github.com/massenz/statemachine/api";
@@ -14,14 +16,50 @@ message Transition {
   string event = 3;
 }
 
+message Event {
+  // A unique event ID, either user- or system-assigned; typically a UUID.
+  string event_id = 1;
+
+  // The time the event was received by the system; if not already set, it
+  // will be system-assigned as the current time.
+  google.protobuf.Timestamp timestamp = 2;
+
+  // The FSM transition that this event refers to (when stored as a "historical" event);
+  // when received by the system, it may simply represent the `event` that triggered the
+  // Transition.
+  Transition transition = 3;
+}
+
 message Configuration {
+  // A Configuration is uniquely identified by its `Name` and `Version`
+  // Configurations are immutable and should never be modified without
+  // also changing the version.
+  string name = 4;
+
+  // A version must be unique for a `Configuration`; if missing, a default `v1` is assigned
+  string version = 5;
+
+  // A list of all the state the FSM may transition through.
+  // A 'final' state is identified by the one state (if any) that
+  // does not have any transition with the state as the `from`.
   repeated string states = 1;
+
   repeated Transition transitions = 2;
+
+  // The initial `state` for the FSM, and the one it returns to if
+  // it is `restart()`ed.
   string starting_state = 3;
 }
 
 message FiniteStateMachine {
-  Configuration config = 1;
+
+  // A config_id is the unique identifier for the `Configuration`, composed of the
+  // name and version, separated by a colon (`:`), e.g., "my_config/stable:v1.0"
+  string config_id = 1;
+
+  // The current state for this FSM
   string state = 2;
+
+  // A sequence of (timestamped) events, listed by their `event_id`s
   repeated string history = 3;
 }

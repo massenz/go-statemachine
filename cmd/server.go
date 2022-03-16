@@ -24,10 +24,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	log "github.com/massenz/go-statemachine/logging"
-	"github.com/massenz/go-statemachine/statemachine"
-	"io/ioutil"
 )
 
 const (
@@ -42,9 +39,6 @@ func main() {
 	var localOnly = flag.Bool("local", false,
 		"If set, it only listens to incoming requests from the local host")
 	var port = flag.Int("port", defaultPort, "Server port")
-	var yamlSpec = flag.String("config", "",
-		"State Machine configuration in YAML format")
-
 	flag.Parse()
 
 	logger := log.NewLog()
@@ -62,20 +56,6 @@ func main() {
 	} else {
 		logger.Warn("Listening on all interfaces: %s:%d", host, *port)
 	}
-	if *yamlSpec == "" {
-		logger.Fatal(fmt.Errorf("missing YAML configuration file name"))
-	}
-	logger.Info("Configuring State Machine: %s", *yamlSpec)
 
-	spec, err := ioutil.ReadFile(*yamlSpec)
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	fsm, err := statemachine.Decode(spec)
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	logger.Info("Machine configured, in state: %s", fsm.State())
+	// TODO: configure & start server
 }
