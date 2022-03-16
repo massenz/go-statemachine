@@ -12,7 +12,9 @@
 *.out
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+vendor/
 .idea/
-api/
 bin/
+
+# Protobuf Generated code
+*.pb.go
