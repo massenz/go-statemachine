@@ -24,7 +24,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	log "github.com/massenz/go-statemachine/logging"
+	"github.com/massenz/go-statemachine/server"
 )
 
 const (
@@ -45,17 +47,23 @@ func main() {
 	if !*debug {
 		logger.SetLevel(log.INFO)
 	} else {
-		logger.SetLevel(log.DEBUG)
+		logger.SetLevel(log.TRACE)
 		logger.Debug("Emitting DEBUG logs")
 	}
 
 	var host = "0.0.0.0"
 	if *localOnly {
-		logger.Info("Listening on localhost interface only")
+		logger.Info("Listening on local interface only")
 		host = "localhost"
 	} else {
-		logger.Warn("Listening on all interfaces: %s:%d", host, *port)
+		logger.Warn("Listening on all interfaces")
 	}
+	addr := fmt.Sprintf("%s:%d", host, *port)
+	server.EnableTracing(*debug)
 
-	// TODO: configure & start server
+	logger.Info("Server started at http://%s", addr)
+	srv := server.NewHTTPServer(addr, logger)
+
+	// TODO: configure & start server using TLS, if configured to do so.
+	logger.Fatal(srv.ListenAndServe())
 }

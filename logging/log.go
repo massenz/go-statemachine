@@ -40,44 +40,52 @@ type LogLevel = int8
 
 type Log struct {
 	*log.Logger
-	level LogLevel
+	level   LogLevel
+	Enabled bool
 }
 
 func (l *Log) SetLevel(level LogLevel) {
 	l.level = level
 }
 
+func (l *Log) Enable(enabled bool) {
+	l.Enabled = enabled
+}
+
+func (l *Log) shouldDebug(level LogLevel) bool {
+	return l.Enabled && l.level <= level
+}
+
 func (l *Log) Trace(format string, v ...interface{}) {
-	if l.level <= TRACE {
+	if l.shouldDebug(TRACE) {
 		format = "[TRACE] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func (l *Log) Debug(format string, v ...interface{}) {
-	if l.level <= DEBUG {
+	if l.shouldDebug(DEBUG) {
 		format = "[DEBUG] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func (l *Log) Info(format string, v ...interface{}) {
-	if l.level <= INFO {
+	if l.shouldDebug(INFO) {
 		format = "[INFO] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func (l *Log) Warn(format string, v ...interface{}) {
-	if l.level <= WARN {
+	if l.shouldDebug(WARN) {
 		format = "[WARN] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
-
 	}
 }
 
 func (l *Log) Error(format string, v ...interface{}) {
-	if l.level <= ERROR {
+	if l.shouldDebug(ERROR) {
 		format = "[ERROR] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
@@ -92,6 +100,7 @@ func NewLog() *Log {
 	return &Log{
 		log.New(os.Stderr, "", DefaultFlags),
 		DefaultLevel,
+		true,
 	}
 }
 
@@ -99,5 +108,6 @@ func NewLogToWriter(writer io.Writer) *Log {
 	return &Log{
 		log.New(writer, "", DefaultFlags),
 		DefaultLevel,
+		true,
 	}
 }
