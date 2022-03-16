@@ -1,0 +1,40 @@
+{
+  "name": "test/orders",
+  "version": "v1",
+  "states": [
+    "start",
+    "pending",
+    "shipping",
+    "delivered",
+    "complete",
+    "closed"
+  ],
+  "transitions": [
+    {
+      "from": "start",
+      "to": "pending",
+      "event": "accepted"
+    },
+    {
+      "from": "pending",
+      "to": "shipping",
+      "event": "shipped"
+    },
+    {
+      "from": "shipping",
+      "to": "delivered",
+      "event": "deliver"
+    },
+    {
+      "from": "delivered",
+      "to": "completed",
+      "event": "sign"
+    },
+    {
+      "from": "complete",
+      "to": "closed",
+      "event": "close"
+    }
+  ],
+  "starting_state": "start"
+}

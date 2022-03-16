@@ -22,6 +22,7 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"io/ioutil"
 
 	. "github.com/massenz/go-statemachine/api"
 )
@@ -90,6 +91,8 @@ var _ = Describe("Protocol buffers", func() {
 var _ = Describe("Finite State Machines", func() {
 
 	Context("must have a named configuration", func() {
+		defer GinkgoRecover()
+
 		var spaceship = Configuration{
 			StartingState: "earth",
 			States:        []string{"earth", "orbit", "mars"},
@@ -115,6 +118,8 @@ var _ = Describe("Finite State Machines", func() {
 	})
 
 	Context("can transition across states", func() {
+		defer GinkgoRecover()
+
 		var spaceship = Configuration{
 			Name:          "mars_rover",
 			Version:       "v2.0",
@@ -141,5 +146,26 @@ var _ = Describe("Finite State Machines", func() {
 		It("should fail for an unsupported transition", func() {
 			Expect(lander.SendEvent("navigate")).Should(HaveOccurred())
 		})
+	})
+
+	Context("can be configured via complex JSON", func() {
+		defer GinkgoRecover()
+
+		configJson, err := ioutil.ReadFile("../data/orders.json")
+		Expect(err).ToNot(HaveOccurred())
+		var orders Configuration
+		Expect(jsonpb.UnmarshalString(string(configJson), &orders)).ToNot(HaveOccurred())
+		Expect(orders.Name).To(Equal("test/orders"))
+		Expect(orders.Version).To(Equal("v1"))
+
+		fsm, err := NewStateMachine(&orders)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(fsm.FSM).ToNot(BeNil())
+		Expect(fsm.FSM.State).To(Equal("start"))
+
+		fsm.SendEvent("accepted")
+		fsm.SendEvent("shipped")
+		Expect(fsm.FSM.State).To(Equal("shipping"))
+		Expect(len(fsm.FSM.History)).To(Equal(2))
 	})
 })
