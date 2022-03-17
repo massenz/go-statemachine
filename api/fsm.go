@@ -27,6 +27,8 @@ import (
 )
 
 var MalformedConfigurationError = fmt.Errorf("this configuration cannot be parsed")
+var MissingNameConfigurationError = fmt.Errorf("configuration must always specify a name (" +
+	"and optionally a version)")
 var UnexpectedTransitionError = fmt.Errorf("unexpected event transition")
 var UnexpectedEventError = fmt.Errorf("the event was malformed")
 var NotImplementedError = fmt.Errorf("not implemented")
@@ -100,4 +102,8 @@ func NewEvent(evt string) *Event {
 
 func (x *ConfiguredStateMachine) Reset() {
 	x.FSM.State = x.Config.StartingState
+}
+
+func (x *Configuration) GetVersionId() string {
+	return x.Name + ":" + x.Version
 }

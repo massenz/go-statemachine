@@ -20,11 +20,21 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
+	"github.com/golang/protobuf/proto"
+	"github.com/massenz/go-statemachine/api"
 	log "github.com/massenz/go-statemachine/logging"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
+)
+
+const (
+	Api                    = "/api/v1"
+	HealthEndpoint         = "/health"
+	ConfigurationsEndpoint = Api + "/configurations"
+	StatemachinesEndpoint  = Api + "/statemachines"
 )
 
 func (s *httpServer) trace(endpoint string) func() {
@@ -61,7 +71,11 @@ func NewHTTPServer(addr string, logger *log.Log) *http.Server {
 		httpsrv = newHTTPServer(logger)
 	}
 	r := mux.NewRouter()
-	r.HandleFunc("/health", httpsrv.healthHandler).Methods("GET")
+	r.HandleFunc(HealthEndpoint, httpsrv.healthHandler).Methods("GET")
+	r.HandleFunc(ConfigurationsEndpoint, httpsrv.createConfigurationHandler).
+		Methods("POST")
+	r.HandleFunc(ConfigurationsEndpoint+"/{cfg_id}", httpsrv.getConfigurationHandler).
+		Methods("GET")
 	return &http.Server{
 		Addr:    addr,
 		Handler: r,
@@ -79,4 +93,63 @@ func (s *httpServer) healthHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+// FIXME: This is temporary until we implement a real Storage module.
+// We store the serialized PB (instead of *Configuration, e.g.) so that the
+// behavior mirrors what will be eventually implemented in Redis.
+var configurationsStore = make(map[string][]byte)
+var machinesStore = make(map[string][]byte)
+
+func (s *httpServer) createConfigurationHandler(w http.ResponseWriter, r *http.Request) {
+	defer s.trace(r.RequestURI)()
+	defaultContent(w)
+
+	var config api.Configuration
+	err := json.NewDecoder(r.Body).Decode(&config)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if config.Name == "" {
+		http.Error(w, api.MissingNameConfigurationError.Error(), http.StatusBadRequest)
+		return
+	}
+	if config.Version == "" {
+		config.Version = "v1"
+	}
+	// TODO: add a validation function to check for well-formed Configuration
+	out, err := proto.Marshal(&config)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	configurationsStore[config.GetVersionId()] = out
+
+	w.Header().Add("Location", ConfigurationsEndpoint+"/"+config.GetVersionId())
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(config)
+	return
+}
+
+func (s *httpServer) getConfigurationHandler(w http.ResponseWriter, r *http.Request) {
+	defer s.trace(r.RequestURI)()
+	defaultContent(w)
+
+	vars := mux.Vars(r)
+	cfg_id := vars["cfg_id"]
+	data, ok := configurationsStore[cfg_id]
+	if !ok {
+		http.Error(w, fmt.Sprintf("Configuration %s does not exist on this server", cfg_id),
+			http.StatusNotFound)
+		return
+	}
+	var config api.Configuration
+	err := proto.Unmarshal(data, &config)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(config)
+	return
 }
