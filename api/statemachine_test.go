@@ -155,7 +155,7 @@ var _ = Describe("Finite State Machines", func() {
 		Expect(err).ToNot(HaveOccurred())
 		var orders Configuration
 		Expect(jsonpb.UnmarshalString(string(configJson), &orders)).ToNot(HaveOccurred())
-		Expect(orders.Name).To(Equal("test/orders"))
+		Expect(orders.Name).To(Equal("test.orders"))
 		Expect(orders.Version).To(Equal("v1"))
 
 		fsm, err := NewStateMachine(&orders)

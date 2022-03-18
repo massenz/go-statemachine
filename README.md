@@ -29,6 +29,18 @@ The overall architecture is shown below:
 
 # Build & Test
 
+This project comes with a (reluctant) `Makefile` so running `make build` will compile the Protobuf, build and test the Go code, and then build an executable binary in the `bin/` folder.
+
+To run the server use:
+
+        make run
+
+which will build the server (if necessary) and then run it on port 8089 with the `--debug` option enabled.
+
+**TODO**
+>We still need to implement the Redis storage and the Kafka listener, once this is done, we will add a `docker-compose` configuration to run those in containers, to which the server can connect.
+
+
 ## Building Protocol Buffers definitions
 
 All the base classes are defined in the `protos` folder and are used to (de)serialize state machines for storage in the database.

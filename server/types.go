@@ -18,8 +18,6 @@
 
 package server
 
-import log "github.com/massenz/go-statemachine/logging"
-
 const (
 	Authorization   = "Authorization"
 	Bearer          = "Bearer"
@@ -29,11 +27,6 @@ const (
 	Html            = "text/html"
 )
 
-type httpServer struct {
-	log         *log.Log
-	shouldTrace bool
-}
-
-type HealthResponse struct {
+type MessageResponse struct {
 	Msg string `json:"message"`
 }

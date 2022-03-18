@@ -43,13 +43,8 @@ func main() {
 	var port = flag.Int("port", defaultPort, "Server port")
 	flag.Parse()
 
-	logger := log.NewLog()
-	if !*debug {
-		logger.SetLevel(log.INFO)
-	} else {
-		logger.SetLevel(log.TRACE)
-		logger.Debug("Emitting DEBUG logs")
-	}
+	logger := log.NewLog("statemachine")
+	logger.Level = log.INFO
 
 	var host = "0.0.0.0"
 	if *localOnly {
@@ -59,10 +54,14 @@ func main() {
 		logger.Warn("Listening on all interfaces")
 	}
 	addr := fmt.Sprintf("%s:%d", host, *port)
-	server.EnableTracing(*debug)
+	if *debug {
+		logger.Level = log.DEBUG
+		logger.Debug("Emitting DEBUG logs")
+		server.EnableTracing()
+	}
 
 	logger.Info("Server started at http://%s", addr)
-	srv := server.NewHTTPServer(addr, logger)
+	srv := server.NewHTTPServer(addr, logger.Level)
 
 	// TODO: configure & start server using TLS, if configured to do so.
 	logger.Fatal(srv.ListenAndServe())

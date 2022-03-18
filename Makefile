@@ -9,6 +9,10 @@ compile:
 
 build: compile test
 	go build -o bin/sm-server cmd/server.go
+	chmod +x bin/sm-server
 
 test: compile
 	ginkgo -r
+
+run: build
+	bin/sm-server --port 8089 --local --debug

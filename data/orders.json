@@ -1,5 +1,5 @@
 {
-  "name": "test/orders",
+  "name": "test.orders",
   "version": "v1",
   "states": [
     "start",

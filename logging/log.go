@@ -19,6 +19,7 @@
 package logging
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
@@ -40,12 +41,9 @@ type LogLevel = int8
 
 type Log struct {
 	*log.Logger
-	level   LogLevel
+	Level   LogLevel
+	Name    string
 	Enabled bool
-}
-
-func (l *Log) SetLevel(level LogLevel) {
-	l.level = level
 }
 
 func (l *Log) Enable(enabled bool) {
@@ -53,40 +51,40 @@ func (l *Log) Enable(enabled bool) {
 }
 
 func (l *Log) shouldDebug(level LogLevel) bool {
-	return l.Enabled && l.level <= level
+	return l.Enabled && l.Level <= level
 }
 
 func (l *Log) Trace(format string, v ...interface{}) {
 	if l.shouldDebug(TRACE) {
-		format = "[TRACE] " + format
+		format = l.Name + "[TRACE] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func (l *Log) Debug(format string, v ...interface{}) {
 	if l.shouldDebug(DEBUG) {
-		format = "[DEBUG] " + format
+		format = l.Name + "[DEBUG] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func (l *Log) Info(format string, v ...interface{}) {
 	if l.shouldDebug(INFO) {
-		format = "[INFO] " + format
+		format = l.Name + "[INFO] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func (l *Log) Warn(format string, v ...interface{}) {
 	if l.shouldDebug(WARN) {
-		format = "[WARN] " + format
+		format = l.Name + "[WARN] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
 }
 
 func (l *Log) Error(format string, v ...interface{}) {
 	if l.shouldDebug(ERROR) {
-		format = "[ERROR] " + format
+		format = l.Name + "[ERROR] " + format
 		l.Output(2, fmt.Sprintf(format, v...))
 	}
 }
@@ -96,18 +94,28 @@ func (l *Log) Fatal(err error) {
 	os.Exit(1)
 }
 
-func NewLog() *Log {
+func NewLog(name string) *Log {
 	return &Log{
 		log.New(os.Stderr, "", DefaultFlags),
 		DefaultLevel,
+		name,
 		true,
 	}
 }
 
-func NewLogToWriter(writer io.Writer) *Log {
+func NewLogToWriter(writer io.Writer, name string) *Log {
 	return &Log{
 		log.New(writer, "", DefaultFlags),
 		DefaultLevel,
+		name,
 		true,
 	}
 }
+
+// RootLog is the default log
+var RootLog = NewLog("")
+
+var none, _ = os.Open(os.DevNull)
+
+// NullLog A log to nowhere
+var NullLog = NewLogToWriter(bufio.NewWriter(none), "nil")

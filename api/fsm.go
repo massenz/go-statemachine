@@ -33,7 +33,7 @@ var UnexpectedTransitionError = fmt.Errorf("unexpected event transition")
 var UnexpectedEventError = fmt.Errorf("the event was malformed")
 var NotImplementedError = fmt.Errorf("not implemented")
 
-var logger = log.NewLog()
+var logger = log.NewLog("fsm")
 
 // eventsCache is a local cache to store events while this server is running
 // TODO: implement a side-load for misses that are fetched from a backing store.
