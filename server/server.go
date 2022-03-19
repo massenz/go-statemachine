@@ -35,6 +35,11 @@ const (
 	StatemachinesEndpoint  = Api + "/statemachines"
 )
 
+var (
+	shouldTrace bool
+	logger      = log.NewLog("server")
+)
+
 func trace(endpoint string) func() {
 	if !shouldTrace {
 		return func() {}
@@ -47,11 +52,6 @@ func trace(endpoint string) func() {
 func defaultContent(w http.ResponseWriter) {
 	w.Header().Add(ContentType, ApplicationJson)
 }
-
-var (
-	shouldTrace bool
-	logger      = log.NewLog("server")
-)
 
 func EnableTracing() {
 	shouldTrace = true
@@ -74,6 +74,8 @@ func NewHTTPServer(addr string, logLevel log.LogLevel) *http.Server {
 // FIXME: This is temporary until we implement a real Storage module.
 // We store the serialized PB (instead of *Configuration, e.g.) so that the
 // behavior mirrors what will be eventually implemented in Redis.
+// FIXME: AND, even more obviously, these should be protected by Mutexes,
+// but that's largely irrelevant as they'll soon be gone (hopefully)
 var configurationsStore = make(map[string][]byte)
 var machinesStore = make(map[string][]byte)
 

@@ -33,10 +33,13 @@ var UnexpectedTransitionError = fmt.Errorf("unexpected event transition")
 var UnexpectedEventError = fmt.Errorf("the event was malformed")
 var NotImplementedError = fmt.Errorf("not implemented")
 
-var logger = log.NewLog("fsm")
+// Logger is made accessible so that its `Level` can be changed
+// or can be sent to a `NullLog` during testing.
+var Logger = log.NewLog("fsm")
 
 // eventsCache is a local cache to store events while this server is running
 // TODO: implement a side-load for misses that are fetched from a backing store.
+// FIXME: add a Mutex to protect this cache
 var eventsCache = make(map[string]*Event)
 
 func GetEvent(eventId string) *Event {
@@ -56,7 +59,7 @@ type ConfiguredStateMachine struct {
 
 func NewStateMachine(configuration *Configuration) (*ConfiguredStateMachine, error) {
 	if configuration.Name == "" {
-		logger.Error("Missing configuration name")
+		Logger.Error("Missing configuration name")
 		return nil, MalformedConfigurationError
 	}
 	if configuration.Version == "" {
