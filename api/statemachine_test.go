@@ -124,7 +124,7 @@ var _ = Describe("FSM Protocol Buffers", func() {
 				_, err := NewStateMachine(&spaceship)
 				Expect(err).Should(HaveOccurred())
 			})
-			It("if missing, will get a default version", func() {
+			It("will get a default version, if missing", func() {
 				spaceship.Name = "mars_orbiter"
 				s, err := NewStateMachine(&spaceship)
 				Expect(err).ShouldNot(HaveOccurred())
@@ -138,7 +138,7 @@ var _ = Describe("FSM Protocol Buffers", func() {
 				Expect(s).ToNot(BeNil())
 				Expect(s.Config).ToNot(BeNil())
 				Expect(s.Config.String()).To(Equal(spaceship.String()))
-				Expect(s.FSM.ConfigId).To(Equal("mars_orbiter:v3"))
+				Expect(s.FSM.ConfigId).To(Equal(spaceship.GetVersionId()))
 			})
 		})
 
@@ -170,6 +170,17 @@ var _ = Describe("FSM Protocol Buffers", func() {
 			It("should fail for an unsupported transition", func() {
 				lander, _ := NewStateMachine(&spaceship)
 				Expect(lander.SendEvent("navigate")).Should(HaveOccurred())
+			})
+			It("can be reset", func() {
+				lander, _ := NewStateMachine(&spaceship)
+				Expect(lander.SendEvent("launch")).ShouldNot(HaveOccurred())
+				Expect(lander.SendEvent("land")).ShouldNot(HaveOccurred())
+				Expect(lander.FSM.State).To(Equal("mars"))
+
+				// Never mind, Elon, let's go home...
+				lander.Reset()
+				Expect(lander.FSM.State).To(Equal("earth"))
+				Expect(lander.FSM.History).To(BeNil())
 			})
 		})
 

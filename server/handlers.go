@@ -52,14 +52,16 @@ func CreateConfigurationHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if config.Name == "" {
-		http.Error(w, api.MissingNameConfigurationError.Error(), http.StatusBadRequest)
-		return
-	}
 	if config.Version == "" {
 		config.Version = "v1"
 	}
-	// TODO: add a validation function to check for well-formed Configuration
+
+	err = config.CheckValid()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	out, err := proto.Marshal(&config)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

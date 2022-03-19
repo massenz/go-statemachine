@@ -20,7 +20,6 @@ package api
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	log "github.com/massenz/go-statemachine/logging"
 	tspb "google.golang.org/protobuf/types/known/timestamppb"
@@ -29,6 +28,12 @@ import (
 var MalformedConfigurationError = fmt.Errorf("this configuration cannot be parsed")
 var MissingNameConfigurationError = fmt.Errorf("configuration must always specify a name (" +
 	"and optionally a version)")
+var MissingStatesConfigurationError = fmt.Errorf(
+	"configuration must always specify at least one state")
+var MismatchStartingstateConfigurationError = fmt.Errorf(
+	"the StartingState must be one of the possible FSM states")
+var UnreachableStateConfigurationError = "state %s is not used in any of the transitions"
+
 var UnexpectedTransitionError = fmt.Errorf("unexpected event transition")
 var UnexpectedEventError = fmt.Errorf("the event was malformed")
 var NotImplementedError = fmt.Errorf("not implemented")
@@ -69,7 +74,7 @@ func NewStateMachine(configuration *Configuration) (*ConfiguredStateMachine, err
 		FSM: &FiniteStateMachine{
 			ConfigId: configuration.Name + ":" + configuration.Version,
 			State:    configuration.StartingState,
-			History:  make([]string, 0),
+			//History:  make([]string, 0),
 		},
 		Config: configuration,
 	}, nil
@@ -79,14 +84,11 @@ func NewStateMachine(configuration *Configuration) (*ConfiguredStateMachine, err
 // It also creates a new Event, and stores in the provided cache.
 func (x *ConfiguredStateMachine) SendEvent(evt string) error {
 	for _, t := range x.Config.Transitions {
-
 		if t.From == x.FSM.State && t.Event == evt {
-			event := &Event{
-				EventId:    uuid.New().String(),
-				Timestamp:  tspb.Now(),
-				Transition: proto.Clone(t).(*Transition),
-			}
+			event := NewEvent(evt)
+			event.Transition.From = x.FSM.State
 			x.FSM.State = t.To
+			event.Transition.To = x.FSM.State
 			x.FSM.History = append(x.FSM.History, event.EventId)
 			PutEvent(event)
 			return nil
@@ -105,8 +107,65 @@ func NewEvent(evt string) *Event {
 
 func (x *ConfiguredStateMachine) Reset() {
 	x.FSM.State = x.Config.StartingState
+	x.FSM.History = nil
 }
 
 func (x *Configuration) GetVersionId() string {
 	return x.Name + ":" + x.Version
+}
+
+// HasState will check whether a given state is either origin or destination for the Transition
+func (x *Transition) HasState(state string) bool {
+	return state == x.From || state == x.To
+}
+
+// HasState checks that `state` is one of the Configuration's `States`
+func (x *Configuration) HasState(state string) bool {
+	for _, s := range x.States {
+		if s == state {
+			return true
+		}
+	}
+	return false
+}
+
+// CheckValid checks that the Configuration is valid and that the current FSM's `state` is one of
+// the allowed states in the Configuration.
+//
+// We also check that the reported FSM's ConfigId, matches the Configuration's name, version.
+func (x *ConfiguredStateMachine) CheckValid() bool {
+	return x.Config.CheckValid() == nil && x.Config.HasState(x.FSM.State) &&
+		x.FSM.ConfigId == x.Config.GetVersionId()
+}
+
+// CheckValid will validate that there is at least one state,
+// and that the starting state is one of the possible states; further for any of the states it
+// will check that they appear in at least one transition.
+//
+// Finally, it will check that the name is valid,
+// and that the generated `ConfigId` is a valid URI segment.
+func (x *Configuration) CheckValid() error {
+	if x.Name == "" {
+		return MissingNameConfigurationError
+	}
+	if len(x.States) == 0 {
+		return MissingStatesConfigurationError
+	}
+	if x.StartingState == "" || !x.HasState(x.StartingState) {
+		return MismatchStartingstateConfigurationError
+	}
+	// TODO: we should actually build the full graph and check it's fully connected.
+	for _, s := range x.States {
+		found := false
+		for _, t := range x.Transitions {
+			if t.HasState(s) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf(UnreachableStateConfigurationError, s)
+		}
+	}
+	return nil
 }
