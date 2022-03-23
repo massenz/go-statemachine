@@ -1,0 +1,69 @@
+# Copyright CopilotIQ Inc. (c) 2022. All rights reserved.
+#
+# Docker Compose for Development of Patient API.
+
+version: '3.2'
+
+
+services:
+
+  redis:
+    container_name: "redis"
+    image: "redis:6.2-alpine"
+    hostname: redis
+    # TODO: add support for persistent data
+    #  command: "redis-server --save 60 1 --loglevel warning"
+    #  volumes:
+    #    - redis_data:/data
+
+    ports:
+      - "6379:6379"
+    networks:
+      - backend
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.1
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "32181:32181"
+    networks:
+      - backend
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 32181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.0.1
+    hostname: kafka0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    networks:
+      - backend
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:32181'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LISTENERS: DOCKER://0.0.0.0:29092,LOCAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: DOCKER://kafka0:29092,LOCAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: DOCKER:PLAINTEXT,LOCAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+
+
+### INFRASTRUCTURE
+
+volumes:
+  redis_data:
+
+# To connect to the servers in this stack, from a container run
+# via Docker, use `--network statemachine`.
+# The hosts listed above will then be reachable at the given names,
+# on whatever ports are exposed.
+networks:
+  backend:
+    ipam:
+      config:
+      - subnet: 172.1.1.0/24
