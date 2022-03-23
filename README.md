@@ -27,33 +27,30 @@ The overall architecture is shown below:
 *System Architecture*
 
 
-# Build & Test
+# Build & Run
+
+## Prerequisites
 
 This project comes with a (reluctant) `Makefile` so running `make build` will compile the Protobuf, build and test the Go code, and then build an executable binary in the `bin/` folder.
 
-To run the server use:
+Before building/running the server, you will need to install `protoc`, the `protoc-gen-go` plugin and `ginkgo`; please follow the instructions below before attempting to running any of the `make` commands.
 
-        make run
+**Ginkgo testing framework**<br/>
+Run this:
 
-which will build the server (if necessary) and then run it on port 8089 with the `--debug` option enabled.
+    go get github.com/onsi/ginkgo/v1/ginkgo &&
+        go get github.com/onsi/gomega/...
 
-**TODO**
+
+**Supporting services -- TODO**<br/>
 >We still need to implement the Redis storage and the Kafka listener, once this is done, we will add a `docker-compose` configuration to run those in containers, to which the server can connect.
 
 
-## Building Protocol Buffers definitions
-
+**Building Protocol Buffers definitions**<br/>
 All the base classes are defined in the `protos` folder and are used to (de)serialize state machines for storage in the database.
 
-See [installation instructions](https://developers.google.com/protocol-buffers/docs/gotutorial) for compiling protobufs for Go; then run:
+See [installation instructions](https://developers.google.com/protocol-buffers/docs/gotutorial#compiling-your-protocol-buffers) for compiling protobufs for Go; then run:
 
-```shell
-└─( mkdir "api"
-└─( protoc --proto_path=protos/ \
-           --go_out=api/ \
-           --go_opt=paths=source_relative \
-           protos/*.proto
-```
 
 The compiled PBs (`*.pb.go`) will be in the `api/` folder and can be imported with:
 
@@ -73,3 +70,10 @@ fsm := &api.FiniteStateMachine{}
 fsm.Config = &config
 fsm.State = config.StartingState
 ```
+## Build Test & Run
+
+To run the server use:
+
+        make run
+
+which will build the server (if necessary) and then run it on port 8089 with the `--debug` option enabled.

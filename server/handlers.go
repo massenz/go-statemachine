@@ -62,12 +62,11 @@ func CreateConfigurationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out, err := proto.Marshal(&config)
+	err = PutConfig(config.GetVersionId(), &config)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	configurationsStore[config.GetVersionId()] = out
 
 	w.Header().Add("Location", ConfigurationsEndpoint+"/"+config.GetVersionId())
 	w.WriteHeader(http.StatusCreated)
@@ -80,6 +79,13 @@ func GetConfigurationHandler(w http.ResponseWriter, r *http.Request) {
 	defaultContent(w)
 
 	vars := mux.Vars(r)
+	if vars == nil {
+		logger.Error("Unexpected missing path parameter cfgId in Request URI: %s",
+			r.RequestURI)
+		http.Error(w, "Unexpected error", http.StatusInternalServerError)
+		return
+	}
+
 	cfgId := vars["cfg_id"]
 	data, ok := configurationsStore[cfgId]
 	if !ok {

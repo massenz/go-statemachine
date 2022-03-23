@@ -58,35 +58,49 @@ func EnableTracing() {
 	logger.Level = log.TRACE
 }
 
-func NewHTTPServer(addr string, logLevel log.LogLevel) *http.Server {
-	logger.Level = logLevel
-
+// NewRouter returns a gorilla/mux Router for the server routes; exposed so
+// that path params are testable.
+func NewRouter() *mux.Router {
 	r := mux.NewRouter()
 	r.HandleFunc(HealthEndpoint, HealthHandler).Methods("GET")
 	r.HandleFunc(ConfigurationsEndpoint, CreateConfigurationHandler).Methods("POST")
 	r.HandleFunc(ConfigurationsEndpoint+"/{cfg_id}", GetConfigurationHandler).Methods("GET")
+	return r
+}
+
+func NewHTTPServer(addr string, logLevel log.LogLevel) *http.Server {
+	logger.Level = logLevel
+
 	return &http.Server{
 		Addr:    addr,
-		Handler: r,
+		Handler: NewRouter(),
 	}
 }
 
-// FIXME: This is temporary until we implement a real Storage module.
-// We store the serialized PB (instead of *Configuration, e.g.) so that the
-// behavior mirrors what will be eventually implemented in Redis.
-// FIXME: AND, even more obviously, these should be protected by Mutexes,
-// but that's largely irrelevant as they'll soon be gone (hopefully)
+// FIXME: These should be protected by Mutexes, but that's largely irrelevant,
+// as they'll soon be gone (hopefully)
 var configurationsStore = make(map[string][]byte)
 var machinesStore = make(map[string][]byte)
 
 func GetConfig(id string) (cfg *api.Configuration, ok bool) {
+	// FIXME: This is temporary until we implement a real Storage module.
 	cfgBytes, ok := configurationsStore[id]
 	if ok {
 		cfg = &api.Configuration{}
+		// We store the serialized PB (instead of *Configuration, e.g.) so that the
+		// behavior mirrors what will be eventually implemented in Redis.
 		err := proto.Unmarshal(cfgBytes, cfg)
 		if err != nil {
 			return nil, false
 		}
 	}
 	return
+}
+
+func PutConfig(id string, cfg *api.Configuration) (err error) {
+	val, err := proto.Marshal(cfg)
+	if err == nil {
+		configurationsStore[id] = val
+	}
+	return err
 }
