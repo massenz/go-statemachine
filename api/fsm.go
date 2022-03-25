@@ -20,6 +20,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	log "github.com/massenz/go-statemachine/logging"
 	tspb "google.golang.org/protobuf/types/known/timestamppb"
@@ -168,4 +169,36 @@ func (x *Configuration) CheckValid() error {
 		}
 	}
 	return nil
+}
+
+//////// encoding interface /////////////
+
+// MarshalBinary is needed to encode the data before storing in Redis,
+// and to retrieve it later.
+//
+// **NOTE** the receiver must be a concrete type (NOT a pointer) or the
+// serialization to Redis will fail.
+func (x Configuration) MarshalBinary() ([]byte, error) {
+	return proto.Marshal(&x)
+}
+
+// UnmarshalBinary is the dual of MarshalBinary and will parse the
+// binary data into the receiver.
+// See: https://pkg.go.dev/encoding
+func (x *Configuration) UnmarshalBinary(data []byte) error {
+	res := proto.Unmarshal(data, x)
+	return res
+}
+
+// Identical implementation for the FiniteStateMachine, but necessary as
+// we can't really define an ABC for both types, and using proto.Message wouldn't
+// work either.
+
+func (x FiniteStateMachine) MarshalBinary() ([]byte, error) {
+	return proto.Marshal(&x)
+}
+
+func (x *FiniteStateMachine) UnmarshalBinary(data []byte) error {
+	res := proto.Unmarshal(data, x)
+	return res
 }

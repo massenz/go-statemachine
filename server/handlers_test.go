@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/gorilla/mux"
+	"github.com/massenz/go-statemachine/storage"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io"
@@ -24,9 +25,12 @@ var _ = Describe("Handlers", func() {
 		writer  *httptest.ResponseRecorder
 	)
 	Context("when creating configurations", func() {
+		var store storage.StoreManager
 		BeforeEach(func() {
 			handler = http.HandlerFunc(server.CreateConfigurationHandler)
 			writer = httptest.NewRecorder()
+			store = storage.NewInMemoryStore()
+			server.SetStore(store)
 		})
 		Context("with a valid JSON", func() {
 			BeforeEach(func() {
@@ -41,10 +45,12 @@ var _ = Describe("Handlers", func() {
 				Expect(writer.Code).To(Equal(http.StatusCreated))
 				Expect(writer.Header().Get("Location")).To(Equal(
 					server.ConfigurationsEndpoint + "/test.orders:v1"))
-				// TODO: decode JSON and confim the ID is valid, etc...
+				// TODO: decode JSON and confirm the ID is valid, etc...
 			})
 			It("should fill the cache", func() {
-				_, found := server.GetConfig("test.orders:v1")
+				handler.ServeHTTP(writer, req)
+				Expect(writer.Code).To(Equal(http.StatusCreated))
+				_, found := store.GetConfig("test.orders:v1")
 				Expect(found).To(BeTrue())
 			})
 		})
@@ -53,7 +59,6 @@ var _ = Describe("Handlers", func() {
 			var body io.Reader
 			BeforeEach(func() {
 				req = httptest.NewRequest(http.MethodGet, server.ConfigurationsEndpoint, body)
-
 			})
 			It("without name, states or transitions, will fail", func() {
 				body = strings.NewReader(`{
@@ -80,10 +85,13 @@ var _ = Describe("Handlers", func() {
 	})
 	Context("when retrieving configurations", func() {
 		var router *mux.Router
+		var store storage.StoreManager
 		BeforeEach(func() {
 			handler = http.HandlerFunc(server.GetConfigurationHandler)
 			writer = httptest.NewRecorder()
 			router = server.NewRouter()
+			store = storage.NewInMemoryStore()
+			server.SetStore(store)
 		})
 		Context("with a valid cfg_id", func() {
 			var spaceship = api.Configuration{
@@ -100,7 +108,7 @@ var _ = Describe("Handlers", func() {
 			BeforeEach(func() {
 				endpoint := server.ConfigurationsEndpoint + "/" + cfgId
 				req = httptest.NewRequest(http.MethodGet, endpoint, nil)
-				Expect(server.PutConfig(cfgId, &spaceship)).ToNot(HaveOccurred())
+				Expect(store.PutConfig(cfgId, &spaceship)).ToNot(HaveOccurred())
 			})
 
 			It("should succeed", func() {

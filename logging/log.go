@@ -119,3 +119,8 @@ var none, _ = os.Open(os.DevNull)
 
 // NullLog A log to nowhere
 var NullLog = NewLogToWriter(bufio.NewWriter(none), "nil")
+
+// A Loggable type is one that has a Log and exposes it to its clients
+type Loggable interface {
+	GetLog() *Log
+}

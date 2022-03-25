@@ -19,9 +19,8 @@
 package server
 
 import (
-	"github.com/golang/protobuf/proto"
-	"github.com/massenz/go-statemachine/api"
 	log "github.com/massenz/go-statemachine/logging"
+	"github.com/massenz/go-statemachine/storage"
 	"net/http"
 	"time"
 
@@ -36,8 +35,9 @@ const (
 )
 
 var (
-	shouldTrace bool
-	logger      = log.NewLog("server")
+	shouldTrace  bool
+	logger       = log.NewLog("server")
+	storeManager storage.StoreManager
 )
 
 func trace(endpoint string) func() {
@@ -77,30 +77,6 @@ func NewHTTPServer(addr string, logLevel log.LogLevel) *http.Server {
 	}
 }
 
-// FIXME: These should be protected by Mutexes, but that's largely irrelevant,
-// as they'll soon be gone (hopefully)
-var configurationsStore = make(map[string][]byte)
-var machinesStore = make(map[string][]byte)
-
-func GetConfig(id string) (cfg *api.Configuration, ok bool) {
-	// FIXME: This is temporary until we implement a real Storage module.
-	cfgBytes, ok := configurationsStore[id]
-	if ok {
-		cfg = &api.Configuration{}
-		// We store the serialized PB (instead of *Configuration, e.g.) so that the
-		// behavior mirrors what will be eventually implemented in Redis.
-		err := proto.Unmarshal(cfgBytes, cfg)
-		if err != nil {
-			return nil, false
-		}
-	}
-	return
-}
-
-func PutConfig(id string, cfg *api.Configuration) (err error) {
-	val, err := proto.Marshal(cfg)
-	if err == nil {
-		configurationsStore[id] = val
-	}
-	return err
+func SetStore(store storage.StoreManager) {
+	storeManager = store
 }

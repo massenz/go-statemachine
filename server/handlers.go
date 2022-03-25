@@ -21,9 +21,9 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
 	"github.com/massenz/go-statemachine/api"
+	pj "google.golang.org/protobuf/encoding/protojson"
 	"net/http"
 )
 
@@ -62,7 +62,7 @@ func CreateConfigurationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = PutConfig(config.GetVersionId(), &config)
+	err = storeManager.PutConfig(config.GetVersionId(), &config)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -70,7 +70,12 @@ func CreateConfigurationHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Add("Location", ConfigurationsEndpoint+"/"+config.GetVersionId())
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(config)
+	resp, err := pj.Marshal(&config)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(resp)
 	return
 }
 
@@ -87,18 +92,17 @@ func GetConfigurationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfgId := vars["cfg_id"]
-	data, ok := configurationsStore[cfgId]
+	config, ok := storeManager.GetConfig(cfgId)
 	if !ok {
 		http.Error(w, fmt.Sprintf("Configuration %s does not exist on this server", cfgId),
 			http.StatusNotFound)
 		return
 	}
-	var config api.Configuration
-	err := proto.Unmarshal(data, &config)
+	resp, err := pj.Marshal(config)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(config)
+	w.Write(resp)
 	return
 }
