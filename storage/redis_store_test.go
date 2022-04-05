@@ -1,0 +1,99 @@
+/*
+ * Copyright (c) 2022 AlertAvert.com.  All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Author: Marco Massenzio (marco@alertavert.com)
+ */
+
+package storage_test
+
+import (
+	"context"
+	"github.com/go-redis/redis/v8"
+	"github.com/golang/protobuf/proto"
+	"github.com/massenz/go-statemachine/api"
+	"github.com/massenz/go-statemachine/storage"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"time"
+)
+
+var _ = Describe("RedisStore", func() {
+
+	var ctx = context.Background()
+	var timeout, _ = time.ParseDuration("200ms")
+
+	Context("when configured locally", func() {
+		var store storage.StoreManager
+		var rdb *redis.Client
+		var cfg = &api.Configuration{}
+
+		BeforeEach(func() {
+			cfg.Name = "my_conf"
+			cfg.Version = "v3"
+			cfg.StartingState = "start"
+
+			localAddress := "localhost:6379"
+			defaultDb := 0
+
+			store = storage.NewRedisStore(localAddress, defaultDb)
+			Expect(store).ToNot(BeNil())
+
+			// This is used to go "behind the back" or our StoreManager and mess with it for testing
+			// purposes. Do NOT do this in your code.
+			rdb = redis.NewClient(&redis.Options{
+				Addr: localAddress,
+				DB:   defaultDb,
+			})
+		})
+
+		It("can get a configuration back", func() {
+			id := "1234"
+			val, _ := proto.Marshal(cfg)
+			res, err := rdb.Set(ctx, id, val, timeout).Result()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res).To(Equal("OK"))
+
+			data, ok := store.GetConfig(id)
+			Expect(ok).To(BeTrue())
+			Expect(data).ToNot(BeNil())
+			Expect(data.GetVersionId()).To(Equal(cfg.GetVersionId()))
+		})
+
+		It("will return orderly if the id does not exist", func() {
+			id := "fake"
+			data, ok := store.GetConfig(id)
+			Expect(ok).To(BeFalse())
+			Expect(data).To(BeNil())
+		})
+
+		It("can save configurations", func() {
+			var found api.Configuration
+
+			Expect(store.PutConfig(cfg.GetVersionId(), cfg)).ToNot(HaveOccurred())
+
+			val, err := rdb.Get(ctx, cfg.GetVersionId()).Bytes()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
+			Expect(found.Name).To(Equal(cfg.Name))
+			Expect(found.Version).To(Equal(cfg.Version))
+			Expect(found.StartingState).To(Equal(cfg.StartingState))
+		})
+
+		It("should not save nil values", func() {
+			Expect(store.PutConfig("fake", nil)).To(HaveOccurred())
+		})
+	})
+})

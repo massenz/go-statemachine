@@ -27,6 +27,7 @@ import (
 	"fmt"
 	log "github.com/massenz/go-statemachine/logging"
 	"github.com/massenz/go-statemachine/server"
+	"github.com/massenz/go-statemachine/storage"
 )
 
 const (
@@ -41,6 +42,10 @@ func main() {
 	var localOnly = flag.Bool("local", false,
 		"If set, it only listens to incoming requests from the local host")
 	var port = flag.Int("port", defaultPort, "Server port")
+	var redisUrl = flag.String("redis", "", "URI for the Redis cluster (host:port)")
+	var kafkaUrl = flag.String("kafka", "", "URI for the Kafka broker (host:port)")
+	var sqsTopic = flag.String("sqs", "", "If defined, it will attempt to connect "+
+		"to the given SQS Queue (ignores any value that is passed via the -kafka flag)")
 	flag.Parse()
 
 	logger := log.NewLog("statemachine")
@@ -58,6 +63,26 @@ func main() {
 		logger.Level = log.DEBUG
 		logger.Debug("Emitting DEBUG logs")
 		server.EnableTracing()
+	}
+
+	var store storage.StoreManager
+	if *redisUrl == "" {
+		logger.Warn("in-memory storage configured, all data will NOT survive a server restart")
+		store = storage.NewInMemoryStore()
+	} else {
+		logger.Info("Connecting to Redis server at %s", *redisUrl)
+		store = storage.NewRedisStore(*redisUrl, 1)
+	}
+	store.GetLog().Level = log.DEBUG
+	server.SetStore(store)
+
+	if *kafkaUrl != "" {
+		logger.Panic("support for Kafka not implemented")
+	} else if *sqsTopic != "" {
+		logger.Panic("support for SQS not implemented")
+	} else {
+		logger.Warn("No event broker configured, state machines will not be " +
+			"able to receive events")
 	}
 
 	logger.Info("Server started at http://%s", addr)
