@@ -1,0 +1,28 @@
+name: Makefile CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  Test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: arduino/setup-protoc@v1
+      with:
+        version: '3.19'
+    
+    - name: Install protoc-gen
+      run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+
+    - name: Build PB
+      run: make protos
+
+    - name: Start local Redis
+      run: docker run -d -p 6379:6379 redis:6.2-alpine
+      
+    - name: Test
+      run: go test ./api ./server ./storage
