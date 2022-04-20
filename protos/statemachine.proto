@@ -60,6 +60,7 @@ message FiniteStateMachine {
   // The current state for this FSM
   string state = 2;
 
-  // A sequence of (timestamped) events, listed by their `event_id`s
+  // A sequence of Events
+  // TODO: this should be repeated Event history = 3;
   repeated string history = 3;
 }
