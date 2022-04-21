@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/massenz/go-statemachine/api"
 	log "github.com/massenz/go-statemachine/logging"
+	"time"
 )
 
 var IllegalStoreError = fmt.Errorf("error storing invalid data")
@@ -40,4 +41,6 @@ type StoreManager interface {
 	log.Loggable
 	ConfigurationStorageManager
 	FiniteStateMachineStorageManager
+
+	SetTimeout(duration time.Duration)
 }

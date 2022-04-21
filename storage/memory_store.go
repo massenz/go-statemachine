@@ -22,6 +22,7 @@ import (
 	"github.com/massenz/go-statemachine/api"
 	log "github.com/massenz/go-statemachine/logging"
 	"sync"
+	"time"
 )
 
 func NewInMemoryStore() StoreManager {
@@ -38,6 +39,11 @@ type InMemoryStore struct {
 	configurationsStore map[string][]byte
 	machinesStore       map[string][]byte
 	logger              *log.Log
+}
+
+// SetTimeout does not really make sense for an in-memory store, so this is a no-op
+func (csm *InMemoryStore) SetTimeout(duration time.Duration) {
+	// do nothing
 }
 
 // GetLog allows InMemoryStore to implement the log.Loggable interface
