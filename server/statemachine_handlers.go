@@ -24,7 +24,6 @@ import (
     "github.com/google/uuid"
     "github.com/gorilla/mux"
     "github.com/massenz/go-statemachine/api"
-    pj "google.golang.org/protobuf/encoding/protojson"
     "net/http"
 )
 
@@ -80,7 +79,7 @@ func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    w.Header().Add("Location", StatemachinesEndpoint+"/"+fsm.ConfigId)
+    w.Header().Add("Location", StatemachinesEndpoint+"/"+request.ID)
     w.WriteHeader(http.StatusCreated)
     err = json.NewEncoder(w).Encode(&StateMachineResponse{
         ID:                   request.ID,
@@ -107,16 +106,19 @@ func GetStatemachineHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     smId := vars["statemachine_id"]
+    logger.Debug("Looking up FSM %s", smId)
+
     stateMachine, ok := storeManager.GetStateMachine(smId)
     if !ok {
         http.Error(w, fmt.Sprintf("State Machine [%s] not found", smId), http.StatusNotFound)
         return
     }
-    resp, err := pj.Marshal(stateMachine)
+    logger.Debug("Found FSM: %s", stateMachine.String())
+    err := json.NewEncoder(w).Encode(stateMachine)
     if err != nil {
+        logger.Error("Could not JSON encode FSM (%s): %s", stateMachine.String(), err.Error())
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
-    w.Write(resp)
     return
 }

@@ -58,6 +58,10 @@ func EnableTracing() {
     logger.Level = log.TRACE
 }
 
+func SetLogLevel(level log.LogLevel) {
+    logger.Level = level
+}
+
 // NewRouter returns a gorilla/mux Router for the server routes; exposed so
 // that path params are testable.
 func NewRouter() *mux.Router {

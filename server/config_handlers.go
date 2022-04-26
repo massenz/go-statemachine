@@ -40,6 +40,7 @@ func CreateConfigurationHandler(w http.ResponseWriter, r *http.Request) {
     if config.Version == "" {
         config.Version = "v1"
     }
+    logger.Debug("Creating new configuration with Version ID: %s", config.GetVersionId())
 
     // TODO PAB-99: Check this configuration does not already exist.
 
@@ -48,21 +49,22 @@ func CreateConfigurationHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, err.Error(), http.StatusBadRequest)
         return
     }
+    logger.Debug("Configuration is valid (starting state: %s)", config.StartingState)
 
     err = storeManager.PutConfig(config.GetVersionId(), &config)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
+    logger.Debug("Configuration stored with ID: %s", config.GetVersionId())
 
     w.Header().Add("Location", ConfigurationsEndpoint+"/"+config.GetVersionId())
     w.WriteHeader(http.StatusCreated)
-    resp, err := pj.Marshal(&config)
+    err = json.NewEncoder(w).Encode(config)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
-    w.Write(resp)
     return
 }
 
