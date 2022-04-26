@@ -16,31 +16,25 @@
  * Author: Marco Massenzio (marco@alertavert.com)
  */
 
-package storage
+package server
 
 import (
-	"fmt"
-	"github.com/massenz/go-statemachine/api"
-	log "github.com/massenz/go-statemachine/logging"
-	"time"
+    "encoding/json"
+    "net/http"
 )
 
-var IllegalStoreError = fmt.Errorf("error storing invalid data")
+// NOTE: We make the handlers "exportable" so they can be tested, do NOT call directly.
 
-type ConfigurationStorageManager interface {
-	GetConfig(id string) (cfg *api.Configuration, ok bool)
-	PutConfig(id string, cfg *api.Configuration) (err error)
-}
+func HealthHandler(w http.ResponseWriter, r *http.Request) {
+    // Standard preamble for all handlers, sets tracing (if enabled) and default content type.
+    defer trace(r.RequestURI)()
+    defaultContent(w)
 
-type FiniteStateMachineStorageManager interface {
-	GetStateMachine(id string) (cfg *api.FiniteStateMachine, ok bool)
-	PutStateMachine(id string, cfg *api.FiniteStateMachine) (err error)
-}
-
-type StoreManager interface {
-	log.Loggable
-	ConfigurationStorageManager
-	FiniteStateMachineStorageManager
-
-	SetTimeout(duration time.Duration)
+    // TODO @MM: add a check on Redis and SQS reachability
+    res := MessageResponse{"UP"}
+    err := json.NewEncoder(w).Encode(res)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
 }

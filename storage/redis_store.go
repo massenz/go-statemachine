@@ -28,7 +28,9 @@ import (
 )
 
 const (
-	NeverExpire = 0
+	NeverExpire      = 0
+	DefaultRedisPort = "6379"
+	DefaultRedisDb   = 0
 )
 
 var (
@@ -41,6 +43,10 @@ type RedisStore struct {
 	logger  *logging.Log
 	client  *redis.Client
 	Timeout time.Duration
+}
+
+func (csm *RedisStore) SetTimeout(duration time.Duration) {
+	csm.Timeout = duration
 }
 
 func NewRedisStore(address string, db int) StoreManager {
@@ -99,7 +105,13 @@ func (csm *RedisStore) PutConfig(id string, cfg *api.Configuration) (err error) 
 	ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
 	defer cancel()
 
+	if id == "" {
+		csm.logger.Error("Cannot store a configuration with an empty ID")
+		return IllegalStoreError
+	}
+
 	if cfg == nil {
+		csm.logger.Error("Attempting to store a nil configuration (%s)", id)
 		return IllegalStoreError
 	}
 	_, err = csm.client.Set(ctx, id, cfg, NeverExpire).Result()
@@ -107,11 +119,40 @@ func (csm *RedisStore) PutConfig(id string, cfg *api.Configuration) (err error) 
 }
 
 func (csm *RedisStore) GetStateMachine(id string) (cfg *api.FiniteStateMachine, ok bool) {
-	//TODO implement me
-	panic("GetStateMachine: implement me")
+	ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
+	defer cancel()
+
+	cmd := csm.client.Get(ctx, id)
+	data, err := cmd.Bytes()
+	if err == redis.Nil {
+		csm.logger.Debug("key '%s' not found", id)
+	} else if err != nil {
+		csm.logger.Error(err.Error())
+	} else {
+		var stateMachine api.FiniteStateMachine
+
+		if err = stateMachine.UnmarshalBinary(data); err != nil {
+			csm.logger.Error("cannot unmarshal data, %q", err)
+		} else {
+			return &stateMachine, true
+		}
+	}
+	return nil, false
 }
 
-func (csm *RedisStore) PutStateMachine(id string, cfg *api.FiniteStateMachine) (err error) {
-	//TODO implement me
-	panic("PutStateMachine: implement me")
+func (csm *RedisStore) PutStateMachine(id string, stateMachine *api.FiniteStateMachine) (err error) {
+	ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
+	defer cancel()
+
+	if id == "" {
+		csm.logger.Error("Cannot store a statemachine with an empty ID")
+		return IllegalStoreError
+	}
+
+	if stateMachine == nil {
+		csm.logger.Error("Attempting to store a nil statemachine (%s)", id)
+		return IllegalStoreError
+	}
+	_, err = csm.client.Set(ctx, id, stateMachine, NeverExpire).Result()
+	return
 }

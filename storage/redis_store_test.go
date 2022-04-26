@@ -19,81 +19,145 @@
 package storage_test
 
 import (
-	"context"
-	"github.com/go-redis/redis/v8"
-	"github.com/golang/protobuf/proto"
-	"github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/storage"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"time"
+    "context"
+    "fmt"
+    "github.com/go-redis/redis/v8"
+    "github.com/golang/protobuf/proto"
+    "github.com/google/uuid"
+    "github.com/massenz/go-statemachine/api"
+    "github.com/massenz/go-statemachine/storage"
+    . "github.com/onsi/ginkgo"
+    . "github.com/onsi/gomega"
+    proto2 "google.golang.org/protobuf/proto"
+    "os"
+    "time"
 )
 
 var _ = Describe("RedisStore", func() {
 
-	var ctx = context.Background()
-	var timeout, _ = time.ParseDuration("200ms")
+    var redisPort = os.Getenv("REDIS_PORT")
+    if redisPort == "" {
+        redisPort = storage.DefaultRedisPort
+    }
 
-	Context("when configured locally", func() {
-		var store storage.StoreManager
-		var rdb *redis.Client
-		var cfg = &api.Configuration{}
+    Context("when configured locally", func() {
+        var store storage.StoreManager
+        var rdb *redis.Client
+        var cfg = &api.Configuration{}
 
-		BeforeEach(func() {
-			cfg.Name = "my_conf"
-			cfg.Version = "v3"
-			cfg.StartingState = "start"
+        testTimeout, _ := time.ParseDuration("2s")
+        ctx, _ := context.WithTimeout(storage.DefaultContext, testTimeout)
 
-			localAddress := "localhost:6379"
-			defaultDb := 0
+        BeforeEach(func() {
+            cfg.Name = "my_conf"
+            cfg.Version = "v3"
+            cfg.StartingState = "start"
 
-			store = storage.NewRedisStore(localAddress, defaultDb)
-			Expect(store).ToNot(BeNil())
+            localAddress := fmt.Sprintf("localhost:%s", redisPort)
 
-			// This is used to go "behind the back" or our StoreManager and mess with it for testing
-			// purposes. Do NOT do this in your code.
-			rdb = redis.NewClient(&redis.Options{
-				Addr: localAddress,
-				DB:   defaultDb,
-			})
-		})
+            store = storage.NewRedisStore(localAddress, storage.DefaultRedisDb)
+            Expect(store).ToNot(BeNil())
+            store.SetTimeout(testTimeout)
+            // Mute unnecessary logging during tests; re-enable (
+            //and set to DEBUG) when diagnosing failures.
+            store.GetLog().Enable(false)
 
-		It("can get a configuration back", func() {
-			id := "1234"
-			val, _ := proto.Marshal(cfg)
-			res, err := rdb.Set(ctx, id, val, timeout).Result()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(res).To(Equal("OK"))
+            // This is used to go "behind the back" or our StoreManager and mess with it for testing
+            // purposes. Do NOT do this in your code.
+            rdb = redis.NewClient(&redis.Options{
+                Addr: localAddress,
+                DB:   storage.DefaultRedisDb,
+            })
+        })
 
-			data, ok := store.GetConfig(id)
-			Expect(ok).To(BeTrue())
-			Expect(data).ToNot(BeNil())
-			Expect(data.GetVersionId()).To(Equal(cfg.GetVersionId()))
-		})
+        It("can get a configuration back", func() {
+            id := "1234"
+            val, _ := proto.Marshal(cfg)
+            res, err := rdb.Set(ctx, id, val, testTimeout).Result()
+            Expect(err).ToNot(HaveOccurred())
+            Expect(res).To(Equal("OK"))
 
-		It("will return orderly if the id does not exist", func() {
-			id := "fake"
-			data, ok := store.GetConfig(id)
-			Expect(ok).To(BeFalse())
-			Expect(data).To(BeNil())
-		})
+            data, ok := store.GetConfig(id)
+            Expect(ok).To(BeTrue())
+            Expect(data).ToNot(BeNil())
+            Expect(data.GetVersionId()).To(Equal(cfg.GetVersionId()))
+        })
 
-		It("can save configurations", func() {
-			var found api.Configuration
+        It("will return orderly if the id does not exist", func() {
+            id := "fake"
+            data, ok := store.GetConfig(id)
+            Expect(ok).To(BeFalse())
+            Expect(data).To(BeNil())
+        })
 
-			Expect(store.PutConfig(cfg.GetVersionId(), cfg)).ToNot(HaveOccurred())
+        It("can save configurations", func() {
+            var found api.Configuration
 
-			val, err := rdb.Get(ctx, cfg.GetVersionId()).Bytes()
-			Expect(err).ToNot(HaveOccurred())
+            Expect(store.PutConfig(cfg.GetVersionId(), cfg)).ToNot(HaveOccurred())
 
-			Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
-			Expect(found.Name).To(Equal(cfg.Name))
-			Expect(found.Version).To(Equal(cfg.Version))
-			Expect(found.StartingState).To(Equal(cfg.StartingState))
-		})
+            val, err := rdb.Get(ctx, cfg.GetVersionId()).Bytes()
+            Expect(err).ToNot(HaveOccurred())
 
-		It("should not save nil values", func() {
-			Expect(store.PutConfig("fake", nil)).To(HaveOccurred())
-		})
-	})
+            Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
+            Expect(found.Name).To(Equal(cfg.Name))
+            Expect(found.Version).To(Equal(cfg.Version))
+            Expect(found.StartingState).To(Equal(cfg.StartingState))
+        })
+
+        It("should not save nil values", func() {
+            Expect(store.PutConfig("fake", nil)).To(HaveOccurred())
+        })
+
+        It("should not fail for a non-existent FSM", func() {
+            id := "fake"
+            data, ok := store.GetStateMachine(id)
+            Expect(ok).To(BeFalse())
+            Expect(data).To(BeNil())
+        })
+
+        It("can get an FSM back", func() {
+            id := uuid.New().String()
+            fsm := &api.FiniteStateMachine{
+                ConfigId: "cfg_id",
+                State:    "a-state",
+                History:  nil,
+            }
+            // Storing the FSM behind the store's back
+            val, _ := proto2.Marshal(fsm)
+            res, err := rdb.Set(ctx, id, val, testTimeout).Result()
+
+            Expect(err).ToNot(HaveOccurred())
+            Expect(res).To(Equal("OK"))
+
+            data, ok := store.GetStateMachine(id)
+            Expect(ok).To(BeTrue())
+            Expect(data).ToNot(BeNil())
+            Expect(data.State).To(Equal(fsm.State))
+            Expect(data.ConfigId).To(Equal(fsm.ConfigId))
+        })
+
+        It("can save an FSM", func() {
+            id := uuid.New().String()
+            var found api.FiniteStateMachine
+            fsm := &api.FiniteStateMachine{
+                ConfigId: "patient.onboard:v3",
+                State:    "eligible",
+                History:  []string{"started", "pending"},
+            }
+
+            Expect(store.PutStateMachine(id, fsm)).ToNot(HaveOccurred())
+
+            val, err := rdb.Get(ctx, id).Bytes()
+            Expect(err).ToNot(HaveOccurred())
+
+            Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
+            Expect(found.ConfigId).To(Equal(fsm.ConfigId))
+            Expect(found.State).To(Equal(fsm.State))
+            Expect(found.History).To(Equal(fsm.History))
+        })
+
+        It("should return an error on a nil value store", func() {
+            Expect(store.PutConfig("nil-val", nil)).To(HaveOccurred())
+        })
+    })
 })
