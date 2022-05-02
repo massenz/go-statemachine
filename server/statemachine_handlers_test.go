@@ -71,8 +71,8 @@ var _ = Describe("Statemachine Handlers", func() {
                 Expect(json.Unmarshal(writer.Body.Bytes(), &response)).ToNot(HaveOccurred())
 
                 Expect(response.ID).To(Equal("test-machine"))
-                Expect(response.ConfigurationVersion).To(Equal("test-config:v1"))
-                Expect(response.State).To(Equal("start"))
+                Expect(response.StateMachine.ConfigId).To(Equal("test-config:v1"))
+                Expect(response.StateMachine.State).To(Equal("start"))
             })
 
             It("should fill the cache", func() {
@@ -173,13 +173,15 @@ var _ = Describe("Statemachine Handlers", func() {
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusOK))
 
-            var result api.FiniteStateMachine
+            var result server.StateMachineResponse
             Expect(json.NewDecoder(writer.Body).Decode(&result)).ToNot(HaveOccurred())
 
-            Expect(result.ConfigId).To(Equal(fsm.ConfigId))
-            Expect(result.State).To(Equal(fsm.State))
-            Expect(len(result.History)).To(Equal(len(fsm.History)))
-            for n, t := range result.History {
+            Expect(result.ID).To(Equal(id))
+            sm := result.StateMachine
+            Expect(sm.ConfigId).To(Equal(fsm.ConfigId))
+            Expect(sm.State).To(Equal(fsm.State))
+            Expect(len(sm.History)).To(Equal(len(fsm.History)))
+            for n, t := range sm.History {
                 Expect(t).To(Equal(fsm.History[n]))
             }
         })

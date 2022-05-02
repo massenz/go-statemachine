@@ -61,6 +61,6 @@ message FiniteStateMachine {
   string state = 2;
 
   // A sequence of Events
-  // TODO: this should be repeated Event history = 3;
+  // TODO @MM: this should be repeated Event history = 3;
   repeated string history = 3;
 }

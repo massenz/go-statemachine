@@ -19,140 +19,140 @@
 package storage
 
 import (
-	"context"
-	"fmt"
-	"github.com/go-redis/redis/v8"
-	"github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/logging"
-	"time"
+    "context"
+    "fmt"
+    "github.com/go-redis/redis/v8"
+    "github.com/massenz/go-statemachine/api"
+    "github.com/massenz/go-statemachine/logging"
+    "time"
 )
 
 const (
-	NeverExpire      = 0
-	DefaultRedisPort = "6379"
-	DefaultRedisDb   = 0
+    NeverExpire      = 0
+    DefaultRedisPort = "6379"
+    DefaultRedisDb   = 0
 )
 
 var (
-	// Despite what Go thinks, yeah, this IS a constant
-	DefaultTimeout, _ = time.ParseDuration("200ms")
-	DefaultContext    = context.Background()
+    // Despite what Go thinks, yeah, this IS a constant
+    DefaultTimeout, _ = time.ParseDuration("200ms")
+    DefaultContext    = context.Background()
 )
 
 type RedisStore struct {
-	logger  *logging.Log
-	client  *redis.Client
-	Timeout time.Duration
+    logger  *logging.Log
+    client  *redis.Client
+    Timeout time.Duration
 }
 
 func (csm *RedisStore) SetTimeout(duration time.Duration) {
-	csm.Timeout = duration
+    csm.Timeout = duration
 }
 
 func NewRedisStore(address string, db int) StoreManager {
-	return &RedisStore{
-		logger: logging.NewLog(fmt.Sprintf("redis:%s", address)),
-		client: redis.NewClient(&redis.Options{
-			Addr: address,
-			// TODO @MM: understand what other int values mean
-			DB: db, // 0 means default DB
-		}),
-		Timeout: DefaultTimeout,
-	}
+    return &RedisStore{
+        logger: logging.NewLog(fmt.Sprintf("redis:%s", address)),
+        client: redis.NewClient(&redis.Options{
+            Addr: address,
+            // TODO @MM: understand what other int values mean
+            DB: db, // 0 means default DB
+        }),
+        Timeout: DefaultTimeout,
+    }
 }
 
 func NewRedisStoreWithCreds(address string, db int, username string, password string) StoreManager {
-	return &RedisStore{
-		logger: logging.NewLog(fmt.Sprintf("redis:%s", address)),
-		client: redis.NewClient(&redis.Options{
-			Addr:     address,
-			Username: username,
-			Password: password,
-			DB:       db,
-		}),
-		Timeout: DefaultTimeout,
-	}
+    return &RedisStore{
+        logger: logging.NewLog(fmt.Sprintf("redis:%s", address)),
+        client: redis.NewClient(&redis.Options{
+            Addr:     address,
+            Username: username,
+            Password: password,
+            DB:       db,
+        }),
+        Timeout: DefaultTimeout,
+    }
 }
 
 // GetLog for RedisStore implements the Loggable interface
-func (csm *RedisStore) GetLog() *logging.Log {
-	return csm.logger
+func (csm *RedisStore) SetLogLevel(level logging.LogLevel) {
+    csm.logger.Level = level
 }
 
 func (csm *RedisStore) GetConfig(id string) (*api.Configuration, bool) {
-	ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
+    defer cancel()
 
-	cmd := csm.client.Get(ctx, id)
-	data, err := cmd.Bytes()
-	if err == redis.Nil {
-		csm.logger.Debug("key '%s' not found", id)
-	} else if err != nil {
-		csm.logger.Error(err.Error())
-	} else {
-		var cfg api.Configuration
+    cmd := csm.client.Get(ctx, id)
+    data, err := cmd.Bytes()
+    if err == redis.Nil {
+        csm.logger.Debug("key '%s' not found", id)
+    } else if err != nil {
+        csm.logger.Error(err.Error())
+    } else {
+        var cfg api.Configuration
 
-		if err = cfg.UnmarshalBinary(data); err != nil {
-			csm.logger.Error("cannot unmarshal data, %q", err)
-		} else {
-			return &cfg, true
-		}
-	}
-	return nil, false
+        if err = cfg.UnmarshalBinary(data); err != nil {
+            csm.logger.Error("cannot unmarshal data, %q", err)
+        } else {
+            return &cfg, true
+        }
+    }
+    return nil, false
 }
 
 func (csm *RedisStore) PutConfig(id string, cfg *api.Configuration) (err error) {
-	ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
+    defer cancel()
 
-	if id == "" {
-		csm.logger.Error("Cannot store a configuration with an empty ID")
-		return IllegalStoreError
-	}
+    if id == "" {
+        csm.logger.Error("Cannot store a configuration with an empty ID")
+        return IllegalStoreError
+    }
 
-	if cfg == nil {
-		csm.logger.Error("Attempting to store a nil configuration (%s)", id)
-		return IllegalStoreError
-	}
-	_, err = csm.client.Set(ctx, id, cfg, NeverExpire).Result()
-	return
+    if cfg == nil {
+        csm.logger.Error("Attempting to store a nil configuration (%s)", id)
+        return IllegalStoreError
+    }
+    _, err = csm.client.Set(ctx, id, cfg, NeverExpire).Result()
+    return
 }
 
 func (csm *RedisStore) GetStateMachine(id string) (cfg *api.FiniteStateMachine, ok bool) {
-	ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
+    defer cancel()
 
-	cmd := csm.client.Get(ctx, id)
-	data, err := cmd.Bytes()
-	if err == redis.Nil {
-		csm.logger.Debug("key '%s' not found", id)
-	} else if err != nil {
-		csm.logger.Error(err.Error())
-	} else {
-		var stateMachine api.FiniteStateMachine
+    cmd := csm.client.Get(ctx, id)
+    data, err := cmd.Bytes()
+    if err == redis.Nil {
+        csm.logger.Debug("key '%s' not found", id)
+    } else if err != nil {
+        csm.logger.Error(err.Error())
+    } else {
+        var stateMachine api.FiniteStateMachine
 
-		if err = stateMachine.UnmarshalBinary(data); err != nil {
-			csm.logger.Error("cannot unmarshal data, %q", err)
-		} else {
-			return &stateMachine, true
-		}
-	}
-	return nil, false
+        if err = stateMachine.UnmarshalBinary(data); err != nil {
+            csm.logger.Error("cannot unmarshal data, %q", err)
+        } else {
+            return &stateMachine, true
+        }
+    }
+    return nil, false
 }
 
 func (csm *RedisStore) PutStateMachine(id string, stateMachine *api.FiniteStateMachine) (err error) {
-	ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
-	defer cancel()
+    ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
+    defer cancel()
 
-	if id == "" {
-		csm.logger.Error("Cannot store a statemachine with an empty ID")
-		return IllegalStoreError
-	}
+    if id == "" {
+        csm.logger.Error("Cannot store a statemachine with an empty ID")
+        return IllegalStoreError
+    }
 
-	if stateMachine == nil {
-		csm.logger.Error("Attempting to store a nil statemachine (%s)", id)
-		return IllegalStoreError
-	}
-	_, err = csm.client.Set(ctx, id, stateMachine, NeverExpire).Result()
-	return
+    if stateMachine == nil {
+        csm.logger.Error("Attempting to store a nil statemachine (%s)", id)
+        return IllegalStoreError
+    }
+    _, err = csm.client.Set(ctx, id, stateMachine, NeverExpire).Result()
+    return
 }

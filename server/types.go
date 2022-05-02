@@ -18,15 +18,34 @@
 
 package server
 
+import "github.com/massenz/go-statemachine/api"
+
 const (
-	Authorization   = "Authorization"
-	Bearer          = "Bearer"
-	ContentType     = "Content-Type"
-	ApplicationJson = "application/json"
-	AllContent      = "*/*"
-	Html            = "text/html"
+    Authorization   = "Authorization"
+    Bearer          = "Bearer"
+    ContentType     = "Content-Type"
+    ApplicationJson = "application/json"
+    AllContent      = "*/*"
+    Html            = "text/html"
 )
 
+// MessageResponse is returned when a more appropriate response is not available.
+// TODO @MM: Use this to implement better error handling
 type MessageResponse struct {
-	Msg string `json:"message"`
+    Msg string `json:"message"`
+}
+
+// StateMachineRequest represents a request for a new FSM to be created, with an optional ID,
+// and a reference to a fully qualified Configuration version.
+//
+// If the ID is not specified, a new UUID will be generated and returned.
+type StateMachineRequest struct {
+    ID                   string `json:"id"`
+    ConfigurationVersion string `json:"configuration_version"`
+}
+
+// StateMachineResponse is returned when a new FSM is created, or as a response to a GET request
+type StateMachineResponse struct {
+    ID           string                  `json:"id"`
+    StateMachine *api.FiniteStateMachine `json:"statemachine"`
 }
