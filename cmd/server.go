@@ -23,71 +23,94 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	log "github.com/massenz/go-statemachine/logging"
-	"github.com/massenz/go-statemachine/server"
-	"github.com/massenz/go-statemachine/storage"
+    "flag"
+    "fmt"
+    log "github.com/massenz/go-statemachine/logging"
+    "github.com/massenz/go-statemachine/pubsub"
+    "github.com/massenz/go-statemachine/server"
+    "github.com/massenz/go-statemachine/storage"
+    "os"
 )
 
 const (
-	defaultPort  = 8080
-	defaultDebug = false
+    defaultPort  = 8080
+    defaultDebug = false
 )
 
 func main() {
-	var debug = flag.Bool("debug", defaultDebug,
-		"If set, URL handlers will emit a trace log for every request; it may impact performance, "+
-			"do not use in production or on heavy load systems")
-	var localOnly = flag.Bool("local", false,
-		"If set, it only listens to incoming requests from the local host")
-	var port = flag.Int("port", defaultPort, "Server port")
-	var redisUrl = flag.String("redis", "", "URI for the Redis cluster (host:port)")
-	var kafkaUrl = flag.String("kafka", "", "URI for the Kafka broker (host:port)")
-	var sqsTopic = flag.String("sqs", "", "If defined, it will attempt to connect "+
-		"to the given SQS Queue (ignores any value that is passed via the -kafka flag)")
-	flag.Parse()
+    var debug = flag.Bool("debug", defaultDebug, "Enables DEBUG logs; do not use with -trace")
+    var trace = flag.Bool("trace", false,
+        "Enables trace logs for every API request and Pub/Sub event; it may impact performance, "+
+            "do not use in production or on heavy load systems")
+    var localOnly = flag.Bool("local", false,
+        "If set, it only listens to incoming requests from the local host")
+    var port = flag.Int("port", defaultPort, "Server port")
+    var redisUrl = flag.String("redis", "", "URI for the Redis cluster (host:port)")
+    var kafkaUrl = flag.String("kafka", "", "URI for the Kafka broker (host:port)")
+    var sqsTopic = flag.String("sqs", "", "If defined, it will attempt to connect "+
+        "to the given SQS Queue (ignores any value that is passed via the -kafka flag)")
+    flag.Parse()
 
-	logger := log.NewLog("statemachine")
-	logger.Level = log.INFO
+    logger := log.NewLog("statemachine")
+    logger.Level = log.INFO
 
-	var host = "0.0.0.0"
-	if *localOnly {
-		logger.Info("Listening on local interface only")
-		host = "localhost"
-	} else {
-		logger.Warn("Listening on all interfaces")
-	}
-	addr := fmt.Sprintf("%s:%d", host, *port)
-	if *debug {
-		logger.Level = log.DEBUG
-		logger.Debug("Emitting DEBUG logs")
-		server.EnableTracing()
-	}
+    var host = "0.0.0.0"
+    if *localOnly {
+        logger.Info("Listening on local interface only")
+        host = "localhost"
+    } else {
+        logger.Warn("Listening on all interfaces")
+    }
+    addr := fmt.Sprintf("%s:%d", host, *port)
 
-	var store storage.StoreManager
-	if *redisUrl == "" {
-		logger.Warn("in-memory storage configured, all data will NOT survive a server restart")
-		store = storage.NewInMemoryStore()
-	} else {
-		logger.Info("Connecting to Redis server at %s", *redisUrl)
-		store = storage.NewRedisStore(*redisUrl, 1)
-	}
-	store.GetLog().Level = log.DEBUG
-	server.SetStore(store)
+    var store storage.StoreManager
+    if *redisUrl == "" {
+        logger.Warn("in-memory storage configured, all data will NOT survive a server restart")
+        store = storage.NewInMemoryStore()
+    } else {
+        logger.Info("Connecting to Redis server at %s", *redisUrl)
+        store = storage.NewRedisStore(*redisUrl, 1)
+    }
+    server.SetStore(store)
 
-	if *kafkaUrl != "" {
-		logger.Panic("support for Kafka not implemented")
-	} else if *sqsTopic != "" {
-		logger.Panic("support for SQS not implemented")
-	} else {
-		logger.Warn("No event broker configured, state machines will not be " +
-			"able to receive events")
-	}
+    // TODO: sub should be a more "abstract" Subscriber interface
+    var sub *pubsub.SqsSubscriber
+    if *kafkaUrl != "" {
+        logger.Panic("support for Kafka not implemented")
+    } else if *sqsTopic != "" {
+        logger.Info("Connecting to SQS Topic: %s", *sqsTopic)
+        sub = pubsub.NewSqsSubscriber(sqsTopic)
+        sub.StoreManager = store
+    } else {
+        logger.Warn("No event broker configured, state machines will not be " +
+            "able to receive events")
+    }
 
-	logger.Info("Server started at http://%s", addr)
-	srv := server.NewHTTPServer(addr, logger.Level)
+    if *debug {
+        if *trace {
+            logger.Error("Cannot use -debug and -trace at the same time, pick one")
+            os.Exit(1)
+        }
+        logger.Info("DEBUG logging enabled")
+        logger.Level = log.DEBUG
+        server.SetLogLevel(log.DEBUG)
+        store.SetLogLevel(log.DEBUG)
+        sub.SetLogLevel(log.DEBUG)
+    }
 
-	// TODO: configure & start server using TLS, if configured to do so.
-	logger.Fatal(srv.ListenAndServe())
+    if *trace {
+        logger.Info("TRACE Enabled")
+        server.EnableTracing()
+        store.SetLogLevel(log.TRACE)
+        sub.SetLogLevel(log.TRACE)
+    }
+
+    logger.Info("Starting Subscriber goroutine")
+    go sub.Subscribe()
+
+    // TODO: configure & start server using TLS, if configured to do so.
+    logger.Info("Server running at http://%s", addr)
+    srv := server.NewHTTPServer(addr, logger.Level)
+
+    logger.Fatal(srv.ListenAndServe())
 }

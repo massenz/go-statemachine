@@ -25,6 +25,7 @@ import (
     "github.com/golang/protobuf/proto"
     "github.com/google/uuid"
     "github.com/massenz/go-statemachine/api"
+    "github.com/massenz/go-statemachine/logging"
     "github.com/massenz/go-statemachine/storage"
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
@@ -60,7 +61,7 @@ var _ = Describe("RedisStore", func() {
             store.SetTimeout(testTimeout)
             // Mute unnecessary logging during tests; re-enable (
             //and set to DEBUG) when diagnosing failures.
-            store.GetLog().Enable(false)
+            store.SetLogLevel(logging.NONE)
 
             // This is used to go "behind the back" or our StoreManager and mess with it for testing
             // purposes. Do NOT do this in your code.

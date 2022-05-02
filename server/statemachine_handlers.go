@@ -27,21 +27,6 @@ import (
     "net/http"
 )
 
-// StateMachineRequest represents a request for a new FSM to be created, with an optional ID,
-// and a reference to a fully qualified Configuration version.
-//
-// If the ID is not specified, a new UUID will be generated and returned.
-type StateMachineRequest struct {
-    ID                   string `json:"id"`
-    ConfigurationVersion string `json:"configuration_version"`
-}
-
-// StateMachineResponse is returned when a new FSM is created, or as a response to a GET request
-type StateMachineResponse struct {
-    ID           string                  `json:"id"`
-    StateMachine *api.FiniteStateMachine `json:"statemachine"`
-}
-
 func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
     defer trace(r.RequestURI)()
     defaultContent(w)
