@@ -28,17 +28,18 @@ import (
 )
 
 // StateMachineRequest represents a request for a new FSM to be created, with an optional ID,
-// and a reference to a fully qualified Configuration version
+// and a reference to a fully qualified Configuration version.
+//
+// If the ID is not specified, a new UUID will be generated and returned.
 type StateMachineRequest struct {
-    ID                   string `json:"statemachine_id"`
+    ID                   string `json:"id"`
     ConfigurationVersion string `json:"configuration_version"`
 }
 
-// StateMachineResponse is returned when a new FSM is created
+// StateMachineResponse is returned when a new FSM is created, or as a response to a GET request
 type StateMachineResponse struct {
-    ID                   string `json:"statemachine_id"`
-    ConfigurationVersion string `json:"configuration_version"`
-    State                string `json:"initial_state"`
+    ID           string                  `json:"id"`
+    StateMachine *api.FiniteStateMachine `json:"statemachine"`
 }
 
 func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
@@ -82,15 +83,12 @@ func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
     w.Header().Add("Location", StatemachinesEndpoint+"/"+request.ID)
     w.WriteHeader(http.StatusCreated)
     err = json.NewEncoder(w).Encode(&StateMachineResponse{
-        ID:                   request.ID,
-        ConfigurationVersion: fsm.ConfigId,
-        State:                fsm.State,
+        ID:           request.ID,
+        StateMachine: fsm,
     })
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
     }
-    return
 }
 
 func GetStatemachineHandler(w http.ResponseWriter, r *http.Request) {
@@ -114,11 +112,12 @@ func GetStatemachineHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
     logger.Debug("Found FSM: %s", stateMachine.String())
-    err := json.NewEncoder(w).Encode(stateMachine)
+
+    err := json.NewEncoder(w).Encode(&StateMachineResponse{
+        ID:           smId,
+        StateMachine: stateMachine,
+    })
     if err != nil {
-        logger.Error("Could not JSON encode FSM (%s): %s", stateMachine.String(), err.Error())
         http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
     }
-    return
 }
