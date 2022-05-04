@@ -63,7 +63,7 @@ func (s *SqsSubscriber) SetLogLevel(level logging.LogLevel) {
 
 // NewSqsSubscriber will create a new `Subscriber` to listen to
 // incoming api.Event from a SQS `queue`.
-func NewSqsSubscriber(queueName *string) *SqsSubscriber {
+func NewSqsSubscriber(queueName *string, store storage.StoreManager) *SqsSubscriber {
     // TODO: allow to specify a --profile (currently using AWS_PROFILE by default)
     // Specify profile to load for the session's config
     //      sess, err := session.NewSessionWithOptions(session.Options{
@@ -86,6 +86,7 @@ func NewSqsSubscriber(queueName *string) *SqsSubscriber {
         Timeout:         DefaultVisibilityTimeout,
         PollingInterval: DefaultPollingInterval,
         Logger:          logging.NewLog("SQS-Sub"),
+        StoreManager:    store,
     }
 }
 

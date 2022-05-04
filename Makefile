@@ -21,7 +21,7 @@ test: api/statemachine.pb.go
 run: build test
 	docker-compose up -d
 	sm-server --port 8089 --local --debug \
-		--redis localhost:6379
+		--redis localhost:6379 --sqs test-sm
 		# TODO: Implement support for Kafka
 		#    --kafka localhost:9092
 
