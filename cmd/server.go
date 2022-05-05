@@ -38,9 +38,7 @@ const (
 
 func SetLogLevel(services []log.Loggable, level log.LogLevel) {
     for _, s := range services {
-        if s != nil {
-            s.SetLogLevel(level)
-        }
+        s.SetLogLevel(level)
     }
 }
 
@@ -82,22 +80,25 @@ func main() {
     }
     server.SetStore(store)
 
+    eventsCh := make(chan pubsub.EventMessage)
+
     // TODO: sub should be a more "abstract" Subscriber interface
     var sub *pubsub.SqsSubscriber
     if *kafkaUrl != "" {
         logger.Panic("support for Kafka not implemented")
     } else if *sqsTopic != "" {
         logger.Info("Connecting to SQS Topic: %s", *sqsTopic)
-        sub = pubsub.NewSqsSubscriber(sqsTopic, store)
+        sub = pubsub.NewSqsSubscriber(sqsTopic, eventsCh)
     } else {
         logger.Warn("No event broker configured, state machines will not be able to receive events")
     }
+    listener := pubsub.NewEventsListener(store, eventsCh)
 
     var serverLogLevel log.LogLevel = log.INFO
     if *debug {
         logger.Info("verbose logging enabled")
         logger.Level = log.DEBUG
-        SetLogLevel([]log.Loggable{store, sub}, log.DEBUG)
+        SetLogLevel([]log.Loggable{store, sub, listener}, log.DEBUG)
         serverLogLevel = log.DEBUG
     }
 
@@ -105,12 +106,13 @@ func main() {
         logger.Warn("trace logging Enabled")
         logger.Level = log.TRACE
         server.EnableTracing()
-        SetLogLevel([]log.Loggable{store, sub}, log.TRACE)
+        SetLogLevel([]log.Loggable{store, sub, listener}, log.TRACE)
         serverLogLevel = log.TRACE
     }
 
     // TODO: Should probably start a workers pool instead.
-    logger.Info("Starting Subscriber goroutine")
+    logger.Info("Starting Subscriber and Listener goroutines")
+    go listener.ListenForMessages()
     go sub.Subscribe()
 
     // TODO: configure & start server using TLS, if configured to do so.
