@@ -80,6 +80,9 @@ func main() {
     }
     server.SetStore(store)
 
+    // TODO: for now just a blocking channel; we will need to confirm
+    //  whether we can support a fully concurrent system with a
+    //  buffered channel
     eventsCh := make(chan pubsub.EventMessage)
 
     // TODO: sub should be a more "abstract" Subscriber interface
@@ -88,11 +91,16 @@ func main() {
         logger.Panic("support for Kafka not implemented")
     } else if *sqsTopic != "" {
         logger.Info("Connecting to SQS Topic: %s", *sqsTopic)
-        sub = pubsub.NewSqsSubscriber(sqsTopic, eventsCh)
+        sub = pubsub.NewSqsSubscriber(eventsCh)
     } else {
         logger.Warn("No event broker configured, state machines will not be able to receive events")
     }
-    listener := pubsub.NewEventsListener(store, eventsCh)
+    listener := pubsub.NewEventsListener(&pubsub.ListenerOptions{
+        EventsChannel:        eventsCh,
+        NotificationsChannel: nil,
+        StatemachinesStore:   store,
+        ListenersPoolSize:    0,
+    })
 
     var serverLogLevel log.LogLevel = log.INFO
     if *debug {
@@ -113,7 +121,7 @@ func main() {
     // TODO: Should probably start a workers pool instead.
     logger.Info("Starting Subscriber and Listener goroutines")
     go listener.ListenForMessages()
-    go sub.Subscribe()
+    go sub.Subscribe(*sqsTopic)
 
     // TODO: configure & start server using TLS, if configured to do so.
     logger.Info("Server running at http://%s", addr)

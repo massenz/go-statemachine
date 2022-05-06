@@ -4,6 +4,7 @@ module github.com/massenz/go-statemachine
 go 1.16
 
 require (
+	github.com/JiaYongfei/respect v0.0.0-20211019032000-61a979c8e39a
 	github.com/aws/aws-sdk-go v1.44.4
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang/protobuf v1.5.2

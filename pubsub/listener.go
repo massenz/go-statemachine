@@ -19,6 +19,7 @@
 package pubsub
 
 import (
+    "bytes"
     "fmt"
     "github.com/massenz/go-statemachine/api"
     "github.com/massenz/go-statemachine/logging"
@@ -26,27 +27,59 @@ import (
     "google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// An EventsListener will process EventMessage in a separate goroutine.
+// The messages are posted on an `events` channel, and if any error is encountered,
+// error messages are posted on a `notifications` channel for further processing upstream.
 type EventsListener struct {
-    logger *logging.Log
-    events <-chan EventMessage
-    store  storage.StoreManager
+    logger        *logging.Log
+    events        <-chan EventMessage
+    notifications chan<- EventErrorMessage
+    store         storage.StoreManager
 }
 
-func NewEventsListener(store storage.StoreManager, events <-chan EventMessage) *EventsListener {
+// ListenerOptions are used to configure an EventsListener at creation and are used
+// to decouple the internals of the listener from its exposed configuration.
+type ListenerOptions struct {
+    EventsChannel        <-chan EventMessage
+    NotificationsChannel chan<- EventErrorMessage
+    StatemachinesStore   storage.StoreManager
+    ListenersPoolSize    int8
+}
+
+func NewEventsListener(options *ListenerOptions) *EventsListener {
     return &EventsListener{
-        logger: logging.NewLog("Listener"),
-        events: events,
-        store:  store,
+        logger:        logging.NewLog("Listener"),
+        events:        options.EventsChannel,
+        store:         options.StatemachinesStore,
+        notifications: options.NotificationsChannel,
     }
 }
 
+// SetLogLevel to implement the logging.Loggable interface
 func (l *EventsListener) SetLogLevel(level logging.LogLevel) {
     l.logger.Level = level
 }
 
-func (l *EventsListener) PostErrorNotification(msg EventMessage, errMsg string) {
-    l.logger.Error("error processing event [%s]: %s", msg.String(), errMsg)
-    // TODO: post to the notifications channels, to be eventually posted to the DLQ
+func (l *EventsListener) PostErrorNotification(msg EventMessage, err error, detail string) {
+    var msgBuf bytes.Buffer
+    fmt.Fprintf(&msgBuf, "error processing event %s", msg)
+    if err != nil {
+        fmt.Fprintf(&msgBuf, ": %v", err)
+    }
+    if detail != "" {
+        fmt.Fprintf(&msgBuf, " (%s)", detail)
+    }
+    l.logger.Error(msgBuf.String())
+
+    var errorMsg = EventErrorMessage{
+        Error:       *NewEventProcessingError(err),
+        ErrorDetail: detail,
+        Message:     &msg,
+    }
+    if l.notifications != nil {
+        l.logger.Debug("Posting notification of error")
+        l.notifications <- errorMsg
+    }
 }
 
 func (l *EventsListener) ListenForMessages() {
@@ -54,20 +87,20 @@ func (l *EventsListener) ListenForMessages() {
     for event := range l.events {
         l.logger.Debug("Received event %s", event)
         if event.Destination == "" {
-            l.PostErrorNotification(event, fmt.Sprintf("No destination for event %s", event.EventId))
+            l.PostErrorNotification(event, fmt.Errorf("no destination for event"), "")
             continue
         }
         fsm, ok := l.store.GetStateMachine(event.Destination)
         if !ok {
-            l.PostErrorNotification(event, fmt.Sprintf("StateMachine [%s] could not be found",
-                event.Destination))
+            l.PostErrorNotification(event, fmt.Errorf("statemachine [%s] could not be found",
+                event.Destination), "")
             continue
         }
         // TODO: cache the configuration locally: they are immutable anyway.
         cfg, ok := l.store.GetConfig(fsm.ConfigId)
         if !ok {
-            l.PostErrorNotification(event, fmt.Sprintf("Configuration [%s] could not be found",
-                fsm.ConfigId))
+            l.PostErrorNotification(event, fmt.Errorf("configuration [%s] could not be found",
+                fsm.ConfigId), "")
             continue
         }
 
@@ -77,16 +110,17 @@ func (l *EventsListener) ListenForMessages() {
         }
         pbEvent := NewPBEvent(event)
         if err := cfgFsm.SendEvent(pbEvent.Transition.Event); err != nil {
-            l.PostErrorNotification(event, fmt.Sprintf("Cannot send event [%s]: %v",
-                event.String(), err))
+            l.PostErrorNotification(event, err, fmt.Sprintf(
+                "FSM [%s] cannot process event `%s`", event.Destination, event.EventName))
             continue
         }
         err := l.store.PutStateMachine(event.Destination, fsm)
         if err != nil {
-            l.PostErrorNotification(event, err.Error())
+            l.PostErrorNotification(event, err, "")
             continue
         }
-        l.logger.Debug("Event %s for FSM %s processed", event.String(), fsm.String())
+        l.logger.Debug("Event %s transitioned FSM [%s] to state `%s`",
+            event.EventName, event.Destination, fsm.State)
     }
 }
 
