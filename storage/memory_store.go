@@ -26,29 +26,27 @@ import (
 )
 
 func NewInMemoryStore() StoreManager {
-    var store = InMemoryStore{
+    return &InMemoryStore{
         configurationsStore: make(map[string][]byte),
         machinesStore:       make(map[string][]byte),
         logger:              logging.NewLog("memory_store"),
     }
-    return &store
 }
 
 type InMemoryStore struct {
+    logger              *logging.Log
     mux                 sync.RWMutex
     configurationsStore map[string][]byte
     machinesStore       map[string][]byte
-    logger              *logging.Log
+}
+
+func (csm *InMemoryStore) SetLogLevel(level logging.LogLevel) {
+    csm.logger.Level = level
 }
 
 // SetTimeout does not really make sense for an in-memory store, so this is a no-op
 func (csm *InMemoryStore) SetTimeout(_ time.Duration) {
     // do nothing
-}
-
-// SetLogLevel allows InMemoryStore to implement the log.Loggable interface
-func (csm *InMemoryStore) SetLogLevel(level logging.LogLevel) {
-    csm.logger.Level = level
 }
 
 func (csm *InMemoryStore) GetConfig(id string) (cfg *api.Configuration, ok bool) {

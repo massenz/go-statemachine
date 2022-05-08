@@ -29,7 +29,6 @@ import (
     "github.com/massenz/go-statemachine/pubsub"
     "github.com/massenz/go-statemachine/server"
     "github.com/massenz/go-statemachine/storage"
-    "os"
 )
 
 const (
@@ -37,11 +36,19 @@ const (
     defaultDebug = false
 )
 
+func SetLogLevel(services []log.Loggable, level log.LogLevel) {
+    for _, s := range services {
+        s.SetLogLevel(level)
+    }
+}
+
 func main() {
-    var debug = flag.Bool("debug", defaultDebug, "Enables DEBUG logs; do not use with -trace")
+    var debug = flag.Bool("debug", defaultDebug,
+        "Verbose logs; better to avoid on Production services")
     var trace = flag.Bool("trace", false,
         "Enables trace logs for every API request and Pub/Sub event; it may impact performance, "+
-            "do not use in production or on heavy load systems")
+            "do not use in production or on heavily loaded systems ("+
+            "will override the -debug option)")
     var localOnly = flag.Bool("local", false,
         "If set, it only listens to incoming requests from the local host")
     var port = flag.Int("port", defaultPort, "Server port")
@@ -73,44 +80,51 @@ func main() {
     }
     server.SetStore(store)
 
+    // TODO: for now just a blocking channel; we will need to confirm
+    //  whether we can support a fully concurrent system with a
+    //  buffered channel
+    eventsCh := make(chan pubsub.EventMessage)
+
     // TODO: sub should be a more "abstract" Subscriber interface
     var sub *pubsub.SqsSubscriber
     if *kafkaUrl != "" {
         logger.Panic("support for Kafka not implemented")
     } else if *sqsTopic != "" {
         logger.Info("Connecting to SQS Topic: %s", *sqsTopic)
-        sub = pubsub.NewSqsSubscriber(sqsTopic)
-        sub.StoreManager = store
+        sub = pubsub.NewSqsSubscriber(eventsCh)
     } else {
-        logger.Warn("No event broker configured, state machines will not be " +
-            "able to receive events")
+        logger.Warn("No event broker configured, state machines will not be able to receive events")
     }
+    listener := pubsub.NewEventsListener(&pubsub.ListenerOptions{
+        EventsChannel:        eventsCh,
+        NotificationsChannel: nil,
+        StatemachinesStore:   store,
+        ListenersPoolSize:    0,
+    })
 
+    var serverLogLevel log.LogLevel = log.INFO
     if *debug {
-        if *trace {
-            logger.Error("Cannot use -debug and -trace at the same time, pick one")
-            os.Exit(1)
-        }
-        logger.Info("DEBUG logging enabled")
+        logger.Info("verbose logging enabled")
         logger.Level = log.DEBUG
-        server.SetLogLevel(log.DEBUG)
-        store.SetLogLevel(log.DEBUG)
-        sub.SetLogLevel(log.DEBUG)
+        SetLogLevel([]log.Loggable{store, sub, listener}, log.DEBUG)
+        serverLogLevel = log.DEBUG
     }
 
     if *trace {
-        logger.Info("TRACE Enabled")
+        logger.Warn("trace logging Enabled")
+        logger.Level = log.TRACE
         server.EnableTracing()
-        store.SetLogLevel(log.TRACE)
-        sub.SetLogLevel(log.TRACE)
+        SetLogLevel([]log.Loggable{store, sub, listener}, log.TRACE)
+        serverLogLevel = log.TRACE
     }
 
-    logger.Info("Starting Subscriber goroutine")
-    go sub.Subscribe()
+    // TODO: Should probably start a workers pool instead.
+    logger.Info("Starting Subscriber and Listener goroutines")
+    go listener.ListenForMessages()
+    go sub.Subscribe(*sqsTopic)
 
     // TODO: configure & start server using TLS, if configured to do so.
     logger.Info("Server running at http://%s", addr)
-    srv := server.NewHTTPServer(addr, logger.Level)
-
+    srv := server.NewHTTPServer(addr, serverLogLevel)
     logger.Fatal(srv.ListenAndServe())
 }

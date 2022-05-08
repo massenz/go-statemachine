@@ -19,28 +19,27 @@
 package storage
 
 import (
-	"fmt"
-	"github.com/massenz/go-statemachine/api"
-	log "github.com/massenz/go-statemachine/logging"
-	"time"
+    "fmt"
+    "github.com/massenz/go-statemachine/api"
+    "github.com/massenz/go-statemachine/logging"
+    "time"
 )
 
 var IllegalStoreError = fmt.Errorf("error storing invalid data")
 
 type ConfigurationStorageManager interface {
-	GetConfig(id string) (cfg *api.Configuration, ok bool)
-	PutConfig(id string, cfg *api.Configuration) (err error)
+    GetConfig(id string) (cfg *api.Configuration, ok bool)
+    PutConfig(id string, cfg *api.Configuration) (err error)
 }
 
 type FiniteStateMachineStorageManager interface {
-	GetStateMachine(id string) (cfg *api.FiniteStateMachine, ok bool)
-	PutStateMachine(id string, cfg *api.FiniteStateMachine) (err error)
+    GetStateMachine(id string) (cfg *api.FiniteStateMachine, ok bool)
+    PutStateMachine(id string, cfg *api.FiniteStateMachine) (err error)
 }
 
 type StoreManager interface {
-	log.Loggable
-	ConfigurationStorageManager
-	FiniteStateMachineStorageManager
-
-	SetTimeout(duration time.Duration)
+    logging.Loggable
+    ConfigurationStorageManager
+    FiniteStateMachineStorageManager
+    SetTimeout(duration time.Duration)
 }

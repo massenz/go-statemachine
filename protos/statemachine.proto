@@ -10,6 +10,8 @@ import "google/protobuf/timestamp.proto";
 // See: https://developers.google.com/protocol-buffers/docs/reference/go-generated#package
 option go_package = "github.com/massenz/statemachine/api";
 
+// A state-machine Transition models the successful processing of an Event, and the
+// FSM transitioning from the `from` state to the `to` state.
 message Transition {
   string from = 1;
   string to = 2;
@@ -28,6 +30,11 @@ message Event {
   // when received by the system, it may simply represent the `event` that triggered the
   // Transition.
   Transition transition = 3;
+
+  // The Sender of this event, if known; it can be a URI or just an ID, the semantics of
+  // this field are left vague by design, the meaning of the `sender` string will be
+  // dependant on the type of Event sent, and the target StateMachine.
+  string originator = 4;
 }
 
 message Configuration {

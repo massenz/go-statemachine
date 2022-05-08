@@ -22,80 +22,68 @@ import (
     "github.com/aws/aws-sdk-go/aws"
     "github.com/aws/aws-sdk-go/aws/session"
     "github.com/aws/aws-sdk-go/service/sqs"
-    "github.com/golang/protobuf/proto"
-    "github.com/massenz/go-statemachine/api"
     "github.com/massenz/go-statemachine/logging"
-    "github.com/massenz/go-statemachine/storage"
+    "strconv"
     "time"
 )
 
-// FIXME: need to generalize and abstract the implementation.
-// TODO: this is just a first pass to explore possible alternatives.
-
-// Not really "variables" - but Go is too dumb to figure out they're actually constants.
-var (
-    // We poll SQS every DefaultPollingInterval seconds
-    DefaultPollingInterval, _ = time.ParseDuration("5s")
-
-    // DefaultVisibilityTimeout sets how long SQS will wait for the subscriber to remove the
-    // message from the queue.
-    // See: https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html
-    DefaultVisibilityTimeout, _ = time.ParseDuration("5s")
-)
-
+// FIXME: need to generalize and abstract the implementation of a Subscriber
 type SqsSubscriber struct {
-    client   *sqs.SQS
-    queueUrl *string
-    // TODO: add an Events channel
-    // TODO: add a Done channel
-
-    QueueName       *string
+    logger          *logging.Log
+    client          *sqs.SQS
+    events          chan<- EventMessage
     Timeout         time.Duration
     PollingInterval time.Duration
-    StoreManager    storage.StoreManager
-    Logger          *logging.Log
-}
-
-// SqsSubscriber implements the logging.Loggable interface
-func (s *SqsSubscriber) SetLogLevel(level logging.LogLevel) {
-    s.Logger.Level = level
 }
 
 // NewSqsSubscriber will create a new `Subscriber` to listen to
 // incoming api.Event from a SQS `queue`.
-func NewSqsSubscriber(queueName *string) *SqsSubscriber {
-    // TODO: allow to specify a --profile (currently using AWS_PROFILE by default)
-    // Specify profile to load for the session's config
-    //      sess, err := session.NewSessionWithOptions(session.Options{
-    //          Profile: "profile_name",
-    //      })
-
+func NewSqsSubscriber(eventsChannel chan<- EventMessage) *SqsSubscriber {
+    // TODO: need to confirm this works when running inside an EKS Node.
     sess := session.Must(session.NewSessionWithOptions(session.Options{
         SharedConfigState: session.SharedConfigEnable,
     }))
     client := sqs.New(sess)
-
-    // TODO: Figure out all the error processing
-    queueUrl, _ := client.GetQueueUrl(&sqs.GetQueueUrlInput{
-        QueueName: queueName,
-    })
-
     return &SqsSubscriber{
+        logger:          logging.NewLog("SQS-Sub"),
         client:          client,
-        queueUrl:        queueUrl.QueueUrl,
+        events:          eventsChannel,
         Timeout:         DefaultVisibilityTimeout,
         PollingInterval: DefaultPollingInterval,
-        Logger:          logging.NewLog("SQS-Sub"),
     }
 }
 
-// Subscribe runs until signaled on the Done channel and listens for incoming Events
-func (s *SqsSubscriber) Subscribe() {
-    timeout := int64(s.Timeout.Seconds())
+// SetLogLevel allows the SqsSubscriber to implement the logging.Loggable interface
+func (s *SqsSubscriber) SetLogLevel(level logging.LogLevel) {
+    s.logger.Level = level
+}
 
+// GetQueueUrlFromTopic retrieves from AWS SQS the URL for the queue, given the topic name
+func (s *SqsSubscriber) GetQueueUrlFromTopic(topic string) (*string, error) {
+    out, err := s.client.GetQueueUrl(&sqs.GetQueueUrlInput{
+        QueueName: &topic,
+    })
+    if err != nil {
+        s.logger.Error("Cannot obtain URL for SQS Topic %s: %v", topic, err)
+        return nil, err
+    }
+    return out.QueueUrl, nil
+}
+
+// Subscribe runs until signaled on the Done channel and listens for incoming Events
+func (s *SqsSubscriber) Subscribe(topic string) {
+    queueUrl, err := s.GetQueueUrlFromTopic(topic)
+    if err != nil {
+        // From the Google School: fail fast and noisily from an unrecoverable error
+        panic(err)
+    }
+    s.logger.Info("SQS Subscriber started for queue: %s", *queueUrl)
+
+    timeout := int64(s.Timeout.Seconds())
+    // This will run forever until the server is terminated.
     for {
         start := time.Now()
-        s.Logger.Trace("Polling SQS...")
+        s.logger.Trace("Polling SQS at %v", start)
         msgResult, err := s.client.ReceiveMessage(&sqs.ReceiveMessageInput{
             AttributeNames: []*string{
                 aws.String(sqs.MessageSystemAttributeNameSentTimestamp),
@@ -103,74 +91,63 @@ func (s *SqsSubscriber) Subscribe() {
             MessageAttributeNames: []*string{
                 aws.String(sqs.QueueAttributeNameAll),
             },
-            QueueUrl:            s.queueUrl,
+            QueueUrl:            queueUrl,
             MaxNumberOfMessages: aws.Int64(10),
             VisibilityTimeout:   &timeout,
         })
         if err == nil {
             if len(msgResult.Messages) > 0 {
-                s.Logger.Debug("Got %d messages", len(msgResult.Messages))
+                s.logger.Debug("Got %d messages", len(msgResult.Messages))
             } else {
-                s.Logger.Trace("No messages in queue")
+                s.logger.Trace("no messages in queue")
             }
             for _, msg := range msgResult.Messages {
-                go s.ProcessMessage(msg)
-                s.Logger.Debug("Removing message %v from SQS", *msg.MessageId)
-                s.client.DeleteMessage(&sqs.DeleteMessageInput{
-                    QueueUrl:      s.queueUrl,
-                    ReceiptHandle: msg.ReceiptHandle,
-                })
+                s.logger.Trace("processing %v", msg.String())
+                go s.ProcessMessage(msg, queueUrl)
             }
         } else {
-            s.Logger.Error(err.Error())
+            s.logger.Error(err.Error())
         }
         timeLeft := s.PollingInterval - time.Since(start)
         if timeLeft > 0 {
+            s.logger.Trace("sleeping for %v", timeLeft)
             time.Sleep(timeLeft)
         }
     }
 }
 
-func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message) {
+func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
 
-    var evt api.Event
-    if err := proto.UnmarshalText(*msg.Body, &evt); err != nil {
-        s.Logger.Error(err.Error())
-        return
-    }
-    stateMachineId := msg.MessageAttributes["DestinationId"].StringValue
-    if stateMachineId == nil {
-        s.Logger.Error("No Destination ID in %v", msg.MessageAttributes)
-        return
-    }
+    var event = EventMessage{}
+    event.Destination = *msg.MessageAttributes["DestinationId"].StringValue
+    event.EventName = *msg.Body
 
-    // TODO: send the ID, Evt on the Events channel here
-
-    // TODO: move the code below to an EventsListener
-    fsm, ok := s.StoreManager.GetStateMachine(*stateMachineId)
-    if !ok {
-        s.Logger.Error("StateMachine [%s] could not be found", *stateMachineId)
-        return
-    }
-    // TODO: cache the configuration locally: they are immutable anyway.
-    cfg, ok := s.StoreManager.GetConfig(fsm.ConfigId)
-    if !ok {
-        s.Logger.Error("Configuration [%s] could not be found", fsm.ConfigId)
-        return
+    if event.Destination != "" && event.EventName != "" {
+        event.EventId = *msg.MessageAttributes["EventId"].StringValue
+        event.Sender = *msg.MessageAttributes["Sender"].StringValue
+        timestamp := msg.Attributes[sqs.MessageSystemAttributeNameSentTimestamp]
+        if timestamp == nil {
+            event.EventTimestamp = time.Now()
+        } else {
+            // TODO: We may need some amount of error-checking here.
+            ts, _ := strconv.ParseInt(*timestamp, 10, 64)
+            event.EventTimestamp = time.UnixMilli(ts)
+        }
+        s.logger.Debug("Sent at: %s", event.EventTimestamp.String())
+        s.events <- event
+    } else {
+        // TODO: publish error to DLQ, no point in retrying.
+        s.logger.Error("No Destination ID or Event in %v", msg.String())
     }
 
-    cfgFsm := api.ConfiguredStateMachine{
-        Config: cfg,
-        FSM:    fsm,
-    }
-    if err := cfgFsm.SendEvent(evt.Transition.Event); err != nil {
-        s.Logger.Error("Cannot send event to FSM %s: %s", *stateMachineId, err.Error())
-        return
-    }
-    err := s.StoreManager.PutStateMachine(*stateMachineId, fsm)
+    s.logger.Debug("Removing message %v from SQS", *msg.MessageId)
+    _, err := s.client.DeleteMessage(&sqs.DeleteMessageInput{
+        QueueUrl:      queueUrl,
+        ReceiptHandle: msg.ReceiptHandle,
+    })
     if err != nil {
-        s.Logger.Error(err.Error())
-        return
+        // TODO: publish error to DLQ, we should probably also alert.
+        s.logger.Error("Failed to remove message %v from SQS: %v", msg.MessageId, err)
     }
-    s.Logger.Debug("Event %s for FSM %s processed", evt, fsm)
+    s.logger.Trace("Message removed")
 }

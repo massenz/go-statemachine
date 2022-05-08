@@ -1,0 +1,14 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="go test statemachine" type="GoTestRunConfiguration" factoryName="Go Test" singleton="false">
+    <module name="statemachine" />
+    <working_directory value="$PROJECT_DIR$" />
+    <go_parameters value="./api ./server ./storage" />
+    <kind value="DIRECTORY" />
+    <package value="github.com/massenz/go-statemachine" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$" />
+    <framework value="gotest" />
+    <pattern value="./api" />
+    <method v="2" />
+  </configuration>
+</component>

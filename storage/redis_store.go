@@ -74,7 +74,7 @@ func NewRedisStoreWithCreds(address string, db int, username string, password st
     }
 }
 
-// GetLog for RedisStore implements the Loggable interface
+// SetLogLevel for RedisStore implements the Loggable interface
 func (csm *RedisStore) SetLogLevel(level logging.LogLevel) {
     csm.logger.Level = level
 }
