@@ -18,11 +18,14 @@ jobs:
     - name: Install protoc-gen
       run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
-    - name: Build PB
-      run: make protos
-
-    - name: Start local Redis
-      run: docker run -d -p 6379:6379 redis:6.2-alpine
+    - name: Build
+      run: export GOPATH=/home/runner/go && mkdir -p $GOPATH/bin && make all
+      
+    - name: Run Containers
+      run: docker-compose up -d
+      
+    - name: Copy Bogus AWS creds
+      run: cp data/credentials ${HOME}/.aws/
       
     - name: Test
-      run: go test ./api ./server ./storage
+      run: go test ./api ./pubsub ./server ./storage

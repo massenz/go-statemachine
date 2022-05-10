@@ -33,8 +33,8 @@ type ConfigurationStorageManager interface {
 }
 
 type FiniteStateMachineStorageManager interface {
-    GetStateMachine(id string) (cfg *api.FiniteStateMachine, ok bool)
-    PutStateMachine(id string, cfg *api.FiniteStateMachine) (err error)
+    GetStateMachine(id string) (fsm *api.FiniteStateMachine, ok bool)
+    PutStateMachine(id string, fsm *api.FiniteStateMachine) (err error)
 }
 
 type StoreManager interface {

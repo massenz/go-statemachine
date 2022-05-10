@@ -31,19 +31,16 @@ import (
     "github.com/massenz/go-statemachine/storage"
 )
 
-const (
-    defaultPort  = 8080
-    defaultDebug = false
-)
-
 func SetLogLevel(services []log.Loggable, level log.LogLevel) {
     for _, s := range services {
-        s.SetLogLevel(level)
+        if s != nil {
+            s.SetLogLevel(level)
+        }
     }
 }
 
 func main() {
-    var debug = flag.Bool("debug", defaultDebug,
+    var debug = flag.Bool("debug", false,
         "Verbose logs; better to avoid on Production services")
     var trace = flag.Bool("trace", false,
         "Enables trace logs for every API request and Pub/Sub event; it may impact performance, "+
@@ -51,15 +48,20 @@ func main() {
             "will override the -debug option)")
     var localOnly = flag.Bool("local", false,
         "If set, it only listens to incoming requests from the local host")
-    var port = flag.Int("port", defaultPort, "Server port")
+    var port = flag.Int("port", 4567, "Server port")
     var redisUrl = flag.String("redis", "", "URI for the Redis cluster (host:port)")
-    var kafkaUrl = flag.String("kafka", "", "URI for the Kafka broker (host:port)")
-    var sqsTopic = flag.String("sqs", "", "If defined, it will attempt to connect "+
+    var sqsUrl = flag.String("sqs", "",
+        "HTTP URL for AWS SQS to connect to; usually best left undefined, "+
+            "unless required for local testing purposes ("+
+            "example using LocalStack: -sqs http://localhost:4566)")
+    var eventsTopic = flag.String("events", "", "If defined, it will attempt to connect "+
         "to the given SQS Queue (ignores any value that is passed via the -kafka flag)")
+    var dlqTopic = flag.String("errors", "",
+        "The name of the Dead-Letter Queue ("+"DLQ) in SQS to post errors to; if not "+
+            "specified, the DLQ will not be used")
     flag.Parse()
 
     logger := log.NewLog("statemachine")
-    logger.Level = log.INFO
 
     var host = "0.0.0.0"
     if *localOnly {
@@ -80,33 +82,50 @@ func main() {
     }
     server.SetStore(store)
 
-    // TODO: for now just a blocking channel; we will need to confirm
+    var sub *pubsub.SqsSubscriber
+    var pub *pubsub.SqsPublisher = nil
+
+    // TODO: for now blocking channels; we will need to confirm
     //  whether we can support a fully concurrent system with a
     //  buffered channel
-    eventsCh := make(chan pubsub.EventMessage)
+    var eventsCh = make(chan pubsub.EventMessage)
+    defer close(eventsCh)
 
-    // TODO: sub should be a more "abstract" Subscriber interface
-    var sub *pubsub.SqsSubscriber
-    if *kafkaUrl != "" {
-        logger.Panic("support for Kafka not implemented")
-    } else if *sqsTopic != "" {
-        logger.Info("Connecting to SQS Topic: %s", *sqsTopic)
-        sub = pubsub.NewSqsSubscriber(eventsCh)
-    } else {
-        logger.Warn("No event broker configured, state machines will not be able to receive events")
+    var errorsCh chan pubsub.EventErrorMessage = nil
+
+    if *eventsTopic == "" {
+        logger.Fatal(fmt.Errorf("no event topic configured, state machines will not " +
+            "be able to receive events"))
+    }
+    logger.Info("Connecting to SQS Topic: %s", *eventsTopic)
+    sub = pubsub.NewSqsSubscriber(eventsCh, sqsUrl)
+    if sub == nil {
+        panic("Cannot create a valid SQS Subscriber")
+    }
+
+    if *dlqTopic != "" {
+        logger.Info("Configuring DLQ Topic: %s", *dlqTopic)
+        errorsCh = make(chan pubsub.EventErrorMessage)
+        defer close(errorsCh)
+        pub = pubsub.NewSqsPublisher(errorsCh, sqsUrl)
+        if sub == nil {
+            panic("Cannot create a valid SQS Publisher")
+        }
+        go pub.Publish(*dlqTopic)
     }
     listener := pubsub.NewEventsListener(&pubsub.ListenerOptions{
         EventsChannel:        eventsCh,
-        NotificationsChannel: nil,
+        NotificationsChannel: errorsCh,
         StatemachinesStore:   store,
-        ListenersPoolSize:    0,
+        // TODO: workers pool not implemented yet.
+        ListenersPoolSize: 0,
     })
 
     var serverLogLevel log.LogLevel = log.INFO
     if *debug {
         logger.Info("verbose logging enabled")
         logger.Level = log.DEBUG
-        SetLogLevel([]log.Loggable{store, sub, listener}, log.DEBUG)
+        SetLogLevel([]log.Loggable{store, pub, sub, listener}, log.DEBUG)
         serverLogLevel = log.DEBUG
     }
 
@@ -118,10 +137,9 @@ func main() {
         serverLogLevel = log.TRACE
     }
 
-    // TODO: Should probably start a workers pool instead.
-    logger.Info("Starting Subscriber and Listener goroutines")
+    logger.Info("Starting Subscriber, Publisher and Listener goroutines")
     go listener.ListenForMessages()
-    go sub.Subscribe(*sqsTopic)
+    go sub.Subscribe(*eventsTopic, nil)
 
     // TODO: configure & start server using TLS, if configured to do so.
     logger.Info("Server running at http://%s", addr)

@@ -1,6 +1,6 @@
 module github.com/massenz/go-statemachine
 
-// TODO @MM: move to 1.18 and use generics
+// TODO: Move to 1.18 and use generics
 go 1.16
 
 require (

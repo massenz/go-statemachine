@@ -66,7 +66,7 @@ func SetLogLevel(level log.LogLevel) {
 // that path params are testable.
 func NewRouter() *mux.Router {
 
-    // TODO @MM: Move all the Handlers to a `handlers` package.
+    // TODO: Move all the Handlers to a `handlers` package.
     r := mux.NewRouter()
     r.HandleFunc(HealthEndpoint, HealthHandler).Methods("GET")
     r.HandleFunc(ConfigurationsEndpoint, CreateConfigurationHandler).Methods("POST")
