@@ -19,13 +19,13 @@ jobs:
       run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
     - name: Build
-      run: export GOPATH=/home/runner/go && mkdir -p $GOPATH/bin && make all
+      run: export GOPATH=/home/runner/go && mkdir -p ${GOPATH}/bin && make all
       
     - name: Run Containers
       run: docker-compose up -d
       
     - name: Copy Bogus AWS creds
-      run: cp data/credentials ${HOME}/.aws/
+      run: mkdir -p ${HOME}/.aws && cp data/credentials ${HOME}/.aws/
       
     - name: Test
       run: go test ./api ./pubsub ./server ./storage
