@@ -35,36 +35,36 @@ func NewEventsListener(options *ListenerOptions) *EventsListener {
 }
 
 // SetLogLevel to implement the logging.Loggable interface
-func (l *EventsListener) SetLogLevel(level logging.LogLevel) {
-    l.logger.Level = level
+func (listener *EventsListener) SetLogLevel(level logging.LogLevel) {
+    listener.logger.Level = level
 }
 
-func (l *EventsListener) PostErrorNotification(error *EventErrorMessage) {
-    l.logger.Error(error.String())
-    if l.notifications != nil {
-        l.logger.Debug("Posting notification of error: %v", *error)
-        l.notifications <- *error
+func (listener *EventsListener) PostErrorNotification(error *EventErrorMessage) {
+    listener.logger.Error(error.String())
+    if listener.notifications != nil {
+        listener.logger.Debug("Posting notification of error: %v", *error)
+        listener.notifications <- *error
     }
 }
 
-func (l *EventsListener) ListenForMessages() {
-    l.logger.Info("Events message listener started")
-    for event := range l.events {
-        l.logger.Debug("Received event %s", event)
+func (listener *EventsListener) ListenForMessages() {
+    listener.logger.Info("Events message listener started")
+    for event := range listener.events {
+        listener.logger.Debug("Received event %s", event)
         if event.Destination == "" {
-            l.PostErrorNotification(ErrorMessage(fmt.Errorf("no destination for event"), &event))
+            listener.PostErrorNotification(ErrorMessage(fmt.Errorf("no destination for event"), &event))
             continue
         }
-        fsm, ok := l.store.GetStateMachine(event.Destination)
+        fsm, ok := listener.store.GetStateMachine(event.Destination)
         if !ok {
-            l.PostErrorNotification(ErrorMessage(fmt.Errorf("statemachine [%s] could not be found",
+            listener.PostErrorNotification(ErrorMessage(fmt.Errorf("statemachine [%s] could not be found",
                 event.Destination), &event))
             continue
         }
         // TODO: cache the configuration locally: they are immutable anyway.
-        cfg, ok := l.store.GetConfig(fsm.ConfigId)
+        cfg, ok := listener.store.GetConfig(fsm.ConfigId)
         if !ok {
-            l.PostErrorNotification(ErrorMessage(fmt.Errorf("configuration [%s] could not be found",
+            listener.PostErrorNotification(ErrorMessage(fmt.Errorf("configuration [%s] could not be found",
                 fsm.ConfigId), &event))
             continue
         }
@@ -75,16 +75,16 @@ func (l *EventsListener) ListenForMessages() {
         }
         pbEvent := NewPBEvent(event)
         if err := cfgFsm.SendEvent(pbEvent.Transition.Event); err != nil {
-            l.PostErrorNotification(ErrorMessageWithDetail(err, &event, fmt.Sprintf(
+            listener.PostErrorNotification(ErrorMessageWithDetail(err, &event, fmt.Sprintf(
                 "FSM [%s] cannot process event `%s`", event.Destination, event.EventName)))
             continue
         }
-        err := l.store.PutStateMachine(event.Destination, fsm)
+        err := listener.store.PutStateMachine(event.Destination, fsm)
         if err != nil {
-            l.PostErrorNotification(ErrorMessage(err, &event))
+            listener.PostErrorNotification(ErrorMessage(err, &event))
             continue
         }
-        l.logger.Debug("Event %s transitioned FSM [%s] to state `%s`",
+        listener.logger.Debug("Event %s transitioned FSM [%s] to state `%s`",
             event.EventName, event.Destination, fsm.State)
     }
 }

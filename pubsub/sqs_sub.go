@@ -40,9 +40,9 @@ type SqsSubscriber struct {
     PollingInterval time.Duration
 }
 
-// NewSqsSubscriber will create a new `Subscriber` to listen to
-// incoming api.Event from a SQS `queue`.
-func NewSqsSubscriber(eventsChannel chan<- EventMessage, sqsUrl *string) *SqsSubscriber {
+// getSqsClient connects to AWS and obtains an SQS client; passing `nil` as the `sqsUrl` will
+// connect by default to AWS; use a different (possibly local) URL for a LocalStack test deployment.
+func getSqsClient(sqsUrl *string) *sqs.SQS {
     var sess *session.Session
     if sqsUrl == nil {
         sess = session.Must(session.NewSessionWithOptions(session.Options{
@@ -63,7 +63,16 @@ func NewSqsSubscriber(eventsChannel chan<- EventMessage, sqsUrl *string) *SqsSub
             },
         }))
     }
-    client := sqs.New(sess)
+    return sqs.New(sess)
+}
+
+// NewSqsSubscriber will create a new `Subscriber` to listen to
+// incoming api.Event from a SQS `queue`.
+func NewSqsSubscriber(eventsChannel chan<- EventMessage, sqsUrl *string) *SqsSubscriber {
+    client := getSqsClient(sqsUrl)
+    if client == nil {
+        return nil
+    }
     return &SqsSubscriber{
         logger:          logging.NewLog("SQS-Sub"),
         client:          client,

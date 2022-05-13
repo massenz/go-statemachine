@@ -21,10 +21,8 @@ package pubsub
 import (
     "fmt"
     "github.com/aws/aws-sdk-go/aws"
-    "github.com/aws/aws-sdk-go/aws/session"
     "github.com/aws/aws-sdk-go/service/sqs"
     "github.com/massenz/go-statemachine/logging"
-    "os"
 )
 
 type SqsPublisher struct {
@@ -36,27 +34,10 @@ type SqsPublisher struct {
 // NewSqsPublisher will create a new `Publisher` to send error notifications to
 // an SQS `dead-letter queue`.
 func NewSqsPublisher(errorsChannel <-chan EventErrorMessage, sqsUrl *string) *SqsPublisher {
-    var sess *session.Session
-    if sqsUrl == nil {
-        sess = session.Must(session.NewSessionWithOptions(session.Options{
-            SharedConfigState: session.SharedConfigEnable,
-        }))
-    } else {
-        region, found := os.LookupEnv("AWS_REGION")
-        if !found {
-            fmt.Printf("No AWS Region configured, cannot connect to SQS provider at %s\n",
-                *sqsUrl)
-            return nil
-        }
-        sess = session.Must(session.NewSessionWithOptions(session.Options{
-            SharedConfigState: session.SharedConfigEnable,
-            Config: aws.Config{
-                Endpoint: sqsUrl,
-                Region:   &region,
-            },
-        }))
+    client := getSqsClient(sqsUrl)
+    if client == nil {
+        return nil
     }
-    client := sqs.New(sess)
     return &SqsPublisher{
         logger: logging.NewLog("SQS-Pub"),
         client: client,

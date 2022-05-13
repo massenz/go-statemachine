@@ -34,6 +34,7 @@ var MissingStatesConfigurationError = fmt.Errorf(
     "configuration must always specify at least one state")
 var MismatchStartingStateConfigurationError = fmt.Errorf(
     "the StartingState must be one of the possible FSM states")
+var EmptyStartingStateConfigurationError = fmt.Errorf("the StartingState must be non-empty")
 
 var NotImplementedError = fmt.Errorf("not implemented")
 
@@ -158,7 +159,10 @@ func (x *Configuration) CheckValid() error {
     if len(x.States) == 0 {
         return MissingStatesConfigurationError
     }
-    if x.StartingState == "" || !x.HasState(x.StartingState) {
+    if x.StartingState == "" {
+        return EmptyStartingStateConfigurationError
+    }
+    if !x.HasState(x.StartingState) {
         return MismatchStartingStateConfigurationError
     }
     // TODO: we should actually build the full graph and check it's fully connected.
