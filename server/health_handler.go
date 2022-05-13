@@ -30,7 +30,7 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
     defer trace(r.RequestURI)()
     defaultContent(w)
 
-    // TODO @MM: add a check on Redis and SQS reachability
+    // TODO: add a check on Redis and SQS reachability
     res := MessageResponse{"UP"}
     err := json.NewEncoder(w).Encode(res)
     if err != nil {

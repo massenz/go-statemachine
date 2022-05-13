@@ -107,7 +107,7 @@ func NewLogToWriter(writer io.Writer, name string) *Log {
 }
 
 // RootLog is the default log
-var RootLog = NewLog("")
+var RootLog = NewLog("ROOT")
 
 var none, _ = os.Open(os.DevNull)
 

@@ -54,8 +54,7 @@ func NewRedisStore(address string, db int) StoreManager {
         logger: logging.NewLog(fmt.Sprintf("redis:%s", address)),
         client: redis.NewClient(&redis.Options{
             Addr: address,
-            // TODO @MM: understand what other int values mean
-            DB: db, // 0 means default DB
+            DB:   db, // 0 means default DB
         }),
         Timeout: DefaultTimeout,
     }

@@ -19,15 +19,19 @@
 package pubsub
 
 import (
+    "fmt"
     "github.com/aws/aws-sdk-go/aws"
     "github.com/aws/aws-sdk-go/aws/session"
     "github.com/aws/aws-sdk-go/service/sqs"
     "github.com/massenz/go-statemachine/logging"
+    "os"
     "strconv"
     "time"
 )
 
-// FIXME: need to generalize and abstract the implementation of a Subscriber
+// TODO: should we need to generalize and abstract the implementation of a Subscriber?
+//  This would be necessary if we were to implement a different message broker (e.g., Kafka)
+
 type SqsSubscriber struct {
     logger          *logging.Log
     client          *sqs.SQS
@@ -36,14 +40,39 @@ type SqsSubscriber struct {
     PollingInterval time.Duration
 }
 
+// getSqsClient connects to AWS and obtains an SQS client; passing `nil` as the `sqsUrl` will
+// connect by default to AWS; use a different (possibly local) URL for a LocalStack test deployment.
+func getSqsClient(sqsUrl *string) *sqs.SQS {
+    var sess *session.Session
+    if sqsUrl == nil {
+        sess = session.Must(session.NewSessionWithOptions(session.Options{
+            SharedConfigState: session.SharedConfigEnable,
+        }))
+    } else {
+        region, found := os.LookupEnv("AWS_REGION")
+        if !found {
+            fmt.Printf("No AWS Region configured, cannot connect to SQS provider at %s\n",
+                *sqsUrl)
+            return nil
+        }
+        sess = session.Must(session.NewSessionWithOptions(session.Options{
+            SharedConfigState: session.SharedConfigEnable,
+            Config: aws.Config{
+                Endpoint: sqsUrl,
+                Region:   &region,
+            },
+        }))
+    }
+    return sqs.New(sess)
+}
+
 // NewSqsSubscriber will create a new `Subscriber` to listen to
 // incoming api.Event from a SQS `queue`.
-func NewSqsSubscriber(eventsChannel chan<- EventMessage) *SqsSubscriber {
-    // TODO: need to confirm this works when running inside an EKS Node.
-    sess := session.Must(session.NewSessionWithOptions(session.Options{
-        SharedConfigState: session.SharedConfigEnable,
-    }))
-    client := sqs.New(sess)
+func NewSqsSubscriber(eventsChannel chan<- EventMessage, sqsUrl *string) *SqsSubscriber {
+    client := getSqsClient(sqsUrl)
+    if client == nil {
+        return nil
+    }
     return &SqsSubscriber{
         logger:          logging.NewLog("SQS-Sub"),
         client:          client,
@@ -58,30 +87,20 @@ func (s *SqsSubscriber) SetLogLevel(level logging.LogLevel) {
     s.logger.Level = level
 }
 
-// GetQueueUrlFromTopic retrieves from AWS SQS the URL for the queue, given the topic name
-func (s *SqsSubscriber) GetQueueUrlFromTopic(topic string) (*string, error) {
-    out, err := s.client.GetQueueUrl(&sqs.GetQueueUrlInput{
-        QueueName: &topic,
-    })
-    if err != nil {
-        s.logger.Error("Cannot obtain URL for SQS Topic %s: %v", topic, err)
-        return nil, err
-    }
-    return out.QueueUrl, nil
-}
-
 // Subscribe runs until signaled on the Done channel and listens for incoming Events
-func (s *SqsSubscriber) Subscribe(topic string) {
-    queueUrl, err := s.GetQueueUrlFromTopic(topic)
-    if err != nil {
-        // From the Google School: fail fast and noisily from an unrecoverable error
-        panic(err)
-    }
-    s.logger.Info("SQS Subscriber started for queue: %s", *queueUrl)
+func (s *SqsSubscriber) Subscribe(topic string, done <-chan interface{}) {
+    queueUrl := GetQueueUrl(s.client, topic)
+    s.logger.Info("SQS Subscriber started for queue: %s", queueUrl)
 
     timeout := int64(s.Timeout.Seconds())
-    // This will run forever until the server is terminated.
     for {
+        select {
+        case <-done:
+            s.logger.Info("SQS Subscriber terminating")
+            return
+        default:
+            s.logger.Trace("...")
+        }
         start := time.Now()
         s.logger.Trace("Polling SQS at %v", start)
         msgResult, err := s.client.ReceiveMessage(&sqs.ReceiveMessageInput{
@@ -91,7 +110,7 @@ func (s *SqsSubscriber) Subscribe(topic string) {
             MessageAttributeNames: []*string{
                 aws.String(sqs.QueueAttributeNameAll),
             },
-            QueueUrl:            queueUrl,
+            QueueUrl:            &queueUrl,
             MaxNumberOfMessages: aws.Int64(10),
             VisibilityTimeout:   &timeout,
         })
@@ -103,7 +122,7 @@ func (s *SqsSubscriber) Subscribe(topic string) {
             }
             for _, msg := range msgResult.Messages {
                 s.logger.Trace("processing %v", msg.String())
-                go s.ProcessMessage(msg, queueUrl)
+                go s.ProcessMessage(msg, &queueUrl)
             }
         } else {
             s.logger.Error(err.Error())
@@ -117,7 +136,7 @@ func (s *SqsSubscriber) Subscribe(topic string) {
 }
 
 func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
-
+    s.logger.Trace("Processing Message %v", msg.MessageId)
     var event = EventMessage{}
     event.Destination = *msg.MessageAttributes["DestinationId"].StringValue
     event.EventName = *msg.Body
@@ -127,8 +146,10 @@ func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
         event.Sender = *msg.MessageAttributes["Sender"].StringValue
         timestamp := msg.Attributes[sqs.MessageSystemAttributeNameSentTimestamp]
         if timestamp == nil {
+            s.logger.Warn("No Timestamp in received event, using current time")
             event.EventTimestamp = time.Now()
         } else {
+            // An SQS Message timestamp is a Unix milliseconds from epoch.
             // TODO: We may need some amount of error-checking here.
             ts, _ := strconv.ParseInt(*timestamp, 10, 64)
             event.EventTimestamp = time.UnixMilli(ts)
@@ -136,8 +157,10 @@ func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
         s.logger.Debug("Sent at: %s", event.EventTimestamp.String())
         s.events <- event
     } else {
-        // TODO: publish error to DLQ, no point in retrying.
-        s.logger.Error("No Destination ID or Event in %v", msg.String())
+        errDetails := fmt.Sprintf("No Destination ID or Event in %v", msg.String())
+        s.logger.Error(errDetails)
+        ErrorMessage(fmt.Errorf(errDetails), &event)
+        // TODO: publish error to DLQ.
     }
 
     s.logger.Debug("Removing message %v from SQS", *msg.MessageId)
@@ -146,8 +169,10 @@ func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
         ReceiptHandle: msg.ReceiptHandle,
     })
     if err != nil {
-        // TODO: publish error to DLQ, we should probably also alert.
-        s.logger.Error("Failed to remove message %v from SQS: %v", msg.MessageId, err)
+        errDetails := fmt.Sprintf("Failed to remove message %v from SQS", msg.MessageId)
+        s.logger.Error("%s: %v", errDetails, err)
+        ErrorMessageWithDetail(err, &event, errDetails)
+        // TODO: publish error to DLQ, should also retry removal here.
     }
-    s.logger.Trace("Message removed")
+    s.logger.Trace("Message %v removed", msg.MessageId)
 }

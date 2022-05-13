@@ -30,7 +30,7 @@ const (
 )
 
 // MessageResponse is returned when a more appropriate response is not available.
-// TODO @MM: Use this to implement better error handling
+// TODO: Use this to implement better error handling
 type MessageResponse struct {
     Msg string `json:"message"`
 }

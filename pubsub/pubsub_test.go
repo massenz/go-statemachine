@@ -52,5 +52,20 @@ var _ = Describe("PubSub types", func() {
             Expect(newMsg).Should(Respect(errMsg))
         })
     })
+    Context("when serializing messages with empty fields", func() {
+        var msg pubsub.EventMessage
+        BeforeEach(func() {
+            msg = pubsub.EventMessage{
+                EventName: "an-event",
+            }
+        })
 
+        It("should convert to and from JSON without loss of meaning", func() {
+            s := msg.String()
+            Expect(s).To(Equal(`{"event_name":"an-event","timestamp":"0001-01-01T00:00:00Z"}`))
+            var newMsg pubsub.EventMessage
+            Expect(json.Unmarshal([]byte(s), &newMsg)).ToNot(HaveOccurred())
+            Expect(newMsg).Should(Respect(msg))
+        })
+    })
 })

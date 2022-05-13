@@ -30,7 +30,7 @@ var _ = Describe("Configuration Handlers", func() {
         router = server.NewRouter()
     )
     // Disabling verbose logging, as it pollutes test output;
-    // set it back to DEBUG when tests fail and you need to
+    // set it back to DEBUG when tests fail, and you need to
     // diagnose the failure.
     server.SetLogLevel(log.WARN)
 

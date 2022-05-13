@@ -42,7 +42,7 @@ func CreateConfigurationHandler(w http.ResponseWriter, r *http.Request) {
     }
     logger.Debug("Creating new configuration with Version ID: %s", config.GetVersionId())
 
-    // TODO PAB-99: Check this configuration does not already exist.
+    // TODO: Check this configuration does not already exist.
 
     err = config.CheckValid()
     if err != nil {
@@ -60,7 +60,7 @@ func CreateConfigurationHandler(w http.ResponseWriter, r *http.Request) {
 
     w.Header().Add("Location", ConfigurationsEndpoint+"/"+config.GetVersionId())
     w.WriteHeader(http.StatusCreated)
-    err = json.NewEncoder(w).Encode(config)
+    err = json.NewEncoder(w).Encode(&config)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
