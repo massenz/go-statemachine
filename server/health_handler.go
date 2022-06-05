@@ -19,22 +19,22 @@
 package server
 
 import (
-    "encoding/json"
-    "net/http"
+	"encoding/json"
+	"net/http"
 )
 
 // NOTE: We make the handlers "exportable" so they can be tested, do NOT call directly.
 
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
-    // Standard preamble for all handlers, sets tracing (if enabled) and default content type.
-    defer trace(r.RequestURI)()
-    defaultContent(w)
+	// Standard preamble for all handlers, sets tracing (if enabled) and default content type.
+	defer trace(r.RequestURI)()
+	defaultContent(w)
 
-    // TODO: add a check on Redis and SQS reachability
-    res := MessageResponse{"UP"}
-    err := json.NewEncoder(w).Encode(res)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
+	// TODO: add a check on Redis and SQS reachability
+	res := MessageResponse{"UP"}
+	err := json.NewEncoder(w).Encode(res)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
