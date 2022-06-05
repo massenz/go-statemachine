@@ -21,21 +21,21 @@ package pubsub
 import (
 	"fmt"
 	"github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/logging"
+	log "github.com/massenz/slf4go/logging"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func NewEventsListener(options *ListenerOptions) *EventsListener {
 	return &EventsListener{
-		logger:        logging.NewLog("Listener"),
+		logger:        log.NewLog("Listener"),
 		events:        options.EventsChannel,
 		store:         options.StatemachinesStore,
 		notifications: options.NotificationsChannel,
 	}
 }
 
-// SetLogLevel to implement the logging.Loggable interface
-func (listener *EventsListener) SetLogLevel(level logging.LogLevel) {
+// SetLogLevel to implement the log.Loggable interface
+func (listener *EventsListener) SetLogLevel(level log.LogLevel) {
 	listener.logger.Level = level
 }
 

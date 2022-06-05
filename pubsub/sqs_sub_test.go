@@ -7,8 +7,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	log "github.com/massenz/go-statemachine/logging"
 	"github.com/massenz/go-statemachine/pubsub"
+	log "github.com/massenz/slf4go/logging"
 )
 
 var _ = Describe("SQS Subscriber", func() {

@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
-	"github.com/massenz/go-statemachine/logging"
+	log "github.com/massenz/slf4go/logging"
 )
 
 const (
@@ -39,11 +39,11 @@ var (
 			Region:   &region,
 		},
 	})))
-	testLog = logging.NewLog("PUBSUB")
+	testLog = log.NewLog("PUBSUB")
 )
 
 var _ = BeforeSuite(func() {
-	testLog.Level = logging.NONE
+	testLog.Level = log.NONE
 	Expect(os.Setenv("AWS_REGION", region)).ToNot(HaveOccurred())
 	for _, topic := range []string{eventsQueue, notificationsQueue} {
 		topic = fmt.Sprintf("%s-%d", topic, GinkgoParallelProcess())

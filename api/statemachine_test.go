@@ -20,7 +20,7 @@ package api_test
 
 import (
 	"github.com/golang/protobuf/jsonpb"
-	log "github.com/massenz/go-statemachine/logging"
+	log "github.com/massenz/slf4go/logging"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"

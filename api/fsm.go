@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
-	log "github.com/massenz/go-statemachine/logging"
+	log "github.com/massenz/slf4go/logging"
 	tspb "google.golang.org/protobuf/types/known/timestamppb"
 	"sync"
 )
