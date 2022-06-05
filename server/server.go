@@ -19,8 +19,8 @@
 package server
 
 import (
-	log "github.com/massenz/go-statemachine/logging"
 	"github.com/massenz/go-statemachine/storage"
+	log "github.com/massenz/slf4go/logging"
 	"net/http"
 	"time"
 

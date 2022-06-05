@@ -20,7 +20,7 @@ package storage
 
 import (
 	"github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/logging"
+	log "github.com/massenz/slf4go/logging"
 	"sync"
 	"time"
 )
@@ -29,18 +29,18 @@ func NewInMemoryStore() StoreManager {
 	return &InMemoryStore{
 		configurationsStore: make(map[string][]byte),
 		machinesStore:       make(map[string][]byte),
-		logger:              logging.NewLog("memory_store"),
+		logger:              log.NewLog("memory_store"),
 	}
 }
 
 type InMemoryStore struct {
-	logger              *logging.Log
+	logger              *log.Log
 	mux                 sync.RWMutex
 	configurationsStore map[string][]byte
 	machinesStore       map[string][]byte
 }
 
-func (csm *InMemoryStore) SetLogLevel(level logging.LogLevel) {
+func (csm *InMemoryStore) SetLogLevel(level log.LogLevel) {
 	csm.logger.Level = level
 }
 

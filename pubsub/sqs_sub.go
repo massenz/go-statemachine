@@ -23,7 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/massenz/go-statemachine/logging"
+	log "github.com/massenz/slf4go/logging"
 	"os"
 	"strconv"
 	"time"
@@ -33,7 +33,7 @@ import (
 //  This would be necessary if we were to implement a different message broker (e.g., Kafka)
 
 type SqsSubscriber struct {
-	logger          *logging.Log
+	logger          *log.Log
 	client          *sqs.SQS
 	events          chan<- EventMessage
 	Timeout         time.Duration
@@ -74,7 +74,7 @@ func NewSqsSubscriber(eventsChannel chan<- EventMessage, sqsUrl *string) *SqsSub
 		return nil
 	}
 	return &SqsSubscriber{
-		logger:          logging.NewLog("SQS-Sub"),
+		logger:          log.NewLog("SQS-Sub"),
 		client:          client,
 		events:          eventsChannel,
 		Timeout:         DefaultVisibilityTimeout,
@@ -82,8 +82,8 @@ func NewSqsSubscriber(eventsChannel chan<- EventMessage, sqsUrl *string) *SqsSub
 	}
 }
 
-// SetLogLevel allows the SqsSubscriber to implement the logging.Loggable interface
-func (s *SqsSubscriber) SetLogLevel(level logging.LogLevel) {
+// SetLogLevel allows the SqsSubscriber to implement the log.Loggable interface
+func (s *SqsSubscriber) SetLogLevel(level log.LogLevel) {
 	s.logger.Level = level
 }
 

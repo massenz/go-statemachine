@@ -21,7 +21,7 @@ package storage
 import (
 	"fmt"
 	"github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/logging"
+	log "github.com/massenz/slf4go/logging"
 	"time"
 )
 
@@ -38,7 +38,7 @@ type FiniteStateMachineStorageManager interface {
 }
 
 type StoreManager interface {
-	logging.Loggable
+	log.Loggable
 	ConfigurationStorageManager
 	FiniteStateMachineStorageManager
 	SetTimeout(duration time.Duration)

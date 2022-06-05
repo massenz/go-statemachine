@@ -22,11 +22,11 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/massenz/go-statemachine/logging"
+	log "github.com/massenz/slf4go/logging"
 )
 
 type SqsPublisher struct {
-	logger *logging.Log
+	logger *log.Log
 	client *sqs.SQS
 	errors <-chan EventErrorMessage
 }
@@ -39,14 +39,14 @@ func NewSqsPublisher(errorsChannel <-chan EventErrorMessage, sqsUrl *string) *Sq
 		return nil
 	}
 	return &SqsPublisher{
-		logger: logging.NewLog("SQS-Pub"),
+		logger: log.NewLog("SQS-Pub"),
 		client: client,
 		errors: errorsChannel,
 	}
 }
 
-// SetLogLevel allows the SqsSubscriber to implement the logging.Loggable interface
-func (s *SqsPublisher) SetLogLevel(level logging.LogLevel) {
+// SetLogLevel allows the SqsSubscriber to implement the log.Loggable interface
+func (s *SqsPublisher) SetLogLevel(level log.LogLevel) {
 	if s == nil {
 		fmt.Println("WARN: attempting to set log level on nil Publisher")
 		return
@@ -61,7 +61,7 @@ func GetQueueUrl(client *sqs.SQS, topic string) string {
 	})
 	if err != nil || out.QueueUrl == nil {
 		// From the Google School: fail fast and noisily from an unrecoverable error
-		logging.RootLog.Fatal(fmt.Errorf("cannot get SQS Queue URL for topic %s: %v", topic, err))
+		log.RootLog.Fatal(fmt.Errorf("cannot get SQS Queue URL for topic %s: %v", topic, err))
 	}
 	return *out.QueueUrl
 }

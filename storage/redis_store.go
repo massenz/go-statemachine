@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/logging"
+	log "github.com/massenz/slf4go/logging"
 	"time"
 )
 
@@ -40,7 +40,7 @@ var (
 )
 
 type RedisStore struct {
-	logger  *logging.Log
+	logger  *log.Log
 	client  *redis.Client
 	Timeout time.Duration
 }
@@ -51,7 +51,7 @@ func (csm *RedisStore) SetTimeout(duration time.Duration) {
 
 func NewRedisStore(address string, db int) StoreManager {
 	return &RedisStore{
-		logger: logging.NewLog(fmt.Sprintf("redis:%s", address)),
+		logger: log.NewLog(fmt.Sprintf("redis:%s", address)),
 		client: redis.NewClient(&redis.Options{
 			Addr: address,
 			DB:   db, // 0 means default DB
@@ -62,7 +62,7 @@ func NewRedisStore(address string, db int) StoreManager {
 
 func NewRedisStoreWithCreds(address string, db int, username string, password string) StoreManager {
 	return &RedisStore{
-		logger: logging.NewLog(fmt.Sprintf("redis:%s", address)),
+		logger: log.NewLog(fmt.Sprintf("redis:%s", address)),
 		client: redis.NewClient(&redis.Options{
 			Addr:     address,
 			Username: username,
@@ -74,7 +74,7 @@ func NewRedisStoreWithCreds(address string, db int, username string, password st
 }
 
 // SetLogLevel for RedisStore implements the Loggable interface
-func (csm *RedisStore) SetLogLevel(level logging.LogLevel) {
+func (csm *RedisStore) SetLogLevel(level log.LogLevel) {
 	csm.logger.Level = level
 }
 

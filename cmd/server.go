@@ -25,10 +25,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	log "github.com/massenz/go-statemachine/logging"
 	"github.com/massenz/go-statemachine/pubsub"
 	"github.com/massenz/go-statemachine/server"
 	"github.com/massenz/go-statemachine/storage"
+	log "github.com/massenz/slf4go/logging"
 )
 
 func SetLogLevel(services []log.Loggable, level log.LogLevel) {

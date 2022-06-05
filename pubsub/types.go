@@ -21,8 +21,8 @@ package pubsub
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/massenz/go-statemachine/logging"
 	"github.com/massenz/go-statemachine/storage"
+	log "github.com/massenz/slf4go/logging"
 	"time"
 )
 
@@ -136,7 +136,7 @@ var (
 // The messages are posted on an `events` channel, and if any error is encountered,
 // error messages are posted on a `notifications` channel for further processing upstream.
 type EventsListener struct {
-	logger        *logging.Log
+	logger        *log.Log
 	events        <-chan EventMessage
 	notifications chan<- EventErrorMessage
 	store         storage.StoreManager

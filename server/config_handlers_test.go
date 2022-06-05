@@ -3,8 +3,8 @@ package server_test
 import (
 	"bytes"
 	"encoding/json"
-	log "github.com/massenz/go-statemachine/logging"
 	"github.com/massenz/go-statemachine/storage"
+	log "github.com/massenz/slf4go/logging"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io"
