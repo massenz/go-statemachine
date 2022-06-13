@@ -20,7 +20,6 @@ package server
 
 import (
     "encoding/json"
-    "fmt"
     "github.com/google/uuid"
     "github.com/gorilla/mux"
     "github.com/massenz/go-statemachine/api"
@@ -43,8 +42,7 @@ func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
     }
     cfg, ok := storeManager.GetConfig(request.ConfigurationVersion)
     if !ok {
-        http.Error(w, fmt.Sprintf("configuration %s not found", request.ConfigurationVersion),
-            http.StatusNotAcceptable)
+        http.Error(w, "configuration not found", http.StatusNotAcceptable)
         return
     }
     logger.Debug("Found configuration %s", cfg)
@@ -93,7 +91,7 @@ func GetStatemachineHandler(w http.ResponseWriter, r *http.Request) {
 
     stateMachine, ok := storeManager.GetStateMachine(smId)
     if !ok {
-        http.Error(w, fmt.Sprintf("State Machine [%s] not found", smId), http.StatusNotFound)
+        http.Error(w, "State Machine not found", http.StatusNotFound)
         return
     }
     logger.Debug("Found FSM: %s", stateMachine.String())
