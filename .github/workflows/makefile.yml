@@ -14,18 +14,18 @@ jobs:
     - uses: arduino/setup-protoc@v1
       with:
         version: '3.19'
-    
+
     - name: Install protoc-gen
       run: go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 
     - name: Build
-      run: export GOPATH=/home/runner/go && mkdir -p ${GOPATH}/bin && make all
-      
+      run: make all
+
     - name: Run Containers
-      run: docker-compose up -d
-      
-    - name: Copy Bogus AWS creds
-      run: mkdir -p ${HOME}/.aws && cp data/credentials ${HOME}/.aws/
-      
+      run: |
+          mkdir -p ${HOME}/.aws && cp data/credentials ${HOME}/.aws/
+          export AWS_REGION=us-west-2
+          make services && make queues
+
     - name: Test
       run: go test ./api ./pubsub ./server ./storage
