@@ -14,12 +14,12 @@ services:
     ports:
       - "6379:6379"
     networks:
-      - backend
+      - sm-net
 
   localstack:
-    container_name: "aws-sqs"
+    container_name: "awslocal"
     image: "localstack/localstack:latest"
-    hostname: aws-sqs
+    hostname: awslocal
     environment:
       - AWS_REGION=us-west-2
       - EDGE_PORT=4566
@@ -30,14 +30,14 @@ services:
       - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
-      - backend
+      - sm-net
 
-# To connect to the servers in this stack, from a container run
+# To connect to the servers in this stack, from a docker run
 # via Docker, use `--network statemachine_backend`.
 # The hosts listed above will then be reachable at the given names,
 # on whatever ports are exposed.
 networks:
-  backend:
+  sm-net:
     ipam:
       config:
       - subnet: 172.1.1.0/24

@@ -2,7 +2,7 @@
 
 A basic implementation of a Finite State Machine in Go
 
-![Version](https://img.shields.io/badge/Version-0.1.0-blue)
+![Version](https://img.shields.io/badge/Version-0.2.0-blue)
 ![Released](https://img.shields.io/badge/unreleased-green)
 
 [![Author](https://img.shields.io/badge/Author-M.%20Massenzio-green)](https://github.com/massenz)
@@ -31,8 +31,6 @@ The overall architecture is shown below:
 
 ## Prerequisites
 
-This project comes with a (reluctant) `Makefile` so running `make build` will compile the Protobuf, build and test the Go code, and then build an executable binary in the `bin/` folder.
-
 Before building/running the server, you will need to install `protoc`, the `protoc-gen-go` plugin and `ginkgo`; please follow the instructions below before attempting to running any of the `make` commands.
 
 **Ginkgo testing framework**<br/>
@@ -41,39 +39,65 @@ Run this:
     go get github.com/onsi/ginkgo/v1/ginkgo &&
         go get github.com/onsi/gomega/...
 
-
-**Supporting services -- TODO**<br/>
->We still need to implement the Redis storage and the Kafka listener, once this is done, we will add a `docker-compose` configuration to run those in containers, to which the server can connect.
-
-
 **Building Protocol Buffers definitions**<br/>
 All the base classes are defined in the `protos` folder and are used to (de)serialize state machines for storage in the database.
 
-See [installation instructions](https://developers.google.com/protocol-buffers/docs/gotutorial#compiling-your-protocol-buffers) for compiling protobufs for Go; then run:
+See [installation instructions](https://developers.google.com/protocol-buffers/docs/gotutorial#compiling-your-protocol-buffers) for compiling protobufs for Go.
+
+**Supporting services**<br/>
+The `sm-server` requires a running [Redis](#) server and [AWS Simple Queue Service (SQS)](#); they can be both run locally in containers: see `docker/docker-compose.yaml` and [Container Build & Run](#container-build--run).
 
 
-The compiled PBs (`*.pb.go`) will be in the `api/` folder and can be imported with:
+## Build & Test
 
-```shell
-import 	"github.com/massenz/go-statemachine/api"
+The `sm-server` is built with
 
-var config = api.Configuration{
-    StartingState: "one",
-    States:        []string{"S1", "S2", "S3"},
-    Transitions: []*api.Transition{
-        {From: "S1", To: "S2", Event: "go"},
-        {From: "S2", To: "S3", Event: "land"},
-    },
-}
+        make
 
-fsm := &api.FiniteStateMachine{}
-fsm.Config = &config
-fsm.State = config.StartingState
+and the tests are run with `make test`.
+
+The binary is in `build/bin` and to see all the available configuration options use:
+
+        build/bin/sm-server -h
+
+Prior to running the server, if you want to use the local running stack, use:
+
+        make services && make queues
+
+To create the necessary SQS Queues in AWS, please see the `aws` CLI command in `Makefile`, `queues` recipe, using a valid profile (in `AWS_PROFILE`) and Region (`AWS_REGION`), with the required IAM permissions.
+
+## Container Build & Run
+
+Running the server inside a container is much preferable; to build the container use:
+
+        make container
+
+and then:
+
+        tag=$(./get-tag)
+        docker run --rm -d -p 7399:7399 --name sm-server \
+            --env AWS_ENDPOINT=http://awslocal:4566 \
+            --env DEBUG=-debug --network docker_sm-net  \
+            massenz/statemachine:${tag}
+
+These are the environment variables whose values can be modified as necessary (see also the `Dockerfile`):
+
+```dockerfile
+ENV AWS_REGION=us-west-2
+ENV AWS_PROFILE=sm-bot
+
+# Sensible defaults for the server
+# See entrypoint.sh
+ENV SERVER_PORT=7399
+ENV EVENTS_Q=events
+ENV ERRORS_Q=notifications
+ENV REDIS=redis
+ENV REDIS_PORT=6379
+ENV DEBUG=""
 ```
-## Build Test & Run
 
-To run the server use:
+Additionally, a valid `credentials` file will need to be mounted (using the `-v` flag) in the container if connecting to AWS (instead of LocalStack):
 
-        make run
+        -v /full/path/to/.aws/credentials:/home/sm-bot/.aws/credentials
 
-which will build the server (if necessary) and then run it on port 8089 with the `--debug` option enabled.
+where the `[profile]` matches the value in `AWS_PROFILE`.

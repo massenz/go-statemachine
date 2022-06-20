@@ -3,11 +3,11 @@
 #  Copyright (c) 2022 AlertAvert.com.  All rights reserved.
 #  Author: Marco Massenzio (marco@alertavert.com)
 #
-#  Usage: make-version
+#  Usage: get-tag
 #
 #  Will extract the version from the build.settings and
 #  generate a version-aware tag, including the git SHA of
-#  the commit, then push to the origin repository.
+#  the commit.
 
 set -eu
 workdir=$(dirname $0)
@@ -16,7 +16,4 @@ workdir=$(dirname $0)
 declare -r version=$(grep "^version" < ${workdir}/build.settings | cut -f 2 -d "=" | sed "s/'//g" | sed "s/ //g")
 declare -r tag="v${version}-g$(git rev-parse --short HEAD)"
 
-echo "Creating new tag ${tag}"
-
-git tag ${tag}
-git push --tags
+echo "${tag}"
