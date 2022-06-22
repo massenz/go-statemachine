@@ -44,6 +44,16 @@ All the base classes are defined in the `protos` folder and are used to (de)seri
 
 See [installation instructions](https://developers.google.com/protocol-buffers/docs/gotutorial#compiling-your-protocol-buffers) for compiling protobufs for Go.
 
+It mostly boils down to the following:
+
+```shell
+go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+
+go get google.golang.org/grpc@v1.32.0
+go get google.golang.org/protobuf@v1.27.1
+```
+
 **Supporting services**<br/>
 The `sm-server` requires a running [Redis](#) server and [AWS Simple Queue Service (SQS)](#); they can be both run locally in containers: see `docker/docker-compose.yaml` and [Container Build & Run](#container-build--run).
 

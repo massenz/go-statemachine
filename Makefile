@@ -10,13 +10,15 @@ image := massenz/statemachine
 compose := docker/docker-compose.yaml
 dockerfile := docker/Dockerfile
 
-api/statemachine.pb.go: protos/statemachine.proto
+compile:
 	protoc --proto_path=protos/ \
                --go_out=api/ \
+               --go-grpc_out=api/ \
                --go_opt=paths=source_relative \
+               --go-grpc_opt=paths=source_relative \
                protos/*.proto
 
-all: api/statemachine.pb.go cmd/server.go
+all: compile cmd/server.go
 	go build -o $(out) cmd/server.go
 	@chmod +x $(out)
 

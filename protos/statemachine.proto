@@ -70,3 +70,16 @@ message FiniteStateMachine {
   // An ordered sequence of Events, recording all FSM transitions.
   repeated Event history = 3;
 }
+
+message EventRequest {
+  Event event = 1;
+  string dest = 2;
+}
+
+message EventResponse {
+  bool ok = 1;
+}
+
+service Events {
+  rpc ConsumeEvent(EventRequest) returns (EventResponse) {}
+}

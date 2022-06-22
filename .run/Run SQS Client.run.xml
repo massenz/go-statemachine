@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Run SQS Client" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="statemachine" />
+    <working_directory value="$PROJECT_DIR$" />
+    <parameters value="-endpoint http://localhost:4566 -q events -dest 234 -evt start" />
+    <kind value="FILE" />
+    <package value="github.com/massenz/go-statemachine/clients" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/clients/sqs_client.go" />
+    <method v="2" />
+  </configuration>
+</component>

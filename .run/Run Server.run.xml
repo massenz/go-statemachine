@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Run Server" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="statemachine" />
+    <working_directory value="$PROJECT_DIR$" />
+    <parameters value="-debug -redis localhost:6379 -events events -errors notifications -endpoint-url http://localhost:4566" />
+    <envs>
+      <env name="AWS_PROFILE" value="default" />
+      <env name="AWS_REGION" value="us-west-2" />
+    </envs>
+    <kind value="FILE" />
+    <package value="github.com/massenz/go-statemachine/cmd" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/cmd/server.go" />
+    <method v="2" />
+  </configuration>
+</component>
