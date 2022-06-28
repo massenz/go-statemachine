@@ -1,7 +1,7 @@
 # Copyright (c) 2022 AlertAvert.com.  All rights reserved.
 # (Reluctantly) Created by M. Massenzio, 2022-03-14
 
-pkgs := ./api ./pubsub ./server ./storage
+pkgs := ./api ./pubsub ./server ./storage ./grpc
 bin := build/bin
 out := $(bin)/sm-server
 tag := $(shell ./get-tag)

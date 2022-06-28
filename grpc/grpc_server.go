@@ -20,6 +20,7 @@ package grpc
 
 import (
     "context"
+    "github.com/google/uuid"
     "github.com/massenz/go-statemachine/api"
     "github.com/massenz/go-statemachine/pubsub"
     "github.com/massenz/slf4go/logging"
@@ -46,8 +47,15 @@ func newGrpcServer(config *Config) (srv *grpcSubscriber, err error) {
     return srv, nil
 }
 
-func (s *grpcSubscriber) ConsumeEvent(ctx context.Context,
-    request *api.EventRequest) (*api.EventResponse, error) {
+func (s *grpcSubscriber) ConsumeEvent(
+    ctx context.Context, request *api.EventRequest) (*api.EventResponse, error) {
+
+    if request.Dest == "" {
+        return nil, api.MissingDestinationError
+    }
+    if request.Event.Transition.Event == "" {
+        return nil, api.MissingEventNameError
+    }
 
     s.Logger.Trace("Received gRPC request: %v", request)
     evt := pubsub.EventMessage{
@@ -56,6 +64,9 @@ func (s *grpcSubscriber) ConsumeEvent(ctx context.Context,
         EventId:        request.Event.EventId,
         EventName:      request.Event.Transition.Event,
         EventTimestamp: time.Now(),
+    }
+    if evt.EventId == "" {
+        evt.EventId = uuid.NewString()
     }
     s.Logger.Trace("Sending Event to channel: %v", evt)
     // TODO: use the context to set a timeout and cancel the request if the channel cannot accept
