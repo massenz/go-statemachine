@@ -27,10 +27,14 @@ import (
 )
 
 var MalformedConfigurationError = fmt.Errorf("this configuration cannot be parsed")
-var MissingNameConfigurationError = fmt.Errorf("configuration must always specify a name (" +
-    "and optionally a version)")
+var MissingNameConfigurationError = fmt.Errorf(
+    "configuration must always specify a name (and optionally a version)")
 var MissingStatesConfigurationError = fmt.Errorf(
     "configuration must always specify at least one state")
+var MissingDestinationError = fmt.Errorf(
+    "event must always have a `Destination` statemachine")
+var MissingEventNameError = fmt.Errorf(
+    "events must always specify the event type")
 var MismatchStartingStateConfigurationError = fmt.Errorf(
     "the StartingState must be one of the possible FSM states")
 var EmptyStartingStateConfigurationError = fmt.Errorf("the StartingState must be non-empty")
