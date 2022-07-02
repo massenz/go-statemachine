@@ -21,7 +21,7 @@ var _ = Describe("GrpcServer", func() {
 
         var testCh chan pubsub.EventMessage
         var listener net.Listener
-        var client api.EventsClient
+        var client api.StatemachineServiceClient
         var done func()
 
         BeforeEach(func() {
@@ -33,7 +33,7 @@ var _ = Describe("GrpcServer", func() {
             cc, err := g.Dial(listener.Addr().String(), g.WithInsecure())
             Expect(err).ToNot(HaveOccurred())
 
-            client = api.NewEventsClient(cc)
+            client = api.NewStatemachineServiceClient(cc)
             server, err := grpc.NewGrpcServer(&grpc.Config{
                 EventsChannel: testCh,
                 Logger:        logging.RootLog,

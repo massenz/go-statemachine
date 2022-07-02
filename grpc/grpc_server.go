@@ -33,10 +33,10 @@ type Config struct {
     Logger        *logging.Log
 }
 
-var _ api.EventsServer = (*grpcSubscriber)(nil)
+var _ api.StatemachineServiceServer = (*grpcSubscriber)(nil)
 
 type grpcSubscriber struct {
-    api.UnimplementedEventsServer
+    api.UnimplementedStatemachineServiceServer
     *Config
 }
 
@@ -81,6 +81,6 @@ func NewGrpcServer(config *Config) (*grpc.Server, error) {
     if err != nil {
         return nil, err
     }
-    api.RegisterEventsServer(gsrv, sub)
+    api.RegisterStatemachineServiceServer(gsrv, sub)
     return gsrv, nil
 }
