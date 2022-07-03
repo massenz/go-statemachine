@@ -25,7 +25,11 @@ import (
 	"time"
 )
 
-var IllegalStoreError = fmt.Errorf("error storing invalid data")
+var (
+	IllegalStoreError   = fmt.Errorf("error storing invalid data")
+	ConfigNotFoundError = fmt.Errorf("configuration not found")
+	FSMNotFoundError    = fmt.Errorf("statemachine not found")
+)
 
 type ConfigurationStorageManager interface {
 	GetConfig(id string) (cfg *api.Configuration, ok bool)
