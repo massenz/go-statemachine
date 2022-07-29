@@ -77,9 +77,25 @@ message EventRequest {
 }
 
 message EventResponse {
-  bool ok = 1;
+  string event_id = 1;
 }
 
-service Events {
+message GetRequest {
+  string id = 1;
+}
+
+message PutResponse {
+  string id = 1;
+  Configuration config = 2;
+  FiniteStateMachine fsm = 3;
+}
+
+service StatemachineService {
+  rpc GetConfiguration(GetRequest) returns (Configuration);
+  rpc PutConfiguration(Configuration) returns (PutResponse);
+
+  rpc GetFiniteStateMachine(GetRequest) returns (FiniteStateMachine);
+  rpc PutFiniteStateMachine(FiniteStateMachine) returns (PutResponse);
+
   rpc ConsumeEvent(EventRequest) returns (EventResponse) {}
 }

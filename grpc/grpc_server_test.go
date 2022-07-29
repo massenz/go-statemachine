@@ -1,142 +1,220 @@
 package grpc_test
 
 import (
-    "context"
-    "fmt"
-    "github.com/massenz/go-statemachine/api"
-    "github.com/massenz/go-statemachine/pubsub"
-    "github.com/massenz/slf4go/logging"
-    . "github.com/onsi/ginkgo"
-    . "github.com/onsi/gomega"
-    g "google.golang.org/grpc"
-    "net"
-    "time"
+	"context"
+	"fmt"
+	. "github.com/JiaYongfei/respect/gomega"
+	"github.com/massenz/go-statemachine/api"
+	"github.com/massenz/go-statemachine/pubsub"
+	"github.com/massenz/go-statemachine/storage"
+	"github.com/massenz/slf4go/logging"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 
-    "github.com/massenz/go-statemachine/grpc"
+	g "google.golang.org/grpc"
+	"net"
+	"time"
+
+	"github.com/massenz/go-statemachine/grpc"
 )
 
 var _ = Describe("GrpcServer", func() {
 
-    Context("when configured", func() {
+	Context("when configured", func() {
+		var testCh chan pubsub.EventMessage
+		var listener net.Listener
+		var client api.StatemachineServiceClient
+		var done func()
+		var store = storage.NewInMemoryStore()
+		store.SetLogLevel(logging.NONE)
 
-        var testCh chan pubsub.EventMessage
-        var listener net.Listener
-        var client api.EventsClient
-        var done func()
+		BeforeEach(func() {
+			var err error
+			testCh = make(chan pubsub.EventMessage, 5)
+			listener, err = net.Listen("tcp", ":0")
+			Ω(err).ShouldNot(HaveOccurred())
 
-        BeforeEach(func() {
-            var err error
-            testCh = make(chan pubsub.EventMessage, 5)
-            listener, err = net.Listen("tcp", ":0")
-            Expect(err).ToNot(HaveOccurred())
+			cc, err := g.Dial(listener.Addr().String(), g.WithInsecure())
+			Ω(err).ShouldNot(HaveOccurred())
 
-            cc, err := g.Dial(listener.Addr().String(), g.WithInsecure())
-            Expect(err).ToNot(HaveOccurred())
+			client = api.NewStatemachineServiceClient(cc)
+			server, err := grpc.NewGrpcServer(&grpc.Config{
+				EventsChannel: testCh,
+				Store:         store,
+				Logger:        logging.NullLog,
+			})
+			Ω(err).ToNot(HaveOccurred())
+			Ω(server).ToNot(BeNil())
 
-            client = api.NewEventsClient(cc)
-            server, err := grpc.NewGrpcServer(&grpc.Config{
-                EventsChannel: testCh,
-                Logger:        logging.RootLog,
-            })
-            Expect(err).ToNot(HaveOccurred())
-            Expect(server).ToNot(BeNil())
+			go func() {
+				Ω(server.Serve(listener)).Should(Succeed())
+			}()
+			done = func() {
+				server.Stop()
+				cc.Close()
+				listener.Close()
+			}
+		})
 
-            go func() {
-                server.Serve(listener)
-            }()
-            done = func() {
-                server.Stop()
-                cc.Close()
-                listener.Close()
-            }
-        })
+		It("should process events", func() {
+			response, err := client.ConsumeEvent(context.Background(), &api.EventRequest{
+				Event: &api.Event{
+					EventId: "1",
+					Transition: &api.Transition{
+						Event: "test-vt",
+					},
+					Originator: "test",
+				},
+				Dest: "2",
+			})
+			Ω(err).ToNot(HaveOccurred())
+			Ω(response).ToNot(BeNil())
+			Ω(response.EventId).To(Equal("1"))
+			done()
+			select {
+			case evt := <-testCh:
+				Ω(evt.EventId).To(Equal("1"))
+				Ω(evt.EventName).To(Equal("test-vt"))
+				Ω(evt.Sender).To(Equal("test"))
+				Ω(evt.Destination).To(Equal("2"))
+			case <-time.After(10 * time.Millisecond):
+				Fail("Timed out")
 
-        It("should process events", func() {
-            response, err := client.ConsumeEvent(context.Background(), &api.EventRequest{
-                Event: &api.Event{
-                    EventId: "1",
-                    Transition: &api.Transition{
-                        Event: "test-vt",
-                    },
-                    Originator: "test",
-                },
-                Dest: "2",
-            })
-            Expect(err).ToNot(HaveOccurred())
-            Expect(response.Ok).To(BeTrue())
-            done()
-            select {
-            case evt := <-testCh:
-                Expect(evt.EventId).To(Equal("1"))
-                Expect(evt.EventName).To(Equal("test-vt"))
-                Expect(evt.Sender).To(Equal("test"))
-                Expect(evt.Destination).To(Equal("2"))
-            case <-time.After(10 * time.Millisecond):
-                Fail("Timed out")
+			}
+		})
+		It("should create an ID for events without", func() {
+			response, err := client.ConsumeEvent(context.Background(), &api.EventRequest{
+				Event: &api.Event{
+					Transition: &api.Transition{
+						Event: "test-vt",
+					},
+					Originator: "test",
+				},
+				Dest: "123456",
+			})
+			Ω(err).ToNot(HaveOccurred())
+			Ω(response.EventId).ToNot(BeNil())
+			generatedId := response.EventId
+			done()
+			select {
+			case evt := <-testCh:
+				Ω(evt.EventId).Should(Equal(generatedId))
+				Ω(evt.EventName).To(Equal("test-vt"))
+			case <-time.After(10 * time.Millisecond):
+				Fail("Timed out")
+			}
+		})
+		It("should fail for missing destination", func() {
+			_, err := client.ConsumeEvent(context.Background(), &api.EventRequest{
+				Event: &api.Event{
+					Transition: &api.Transition{
+						Event: "test-vt",
+					},
+					Originator: "test",
+				},
+			})
+			Ω(err).To(HaveOccurred())
+			done()
+			select {
+			case evt := <-testCh:
+				Fail(fmt.Sprintf("Unexpected event: %s", evt))
+			case <-time.After(10 * time.Millisecond):
+				Succeed()
+			}
+		})
+		It("should fail for missing event", func() {
+			_, err := client.ConsumeEvent(context.Background(), &api.EventRequest{
+				Event: &api.Event{
+					Transition: &api.Transition{
+						Event: "",
+					},
+					Originator: "test",
+				},
+				Dest: "9876",
+			})
+			Ω(err).To(HaveOccurred())
+			done()
+			select {
+			case evt := <-testCh:
+				Fail(fmt.Sprintf("UnΩed event: %s", evt))
+			case <-time.After(10 * time.Millisecond):
+				Succeed()
+			}
+		})
 
-            }
-        })
+		// Store management tests
+		var cfg *api.Configuration
+		var fsm *api.FiniteStateMachine
+		BeforeEach(func() {
+			cfg = &api.Configuration{
+				Name:    "test-conf",
+				Version: "v1",
+				States:  []string{"start", "stop"},
+				Transitions: []*api.Transition{
+					{From: "start", To: "stop", Event: "shutdown"},
+				},
+				StartingState: "start",
+			}
+			fsm = &api.FiniteStateMachine{ConfigId: cfg.GetVersionId()}
+		})
+		It("should store valid configurations", func() {
+			_, ok := store.GetConfig(cfg.GetVersionId())
+			Ω(ok).To(BeFalse())
+			response, err := client.PutConfiguration(context.Background(), cfg)
+			Ω(err).ToNot(HaveOccurred())
+			Ω(response).ToNot(BeNil())
+			Ω(response.Id).To(Equal(cfg.GetVersionId()))
+			found, ok := store.GetConfig(response.Id)
+			Ω(ok).Should(BeTrue())
+			Ω(found).Should(Respect(cfg))
+		})
+		It("should fail for invalid configuration", func() {
+			invalid := &api.Configuration{
+				Name:          "invalid",
+				Version:       "v1",
+				States:        []string{},
+				Transitions:   nil,
+				StartingState: "",
+			}
+			_, err := client.PutConfiguration(context.Background(), invalid)
+			Ω(err).To(HaveOccurred())
+		})
+		It("should retrieve a valid configuration", func() {
+			Ω(store.PutConfig(cfg.GetVersionId(), cfg)).To(Succeed())
+			response, err := client.GetConfiguration(context.Background(),
+				&api.GetRequest{Id: cfg.GetVersionId()})
+			Ω(err).ToNot(HaveOccurred())
+			Ω(response).ToNot(BeNil())
+			Ω(response).Should(Respect(cfg))
+		})
+		It("should return an empty configuration for an invalid ID", func() {
+			_, err := client.GetConfiguration(context.Background(), &api.GetRequest{Id: "fake"})
+			Ω(err).To(HaveOccurred())
+		})
 
-        It("should create an ID for events without", func() {
-            response, err := client.ConsumeEvent(context.Background(), &api.EventRequest{
-                Event: &api.Event{
-                    Transition: &api.Transition{
-                        Event: "test-vt",
-                    },
-                    Originator: "test",
-                },
-                Dest: "123456",
-            })
-            Expect(err).ToNot(HaveOccurred())
-            Expect(response.Ok).To(BeTrue())
-            done()
-            select {
-            case evt := <-testCh:
-                Expect(evt.EventId).ToNot(BeEmpty())
-                Expect(evt.EventName).To(Equal("test-vt"))
-            case <-time.After(10 * time.Millisecond):
-                Fail("Timed out")
-            }
-        })
-        It("should fail for missing destination", func() {
-            response, err := client.ConsumeEvent(context.Background(), &api.EventRequest{
-                Event: &api.Event{
-                    Transition: &api.Transition{
-                        Event: "test-vt",
-                    },
-                    Originator: "test",
-                },
-            })
-            Expect(err).To(HaveOccurred())
-            Expect(response).To(BeNil())
-            done()
-            select {
-            case evt := <-testCh:
-                Fail(fmt.Sprintf("Unexpected event: %s", evt))
-            case <-time.After(10 * time.Millisecond):
-                Succeed()
-            }
-        })
-        It("should fail for missing event", func() {
-            response, err := client.ConsumeEvent(context.Background(), &api.EventRequest{
-                Event: &api.Event{
-                    Transition: &api.Transition{
-                        Event: "",
-                    },
-                    Originator: "test",
-                },
-                Dest: "9876",
-            })
-            Expect(err).To(HaveOccurred())
-            Expect(response).To(BeNil())
-            done()
-            select {
-            case evt := <-testCh:
-                Fail(fmt.Sprintf("Unexpected event: %s", evt))
-            case <-time.After(10 * time.Millisecond):
-                Succeed()
-            }
-        })
-    })
-
+		It("should store a valid FSM", func() {
+			Ω(store.PutConfig(cfg.GetVersionId(), cfg)).To(Succeed())
+			resp, err := client.PutFiniteStateMachine(context.Background(), fsm)
+			Ω(err).ToNot(HaveOccurred())
+			Ω(resp).ToNot(BeNil())
+			Ω(resp.Id).ToNot(BeNil())
+			Ω(resp.Fsm).Should(Respect(fsm))
+		})
+		It("should fail with an invalid Config ID", func() {
+			invalid := &api.FiniteStateMachine{ConfigId: "fake"}
+			_, err := client.PutFiniteStateMachine(context.Background(), invalid)
+			Ω(err).Should(HaveOccurred())
+		})
+		It("can retrieve a stored FSM", func() {
+			id := "123456"
+			Ω(store.PutConfig(fsm.ConfigId, cfg))
+			Ω(store.PutStateMachine(id, fsm)).Should(Succeed())
+			Ω(client.GetFiniteStateMachine(context.Background(), &api.GetRequest{Id: id})).Should(
+				Respect(fsm))
+		})
+		It("will return an error for an invalid ID", func() {
+			_, err := client.GetFiniteStateMachine(context.Background(), &api.GetRequest{Id: "fake"})
+			Ω(err).Should(HaveOccurred())
+		})
+	})
 })
