@@ -30,7 +30,7 @@ echo "./sm-server -port ${SERVER_PORT}  ${endpoint} ${DEBUG} \
     -events ${EVENTS_Q} -errors ${ERRORS_Q}"
 echo "$@"
 
-./sm-server -port "${SERVER_PORT}"  ${endpoint} ${DEBUG} \
+./sm-server -http-port "${SERVER_PORT}"  ${endpoint} ${DEBUG} \
     -redis ${REDIS}:${REDIS_PORT} \
     -events "${EVENTS_Q}" -errors "${ERRORS_Q}" \
     "$@"

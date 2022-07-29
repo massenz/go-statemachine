@@ -2,7 +2,9 @@
 #
 # Created by M. Massenzio, 2022-04-28
 
-FROM  debian:stable-slim
+# NOTE: Use the Ubuntu image, others will encounter errors,
+#       including the "`GLIBC_2.32' not found" error.
+FROM  ubuntu:22.04
 WORKDIR /app
 
 COPY build/bin/sm-server docker/entrypoint.sh ./

@@ -33,7 +33,7 @@ queues:
 test: all services queues
 	ginkgo -p $(pkgs)
 
-container: test
+container:
 	docker build -f $(dockerfile) -t $(image):$(tag) .
 
 # Runs test coverage and displays the results in browser
