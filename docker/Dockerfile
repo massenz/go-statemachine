@@ -10,6 +10,8 @@ WORKDIR /app
 COPY build/bin/sm-server docker/entrypoint.sh ./
 
 RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
+RUN apt-get update
+RUN apt-get install ca-certificates -y
 ADD docker/aws-credentials /home/sm-bot/.aws/credentials
 RUN chmod +x entrypoint.sh
 RUN chown sm-bot:sm-bot entrypoint.sh

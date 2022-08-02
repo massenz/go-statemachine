@@ -20,17 +20,17 @@
 set -eu
 
 unset endpoint
-if [[ -n ${AWS_ENDPOINT} ]]
+if [[ -n ${AWS_ENDPOINT:-} ]]
 then
   endpoint="--endpoint-url ${AWS_ENDPOINT}"
 fi
 
-echo "./sm-server -port ${SERVER_PORT}  ${endpoint} ${DEBUG} \
+echo "./sm-server -port ${SERVER_PORT}  ${endpoint:-} ${DEBUG} \
     -redis ${REDIS}:${REDIS_PORT} \
     -events ${EVENTS_Q} -errors ${ERRORS_Q}"
 echo "$@"
 
-./sm-server -http-port "${SERVER_PORT}"  ${endpoint} ${DEBUG} \
+./sm-server -http-port "${SERVER_PORT}"  ${endpoint:-} ${DEBUG} \
     -redis ${REDIS}:${REDIS_PORT} \
     -events "${EVENTS_Q}" -errors "${ERRORS_Q}" \
     "$@"
