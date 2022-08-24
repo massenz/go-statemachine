@@ -157,7 +157,7 @@ var _ = Describe("Handlers", func() {
 
             It("should fail", func() {
                 router.ServeHTTP(writer, req)
-                Expect(writer.Code).To(Equal(http.StatusNotAcceptable))
+                Expect(writer.Code).To(Equal(http.StatusNotFound))
                 location := writer.Header().Get("Location")
                 Expect(location).To(BeEmpty())
                 response := server.StateMachineResponse{}

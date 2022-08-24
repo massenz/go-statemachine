@@ -42,7 +42,7 @@ func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
     }
     cfg, ok := storeManager.GetConfig(request.ConfigurationVersion)
     if !ok {
-        http.Error(w, "configuration not found", http.StatusNotAcceptable)
+        http.Error(w, "configuration not found", http.StatusNotFound)
         return
     }
     logger.Debug("Found configuration %s", cfg)
