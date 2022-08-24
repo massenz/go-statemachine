@@ -26,11 +26,11 @@ then
 fi
 
 echo -e "./sm-server -port ${SERVER_PORT}  ${endpoint:-} ${DEBUG}\n\
-    -redis ${REDIS}:${REDIS_PORT} -timeout ${TIMEOUT:-25ms}\n\
+    -redis ${REDIS}:${REDIS_PORT} -timeout ${TIMEOUT:-25ms} -max-retries ${RETRIES:-3}\n\
     -events ${EVENTS_Q} -errors ${ERRORS_Q}\n\
     $@"
 
 ./sm-server -http-port "${SERVER_PORT}"  ${endpoint:-} ${DEBUG} \
-    -redis ${REDIS}:${REDIS_PORT} -timeout ${TIMEOUT:-25ms} \
+    -redis ${REDIS}:${REDIS_PORT} -timeout ${TIMEOUT:-25ms} -max-retries ${RETRIES:-3} \
     -events "${EVENTS_Q}" -errors "${ERRORS_Q}" \
     "$@"

@@ -56,7 +56,7 @@ var _ = Describe("RedisStore", func() {
 
             localAddress := fmt.Sprintf("localhost:%s", redisPort)
 
-            store = storage.NewRedisStore(localAddress, storage.DefaultRedisDb)
+            store = storage.NewRedisStore(localAddress, storage.DefaultRedisDb, testTimeout, storage.DefaultMaxRetries)
             Expect(store).ToNot(BeNil())
             store.SetTimeout(testTimeout)
             // Mute unnecessary logging during tests; re-enable (

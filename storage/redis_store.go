@@ -24,13 +24,15 @@ import (
     "github.com/go-redis/redis/v8"
     "github.com/massenz/go-statemachine/api"
     slf4go "github.com/massenz/slf4go/logging"
+    "math/rand"
     "time"
 )
 
 const (
-    NeverExpire      = 0
-    DefaultRedisPort = "6379"
-    DefaultRedisDb   = 0
+    NeverExpire       = 0
+    DefaultRedisPort  = "6379"
+    DefaultRedisDb    = 0
+    DefaultMaxRetries = 3
 )
 
 var (
@@ -40,29 +42,34 @@ var (
 )
 
 type RedisStore struct {
-    logger  *slf4go.Log
-    client  *redis.Client
-    Timeout time.Duration
+    logger     *slf4go.Log
+    client     *redis.Client
+    Timeout    time.Duration
+    MaxRetries int
 }
 
 func (csm *RedisStore) SetTimeout(duration time.Duration) {
     csm.Timeout = duration
 }
 
-func NewRedisStore(address string, db int, timeout time.Duration) StoreManager {
+func NewRedisStore(address string, db int, timeout time.Duration, maxRetries int) StoreManager {
     logger := slf4go.NewLog(fmt.Sprintf("redis://%s/%d", address, db))
-    logger.Info("Creating new RedisStore with timeout %s", timeout)
     return &RedisStore{
         logger: logger,
         client: redis.NewClient(&redis.Options{
             Addr: address,
             DB:   db, // 0 means default DB
         }),
-        Timeout: timeout,
+        Timeout:    timeout,
+        MaxRetries: maxRetries,
     }
 }
 
-func NewRedisStoreWithCreds(address string, db int, username string, password string) StoreManager {
+// FIXME: the "constructor" functions are very similar, the creation pattern will need to be
+//  refactored to avoid code duplication.
+
+func NewRedisStoreWithCreds(address string, db int, timeout time.Duration, maxRetries int,
+    username string, password string) StoreManager {
     return &RedisStore{
         logger: slf4go.NewLog(fmt.Sprintf("redis:%s", address)),
         client: redis.NewClient(&redis.Options{
@@ -71,7 +78,8 @@ func NewRedisStoreWithCreds(address string, db int, username string, password st
             Password: password,
             DB:       db,
         }),
-        Timeout: DefaultTimeout,
+        Timeout:    timeout,
+        MaxRetries: maxRetries,
     }
 }
 
@@ -84,22 +92,52 @@ func (csm *RedisStore) GetConfig(id string) (*api.Configuration, bool) {
     ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
     defer cancel()
 
-    cmd := csm.client.Get(ctx, id)
-    data, err := cmd.Bytes()
-    if err == redis.Nil {
-        csm.logger.Debug("key '%s' not found", id)
-    } else if err != nil {
-        csm.logger.Error(err.Error())
-    } else {
-        var cfg api.Configuration
+    data, err := csm.get(ctx, id)
+    if err != nil {
+        if err != redis.Nil {
+            csm.logger.Error("Error retrieving configuration `%s`: %s", id, err.Error())
+        }
+        return nil, false
+    }
+    var cfg api.Configuration
+    if err = cfg.UnmarshalBinary(data); err != nil {
+        csm.logger.Error("cannot unmarshal data, %q", err)
+        return nil, false
+    }
+    return &cfg, true
+}
 
-        if err = cfg.UnmarshalBinary(data); err != nil {
-            csm.logger.Error("cannot unmarshal data, %q", err)
+// `get` abstracts away the common functionality of looking for a key in Redis,
+// with a given timeout and a number of retries.
+func (csm *RedisStore) get(ctx context.Context, id string) ([]byte, error) {
+    attemptsLeft := csm.MaxRetries
+    csm.logger.Debug("Looking up key `%s` (Max retries: %d)", id, attemptsLeft)
+    for {
+        cmd := csm.client.Get(ctx, id)
+        data, err := cmd.Bytes()
+        if err == redis.Nil {
+            // The key isn't there, no point in retrying
+            csm.logger.Debug("Key `%s` not found", id)
+            return nil, err
+        } else if err != nil {
+            // The error here may be recoverable, so we'll keep trying until we run out of attempts
+            csm.logger.Error(err.Error())
+            attemptsLeft--
+            if attemptsLeft == 0 {
+                csm.logger.Error("max retries reached, giving up")
+                return nil, err
+            }
+            if ctx.Err() == context.DeadlineExceeded {
+                // Poor man's backoff - TODO: should use some form of exponential backoff
+                waitForMsec := rand.Intn(500)
+                time.Sleep(time.Duration(waitForMsec) * time.Millisecond)
+                csm.logger.Warn("retrying after timeout, attempts left: %d", attemptsLeft)
+                continue
+            }
         } else {
-            return &cfg, true
+            return data, nil
         }
     }
-    return nil, false
 }
 
 func (csm *RedisStore) PutConfig(id string, cfg *api.Configuration) (err error) {
@@ -123,22 +161,17 @@ func (csm *RedisStore) GetStateMachine(id string) (cfg *api.FiniteStateMachine, 
     ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
     defer cancel()
 
-    cmd := csm.client.Get(ctx, id)
-    data, err := cmd.Bytes()
-    if err == redis.Nil {
-        csm.logger.Debug("key '%s' not found", id)
-    } else if err != nil {
-        csm.logger.Error(err.Error())
-    } else {
-        var stateMachine api.FiniteStateMachine
-
-        if err = stateMachine.UnmarshalBinary(data); err != nil {
-            csm.logger.Error("cannot unmarshal data, %q", err)
-        } else {
-            return &stateMachine, true
-        }
+    data, err := csm.get(ctx, id)
+    if err != nil {
+        csm.logger.Error("Error retrieving statemachine `%s`: %s", id, err.Error())
+        return nil, false
     }
-    return nil, false
+
+    var stateMachine api.FiniteStateMachine
+    if err = stateMachine.UnmarshalBinary(data); err != nil {
+        csm.logger.Error("cannot unmarshal data, %q", err)
+    }
+    return &stateMachine, true
 }
 
 func (csm *RedisStore) PutStateMachine(id string, stateMachine *api.FiniteStateMachine) (err error) {
