@@ -25,12 +25,12 @@ then
   endpoint="--endpoint-url ${AWS_ENDPOINT}"
 fi
 
-echo "./sm-server -port ${SERVER_PORT}  ${endpoint:-} ${DEBUG} \
-    -redis ${REDIS}:${REDIS_PORT} \
-    -events ${EVENTS_Q} -errors ${ERRORS_Q}"
-echo "$@"
+echo -e "./sm-server -port ${SERVER_PORT}  ${endpoint:-} ${DEBUG}\n\
+    -redis ${REDIS}:${REDIS_PORT} -timeout ${TIMEOUT:-25ms}\n\
+    -events ${EVENTS_Q} -errors ${ERRORS_Q}\n\
+    $@"
 
 ./sm-server -http-port "${SERVER_PORT}"  ${endpoint:-} ${DEBUG} \
-    -redis ${REDIS}:${REDIS_PORT} \
+    -redis ${REDIS}:${REDIS_PORT} -timeout ${TIMEOUT:-25ms} \
     -events "${EVENTS_Q}" -errors "${ERRORS_Q}" \
     "$@"

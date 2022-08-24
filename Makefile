@@ -18,8 +18,8 @@ compile:
                --go-grpc_opt=paths=source_relative \
                protos/*.proto
 
-all: compile cmd/server.go
-	go build -o $(out) cmd/server.go
+all: compile cmd/main.go
+	go build -o $(out) cmd/main.go
 	@chmod +x $(out)
 
 services:

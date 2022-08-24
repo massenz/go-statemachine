@@ -85,6 +85,8 @@ func main() {
         "The name of the Dead-Letter Queue ("+"DLQ) in SQS to post errors to; if not "+
             "specified, the DLQ will not be used")
     var grpcPort = flag.Int("grpc-port", 7398, "The port for the gRPC server")
+    var timeout = flag.Duration("timeout", storage.DefaultTimeout,
+        "Timeout for Redis (as a Duration string, e.g. 1s, 20ms, etc.)")
     flag.Parse()
 
     if *localOnly {
@@ -100,7 +102,7 @@ func main() {
         store = storage.NewInMemoryStore()
     } else {
         logger.Info("Connecting to Redis server at %s", *redisUrl)
-        store = storage.NewRedisStore(*redisUrl, 1)
+        store = storage.NewRedisStore(*redisUrl, 1, *timeout)
     }
     server.SetStore(store)
 

@@ -29,7 +29,10 @@ import (
 )
 
 var _ = Describe("FSM Protocol Buffers", func() {
-    BeforeEach(func() { Logger = log.NullLog })
+    BeforeEach(func() {
+        Logger = log.NewLog("statemachine-test")
+        Logger.Level = log.NONE
+    })
     Context("if well defined", func() {
         It("can be initialized", func() {
             var spaceship = Configuration{

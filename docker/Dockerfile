@@ -5,16 +5,15 @@
 # NOTE: Use the Ubuntu image, others will encounter errors,
 #       including the "`GLIBC_2.32' not found" error.
 FROM  ubuntu:22.04
-WORKDIR /app
-
-COPY build/bin/sm-server docker/entrypoint.sh ./
 
 RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
-RUN apt-get update
-RUN apt-get install ca-certificates -y
+RUN apt-get update && apt-get install ca-certificates -y
+
+WORKDIR /app
+
 ADD docker/aws-credentials /home/sm-bot/.aws/credentials
-RUN chmod +x entrypoint.sh
-RUN chown sm-bot:sm-bot entrypoint.sh
+COPY build/bin/sm-server docker/entrypoint.sh ./
+RUN chmod a+x entrypoint.sh
 
 USER sm-bot
 
