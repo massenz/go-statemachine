@@ -89,10 +89,7 @@ func (csm *RedisStore) SetLogLevel(level slf4go.LogLevel) {
 }
 
 func (csm *RedisStore) GetConfig(id string) (*api.Configuration, bool) {
-    ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
-    defer cancel()
-
-    data, err := csm.get(ctx, id)
+    data, err := csm.get(id)
     if err != nil {
         if err != redis.Nil {
             csm.logger.Error("Error retrieving configuration `%s`: %s", id, err.Error())
@@ -109,31 +106,36 @@ func (csm *RedisStore) GetConfig(id string) (*api.Configuration, bool) {
 
 // `get` abstracts away the common functionality of looking for a key in Redis,
 // with a given timeout and a number of retries.
-func (csm *RedisStore) get(ctx context.Context, id string) ([]byte, error) {
+func (csm *RedisStore) get(id string) ([]byte, error) {
     attemptsLeft := csm.MaxRetries
     csm.logger.Debug("Looking up key `%s` (Max retries: %d)", id, attemptsLeft)
+    var cancel context.CancelFunc
+    defer func() {
+        if cancel != nil {
+            cancel()
+        }
+    }()
     for {
+        var ctx context.Context
+        ctx, cancel = context.WithTimeout(DefaultContext, csm.Timeout)
+        attemptsLeft--
         cmd := csm.client.Get(ctx, id)
         data, err := cmd.Bytes()
         if err == redis.Nil {
             // The key isn't there, no point in retrying
             csm.logger.Debug("Key `%s` not found", id)
             return nil, err
-        } else if err != nil {
+        } else if err != nil && ctx.Err() == context.DeadlineExceeded {
             // The error here may be recoverable, so we'll keep trying until we run out of attempts
             csm.logger.Error(err.Error())
-            attemptsLeft--
             if attemptsLeft == 0 {
                 csm.logger.Error("max retries reached, giving up")
                 return nil, err
             }
-            if ctx.Err() == context.DeadlineExceeded {
-                // Poor man's backoff - TODO: should use some form of exponential backoff
-                waitForMsec := rand.Intn(500)
-                time.Sleep(time.Duration(waitForMsec) * time.Millisecond)
-                csm.logger.Warn("retrying after timeout, attempts left: %d", attemptsLeft)
-                continue
-            }
+            csm.logger.Warn("retrying after timeout, attempts left: %d", attemptsLeft)
+            // Poor man's backoff - TODO: should use some form of exponential backoff
+            waitForMsec := rand.Intn(500)
+            time.Sleep(time.Duration(waitForMsec) * time.Millisecond)
         } else {
             return data, nil
         }
@@ -158,10 +160,7 @@ func (csm *RedisStore) PutConfig(id string, cfg *api.Configuration) (err error) 
 }
 
 func (csm *RedisStore) GetStateMachine(id string) (cfg *api.FiniteStateMachine, ok bool) {
-    ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
-    defer cancel()
-
-    data, err := csm.get(ctx, id)
+    data, err := csm.get(id)
     if err != nil {
         csm.logger.Error("Error retrieving statemachine `%s`: %s", id, err.Error())
         return nil, false
