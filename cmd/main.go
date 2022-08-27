@@ -43,6 +43,8 @@ func SetLogLevel(services []log.Loggable, level log.LogLevel) {
 }
 
 var (
+    Release string
+
     logger                      = log.NewLog("sm-server")
     serverLogLevel log.LogLevel = log.INFO
 
@@ -90,6 +92,10 @@ func main() {
     var timeout = flag.Duration("timeout", storage.DefaultTimeout,
         "Timeout for Redis (as a Duration string, e.g. 1s, 20ms, etc.)")
     flag.Parse()
+
+    logger.Info("Starting State Machine Server - Release: %s", Release)
+    // FIXME: why injecting a build with "-X ldflag=server.Release" doesn't work, but main.Release does?
+    server.Release = Release
 
     if *localOnly {
         logger.Info("Listening on local interface only")
@@ -144,7 +150,6 @@ func main() {
     logger.Info("Starting Events Listener")
     go listener.ListenForMessages()
 
-    // TODO: Start the gRPC server here
     logger.Info("gRPC Server running at tcp://:%d", *grpcPort)
     go startGrpcServer(*grpcPort, eventsCh)
 

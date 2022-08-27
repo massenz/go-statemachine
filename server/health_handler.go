@@ -19,22 +19,43 @@
 package server
 
 import (
-	"encoding/json"
-	"net/http"
+    "encoding/json"
+    "fmt"
+    "net/http"
 )
 
 // NOTE: We make the handlers "exportable" so they can be tested, do NOT call directly.
 
-func HealthHandler(w http.ResponseWriter, r *http.Request) {
-	// Standard preamble for all handlers, sets tracing (if enabled) and default content type.
-	defer trace(r.RequestURI)()
-	defaultContent(w)
+type HealthResponse struct {
+    Status  string `json:"status"`
+    Release string `json:"release"`
+}
 
-	// TODO: add a check on Redis and SQS reachability
-	res := MessageResponse{"UP"}
-	err := json.NewEncoder(w).Encode(res)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+func HealthHandler(w http.ResponseWriter, r *http.Request) {
+    // Standard preamble for all handlers, sets tracing (if enabled) and default content type.
+    defer trace(r.RequestURI)()
+    defaultContent(w)
+
+    var response MessageResponse
+    res := HealthResponse{
+        Status:  "OK",
+        Release: Release,
+    }
+    if err := storeManager.Health(); err != nil {
+        logger.Error("Health check failed: %s", err)
+        res.Status = "ERROR"
+        response = MessageResponse{
+            Msg:   res,
+            Error: fmt.Sprintf("error connecting to storage: %s", err),
+        }
+    } else {
+        response = MessageResponse{
+            Msg: res,
+        }
+    }
+    err := json.NewEncoder(w).Encode(response)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
 }

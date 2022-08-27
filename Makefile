@@ -19,7 +19,7 @@ compile:
                protos/*.proto
 
 all: compile cmd/main.go
-	go build -o $(out) cmd/main.go
+	go build -ldflags "-X main.Release=$(tag)" -o $(out) cmd/main.go
 	@chmod +x $(out)
 
 services:

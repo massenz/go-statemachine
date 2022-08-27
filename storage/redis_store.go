@@ -121,6 +121,7 @@ func (csm *RedisStore) get(id string) ([]byte, error) {
         attemptsLeft--
         cmd := csm.client.Get(ctx, id)
         data, err := cmd.Bytes()
+
         if err == redis.Nil {
             // The key isn't there, no point in retrying
             csm.logger.Debug("Key `%s` not found", id)
@@ -188,4 +189,16 @@ func (csm *RedisStore) PutStateMachine(id string, stateMachine *api.FiniteStateM
     }
     _, err = csm.client.Set(ctx, id, stateMachine, NeverExpire).Result()
     return
+}
+
+func (csm *RedisStore) Health() error {
+    ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
+    defer cancel()
+
+    _, err := csm.client.Ping(ctx).Result()
+    if err != nil {
+        csm.logger.Error("Error pinging redis: %s", err.Error())
+        return fmt.Errorf("Redis health check failed: %w", err)
+    }
+    return nil
 }
