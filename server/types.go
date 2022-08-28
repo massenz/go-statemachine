@@ -18,7 +18,9 @@
 
 package server
 
-import "github.com/massenz/go-statemachine/api"
+import (
+    protos "github.com/massenz/statemachine-proto/golang/api"
+)
 
 const (
     Authorization   = "Authorization"
@@ -46,6 +48,6 @@ type StateMachineRequest struct {
 
 // StateMachineResponse is returned when a new FSM is created, or as a response to a GET request
 type StateMachineResponse struct {
-    ID           string                  `json:"id"`
-    StateMachine *api.FiniteStateMachine `json:"statemachine"`
+    ID           string                     `json:"id"`
+    StateMachine *protos.FiniteStateMachine `json:"statemachine"`
 }

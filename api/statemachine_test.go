@@ -26,6 +26,7 @@ import (
     "io/ioutil"
 
     . "github.com/massenz/go-statemachine/api"
+    protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("FSM Protocol Buffers", func() {
@@ -35,10 +36,10 @@ var _ = Describe("FSM Protocol Buffers", func() {
     })
     Context("if well defined", func() {
         It("can be initialized", func() {
-            var spaceship = Configuration{
+            var spaceship = protos.Configuration{
                 StartingState: "earth",
                 States:        []string{"earth", "orbit", "mars"},
-                Transitions: []*Transition{
+                Transitions: []*protos.Transition{
                     {From: "earth", To: "orbit", Event: "launch"},
                     {From: "orbit", To: "mars", Event: "land"},
                 },
@@ -49,7 +50,7 @@ var _ = Describe("FSM Protocol Buffers", func() {
             Expect(spaceship.Transitions[0]).ToNot(BeNil())
         })
         It("can be created and used", func() {
-            fsm := &FiniteStateMachine{}
+            fsm := &protos.FiniteStateMachine{}
             fsm.State = "mars"
             Expect(fsm).ShouldNot(BeNil())
             Expect(fsm.State).Should(Equal("mars"))
@@ -59,9 +60,9 @@ var _ = Describe("FSM Protocol Buffers", func() {
 
     Context("when defined via JSON", func() {
         var (
-            t                                 = Transition{}
-            evt                               = Event{}
-            gccConfig                         = Configuration{}
+            t                                 = protos.Transition{}
+            evt                               = protos.Event{}
+            gccConfig                         = protos.Configuration{}
             transition, simpleEvent, compiler string
         )
 
@@ -110,13 +111,13 @@ var _ = Describe("FSM Protocol Buffers", func() {
 
     Describe("Finite State Machines", func() {
         Context("with an unnamed configuration", func() {
-            var spaceship Configuration
+            var spaceship protos.Configuration
 
             BeforeEach(func() {
-                spaceship = Configuration{
+                spaceship = protos.Configuration{
                     StartingState: "earth",
                     States:        []string{"earth", "orbit", "mars"},
-                    Transitions: []*Transition{
+                    Transitions: []*protos.Transition{
                         {From: "earth", To: "orbit", Event: "launch"},
                         {From: "orbit", To: "mars", Event: "land"},
                     },
@@ -141,21 +142,21 @@ var _ = Describe("FSM Protocol Buffers", func() {
                 Expect(s).ToNot(BeNil())
                 Expect(s.Config).ToNot(BeNil())
                 Expect(s.Config.String()).To(Equal(spaceship.String()))
-                Expect(s.FSM.ConfigId).To(Equal(spaceship.GetVersionId()))
+                Expect(s.FSM.ConfigId).To(Equal(GetVersionId(&spaceship)))
             })
         })
 
         Context("with a valid configuration", func() {
             defer GinkgoRecover()
-            var spaceship Configuration
+            var spaceship protos.Configuration
 
             BeforeEach(func() {
-                spaceship = Configuration{
+                spaceship = protos.Configuration{
                     Name:          "mars_rover",
                     Version:       "v2.0",
                     StartingState: "earth",
                     States:        []string{"earth", "orbit", "mars"},
-                    Transitions: []*Transition{
+                    Transitions: []*protos.Transition{
                         {From: "earth", To: "orbit", Event: "launch"},
                         {From: "orbit", To: "mars", Event: "land"},
                     },
@@ -190,7 +191,7 @@ var _ = Describe("FSM Protocol Buffers", func() {
         Context("can be configured via complex JSON", func() {
             defer GinkgoRecover()
             var (
-                orders     Configuration
+                orders     protos.Configuration
                 configJson []byte
             )
             BeforeEach(func() {

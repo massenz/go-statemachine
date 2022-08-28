@@ -19,21 +19,22 @@
 package server_test
 
 import (
-    "bytes"
-    "encoding/json"
-    "github.com/massenz/go-statemachine/storage"
-    log "github.com/massenz/slf4go/logging"
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
+
+    "bytes"
+    "encoding/json"
+    log "github.com/massenz/slf4go/logging"
     "io"
     "io/ioutil"
     "net/http"
     "net/http/httptest"
     "strings"
 
-    "github.com/massenz/go-statemachine/api"
-
+    . "github.com/massenz/go-statemachine/api"
     "github.com/massenz/go-statemachine/server"
+    "github.com/massenz/go-statemachine/storage"
+    "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("Configuration Handlers", func() {
@@ -139,9 +140,9 @@ var _ = Describe("Configuration Handlers", func() {
                     {From: "orbit", To: "mars", Event: "land"},
                 },
             }
-            var cfgId = spaceship.GetVersionId()
+            var cfgId = GetVersionId(&spaceship)
             BeforeEach(func() {
-                Expect(store.PutConfig(cfgId, &spaceship)).ToNot(HaveOccurred())
+                Expect(store.PutConfig(&spaceship)).ToNot(HaveOccurred())
                 endpoint := strings.Join([]string{server.ConfigurationsEndpoint, cfgId}, "/")
                 req = httptest.NewRequest(http.MethodGet, endpoint, nil)
             })
@@ -151,7 +152,7 @@ var _ = Describe("Configuration Handlers", func() {
                 router.ServeHTTP(writer, req)
                 Expect(writer.Code).To(Equal(http.StatusOK))
                 Expect(json.NewDecoder(writer.Body).Decode(&result)).ToNot(HaveOccurred())
-                Expect(result.GetVersionId()).To(Equal(cfgId))
+                Expect(GetVersionId(&result)).To(Equal(cfgId))
                 Expect(result.States).To(Equal(spaceship.States))
                 Expect(len(result.Transitions)).To(Equal(len(spaceship.Transitions)))
                 for n, t := range result.Transitions {

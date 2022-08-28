@@ -19,19 +19,21 @@
 package storage_test
 
 import (
+    . "github.com/onsi/ginkgo"
+    . "github.com/onsi/gomega"
+
     "context"
     "fmt"
     "github.com/go-redis/redis/v8"
     "github.com/golang/protobuf/proto"
     "github.com/google/uuid"
-    "github.com/massenz/go-statemachine/api"
-    "github.com/massenz/go-statemachine/storage"
     log "github.com/massenz/slf4go/logging"
-    . "github.com/onsi/ginkgo"
-    . "github.com/onsi/gomega"
-    proto2 "google.golang.org/protobuf/proto"
+    "github.com/massenz/statemachine-proto/golang/api"
     "os"
     "time"
+
+    . "github.com/massenz/go-statemachine/api"
+    "github.com/massenz/go-statemachine/storage"
 )
 
 var _ = Describe("RedisStore", func() {
@@ -81,7 +83,7 @@ var _ = Describe("RedisStore", func() {
             data, ok := store.GetConfig(id)
             Expect(ok).To(BeTrue())
             Expect(data).ToNot(BeNil())
-            Expect(data.GetVersionId()).To(Equal(cfg.GetVersionId()))
+            Expect(GetVersionId(data)).To(Equal(GetVersionId(cfg)))
         })
 
         It("will return orderly if the id does not exist", func() {
@@ -94,9 +96,9 @@ var _ = Describe("RedisStore", func() {
         It("can save configurations", func() {
             var found api.Configuration
 
-            Expect(store.PutConfig(cfg.GetVersionId(), cfg)).ToNot(HaveOccurred())
+            Expect(store.PutConfig(cfg)).ToNot(HaveOccurred())
 
-            val, err := rdb.Get(ctx, cfg.GetVersionId()).Bytes()
+            val, err := rdb.Get(ctx, GetVersionId(cfg)).Bytes()
             Expect(err).ToNot(HaveOccurred())
 
             Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
@@ -106,7 +108,7 @@ var _ = Describe("RedisStore", func() {
         })
 
         It("should not save nil values", func() {
-            Expect(store.PutConfig("fake", nil)).To(HaveOccurred())
+            Expect(store.PutConfig(nil)).To(HaveOccurred())
         })
 
         It("should not fail for a non-existent FSM", func() {
@@ -124,7 +126,7 @@ var _ = Describe("RedisStore", func() {
                 History:  nil,
             }
             // Storing the FSM behind the store's back
-            val, _ := proto2.Marshal(fsm)
+            val, _ := proto.Marshal(fsm)
             res, err := rdb.Set(ctx, id, val, testTimeout).Result()
 
             Expect(err).ToNot(HaveOccurred())
@@ -164,7 +166,7 @@ var _ = Describe("RedisStore", func() {
         })
 
         It("should return an error on a nil value store", func() {
-            Expect(store.PutConfig("nil-val", nil)).To(HaveOccurred())
+            Expect(store.PutConfig(nil)).To(HaveOccurred())
         })
     })
 })

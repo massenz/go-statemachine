@@ -1,7 +1,7 @@
 # Copyright (c) 2022 AlertAvert.com.  All rights reserved.
 # (Reluctantly) Created by M. Massenzio, 2022-03-14
 
-pkgs := ./api ./pubsub ./server ./storage ./grpc
+pkgs := ./api ./grpc ./pubsub ./server ./storage
 bin := build/bin
 out := $(bin)/sm-server
 tag := $(shell ./get-tag)
@@ -10,15 +10,7 @@ image := massenz/statemachine
 compose := docker/docker-compose.yaml
 dockerfile := docker/Dockerfile
 
-compile:
-	protoc --proto_path=protos/ \
-               --go_out=api/ \
-               --go-grpc_out=api/ \
-               --go_opt=paths=source_relative \
-               --go-grpc_opt=paths=source_relative \
-               protos/*.proto
-
-all: compile cmd/main.go
+build: cmd/main.go
 	go build -ldflags "-X main.Release=$(tag)" -o $(out) cmd/main.go
 	@chmod +x $(out)
 
@@ -30,14 +22,14 @@ queues:
 		aws --no-cli-pager --endpoint-url=http://localhost:4566 --region us-west-2 \
  			sqs create-queue --queue-name $$queue; done >/dev/null
 
-test: all services queues
+test: build services queues
 	ginkgo -p $(pkgs)
 
 container:
 	docker build -f $(dockerfile) -t $(image):$(tag) .
 
 # Runs test coverage and displays the results in browser
-cov: all services queues
+cov: build services queues
 	@go test -coverprofile=/tmp/cov.out $(pkgs)
 	@go tool cover -html=/tmp/cov.out
 

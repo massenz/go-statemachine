@@ -22,8 +22,10 @@ import (
     "encoding/json"
     "github.com/google/uuid"
     "github.com/gorilla/mux"
-    "github.com/massenz/go-statemachine/api"
     "net/http"
+
+    . "github.com/massenz/go-statemachine/api"
+    "github.com/massenz/statemachine-proto/golang/api"
 )
 
 func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +55,7 @@ func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
         request.ID, request.ConfigurationVersion)
 
     fsm := &api.FiniteStateMachine{
-        ConfigId: cfg.GetVersionId(),
+        ConfigId: GetVersionId(cfg),
         State:    cfg.StartingState,
         History:  make([]*api.Event, 0),
     }
@@ -82,7 +84,7 @@ func GetStatemachineHandler(w http.ResponseWriter, r *http.Request) {
     if vars == nil {
         logger.Error("Unexpected missing path parameter smId in Request URI: %s",
             r.RequestURI)
-        http.Error(w, api.UnexpectedError.Error(), http.StatusMethodNotAllowed)
+        http.Error(w, UnexpectedError.Error(), http.StatusMethodNotAllowed)
         return
     }
 
