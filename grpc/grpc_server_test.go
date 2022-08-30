@@ -15,7 +15,6 @@ import (
 
     . "github.com/massenz/go-statemachine/api"
     "github.com/massenz/go-statemachine/grpc"
-    "github.com/massenz/go-statemachine/pubsub"
     "github.com/massenz/go-statemachine/storage"
     "github.com/massenz/statemachine-proto/golang/api"
 )
@@ -23,7 +22,7 @@ import (
 var _ = Describe("GrpcServer", func() {
 
     Context("when configured", func() {
-        var testCh chan pubsub.EventMessage
+        var testCh chan api.EventRequest
         var listener net.Listener
         var client api.StatemachineServiceClient
         var done func()
@@ -32,7 +31,7 @@ var _ = Describe("GrpcServer", func() {
 
         BeforeEach(func() {
             var err error
-            testCh = make(chan pubsub.EventMessage, 5)
+            testCh = make(chan api.EventRequest, 5)
             listener, err = net.Listen("tcp", ":0")
             Ω(err).ShouldNot(HaveOccurred())
 
@@ -77,10 +76,10 @@ var _ = Describe("GrpcServer", func() {
             done()
             select {
             case evt := <-testCh:
-                Ω(evt.EventId).To(Equal("1"))
-                Ω(evt.EventName).To(Equal("test-vt"))
-                Ω(evt.Sender).To(Equal("test"))
-                Ω(evt.Destination).To(Equal("2"))
+                Ω(evt.Event.EventId).To(Equal("1"))
+                Ω(evt.Event.Transition.Event).To(Equal("test-vt"))
+                Ω(evt.Event.Originator).To(Equal("test"))
+                Ω(evt.Dest).To(Equal("2"))
             case <-time.After(10 * time.Millisecond):
                 Fail("Timed out")
 
@@ -102,8 +101,8 @@ var _ = Describe("GrpcServer", func() {
             done()
             select {
             case evt := <-testCh:
-                Ω(evt.EventId).Should(Equal(generatedId))
-                Ω(evt.EventName).To(Equal("test-vt"))
+                Ω(evt.Event.EventId).Should(Equal(generatedId))
+                Ω(evt.Event.Transition.Event).To(Equal("test-vt"))
             case <-time.After(10 * time.Millisecond):
                 Fail("Timed out")
             }
@@ -121,7 +120,7 @@ var _ = Describe("GrpcServer", func() {
             done()
             select {
             case evt := <-testCh:
-                Fail(fmt.Sprintf("Unexpected event: %s", evt))
+                Fail(fmt.Sprintf("Unexpected event: %s", evt.String()))
             case <-time.After(10 * time.Millisecond):
                 Succeed()
             }
@@ -140,7 +139,7 @@ var _ = Describe("GrpcServer", func() {
             done()
             select {
             case evt := <-testCh:
-                Fail(fmt.Sprintf("UnΩed event: %s", evt))
+                Fail(fmt.Sprintf("UnΩed event: %s", evt.String()))
             case <-time.After(10 * time.Millisecond):
                 Succeed()
             }
