@@ -22,18 +22,18 @@ import (
     "context"
     "fmt"
     "github.com/google/uuid"
-    "github.com/massenz/go-statemachine/api"
-    "github.com/massenz/go-statemachine/pubsub"
-    "github.com/massenz/go-statemachine/storage"
     "github.com/massenz/slf4go/logging"
     "google.golang.org/grpc"
-    "time"
+    "google.golang.org/protobuf/types/known/timestamppb"
+
+    "github.com/massenz/go-statemachine/api"
+    "github.com/massenz/go-statemachine/storage"
 
     protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 type Config struct {
-    EventsChannel chan<- pubsub.EventMessage
+    EventsChannel chan<- protos.EventRequest
     Store         storage.StoreManager
     Logger        *logging.Log
 }
@@ -60,23 +60,17 @@ func (s *grpcSubscriber) ConsumeEvent(ctx context.Context, request *protos.Event
     if request.Event.Transition.Event == "" {
         return nil, api.MissingEventNameError
     }
-
-    s.Logger.Trace("Received gRPC request: %v", request)
-    evt := pubsub.EventMessage{
-        Sender:         request.Event.Originator,
-        Destination:    request.Dest,
-        EventId:        request.Event.EventId,
-        EventName:      request.Event.Transition.Event,
-        EventTimestamp: time.Now(),
+    if request.Event.EventId == "" {
+        request.Event.EventId = uuid.NewString()
     }
-    if evt.EventId == "" {
-        evt.EventId = uuid.NewString()
+    if request.Event.Timestamp == nil {
+        request.Event.Timestamp = timestamppb.Now()
     }
-    s.Logger.Trace("Sending Event to channel: %v", evt.EventId)
-    // TODO: use the context to set a timeout and cancel the request if the channel cannot accept
+    s.Logger.Trace("Sending Event to channel: %v", request.Event)
+    // TODO: use the context and cancel the request if the channel cannot accept
     //       the event within the given timeout.
-    s.EventsChannel <- evt
-    return &protos.EventResponse{EventId: evt.EventId}, nil
+    s.EventsChannel <- *request
+    return &protos.EventResponse{EventId: request.Event.EventId}, nil
 }
 
 func (s *grpcSubscriber) PutConfiguration(ctx context.Context, cfg *protos.Configuration) (*protos.PutResponse, error) {

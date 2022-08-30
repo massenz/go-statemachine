@@ -25,15 +25,16 @@ import (
     "bytes"
     "encoding/json"
     log "github.com/massenz/slf4go/logging"
+    "google.golang.org/protobuf/types/known/timestamppb"
     "io"
     "net/http"
     "net/http/httptest"
     "strings"
-    "time"
 
-    "github.com/massenz/go-statemachine/pubsub"
+    . "github.com/massenz/go-statemachine/api"
     "github.com/massenz/go-statemachine/server"
     "github.com/massenz/go-statemachine/storage"
+
     "github.com/massenz/statemachine-proto/golang/api"
 )
 
@@ -218,43 +219,29 @@ var _ = Describe("Handlers", func() {
         })
         It("with a missing ID will return Not Allowed", func() {
             req = httptest.NewRequest(http.MethodGet, server.StatemachinesEndpoint, nil)
-
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusMethodNotAllowed))
         })
-
         It("with gibberish data will still fail gracefully", func() {
             cfg := api.Configuration{}
             Expect(store.PutConfig(&cfg)).ToNot(HaveOccurred())
             endpoint := strings.Join([]string{server.StatemachinesEndpoint, "6789"}, "/")
             req = httptest.NewRequest(http.MethodGet, endpoint, nil)
-
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusNotFound))
         })
     })
 
-    Context("when receiving events", func() {
-        // We need a channel to send events to
+    Context("when the statemachine has events", func() {
         var store storage.StoreManager
-        var events chan pubsub.EventMessage
-        var listener *pubsub.EventsListener
+        var fsmId = "12345"
+        var config *api.Configuration
 
         BeforeEach(func() {
-            events = make(chan pubsub.EventMessage)
             writer = httptest.NewRecorder()
             store = storage.NewInMemoryStore()
             server.SetStore(store)
-
-            listener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
-                EventsChannel:        events,
-                NotificationsChannel: nil,
-                StatemachinesStore:   store,
-                ListenersPoolSize:    0,
-            })
-            listener.SetLogLevel(log.NONE)
-
-            config := &api.Configuration{
+            config = &api.Configuration{
                 Name:    "car",
                 Version: "v1",
                 States:  []string{"stopped", "running", "slowing"},
@@ -266,82 +253,60 @@ var _ = Describe("Handlers", func() {
                 },
                 StartingState: "stopped",
             }
-            car := &api.FiniteStateMachine{
-                ConfigId: "car:v1",
-                State:    "stopped",
-                History:  nil,
-            }
-            Expect(store.PutConfig(config)).ToNot(HaveOccurred())
-            Expect(store.PutStateMachine("sm-123", car)).ToNot(HaveOccurred())
-
+            car, _ := NewStateMachine(config)
+            Expect(store.PutConfig(config)).To(Succeed())
+            Expect(store.PutStateMachine(fsmId, car.FSM)).To(Succeed())
         })
 
         It("it should show them", func() {
-            done := make(chan interface{})
-            go func() {
-                defer close(done)
-                go listener.ListenForMessages()
-            }()
-
-            fsmId := "sm-123"
-            event := pubsub.EventMessage{
-                Sender:         "test-sender",
-                Destination:    fsmId,
-                EventId:        "1",
-                EventName:      "start",
-                EventTimestamp: time.Time{},
+            found, _ := store.GetStateMachine(fsmId)
+            car := ConfiguredStateMachine{
+                Config: config,
+                FSM:    found,
             }
-            events <- event
-
-            event.EventId = "2"
-            event.EventName = "brake"
-            events <- event
-
-            event.EventId = "3"
-            event.EventName = "stop"
-            events <- event
-            close(events)
-
-            // Wait a bit for the events to be fully processed.
-            time.Sleep(5 * time.Millisecond)
+            Expect(car.SendEvent(&api.Event{
+                EventId:    "1",
+                Timestamp:  timestamppb.Now(),
+                Transition: &api.Transition{Event: "start"},
+                Originator: "test",
+                Details:    "this is a test",
+            })).To(Succeed())
+            Expect(car.SendEvent(&api.Event{
+                EventId:    "2",
+                Timestamp:  timestamppb.Now(),
+                Transition: &api.Transition{Event: "brake"},
+                Originator: "test",
+                Details:    "a test is this not",
+            })).To(Succeed())
+            Expect(store.PutStateMachine(fsmId, car.FSM)).To(Succeed())
 
             endpoint := strings.Join([]string{server.StatemachinesEndpoint, fsmId}, "/")
             req = httptest.NewRequest(http.MethodGet, endpoint, nil)
-
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusOK))
 
             var result server.StateMachineResponse
-            Expect(json.NewDecoder(writer.Body).Decode(&result)).ToNot(HaveOccurred())
+            Expect(json.NewDecoder(writer.Body).Decode(&result)).To(Succeed())
 
             Expect(result.ID).To(Equal(fsmId))
             Expect(result.StateMachine).ToNot(BeNil())
             fsm := result.StateMachine
-            Expect(fsm.State).To(Equal("stopped"))
-            Expect(len(fsm.History)).To(Equal(3))
+            Expect(fsm.State).To(Equal("slowing"))
+            Expect(len(fsm.History)).To(Equal(2))
             var history []*api.Event
             history = fsm.History
-            startEvent := history[0]
-            Expect(startEvent.EventId).To(Equal("1"))
-            Expect(startEvent.Originator).To(Equal("test-sender"))
-            Expect(startEvent.Transition.Event).To(Equal("start"))
-            Expect(startEvent.Transition.From).To(Equal("stopped"))
-            Expect(startEvent.Transition.To).To(Equal("running"))
-            brakeEvent := history[1]
-            Expect(brakeEvent.EventId).To(Equal("2"))
-            Expect(brakeEvent.Transition.Event).To(Equal("brake"))
-            Expect(brakeEvent.Transition.To).To(Equal("slowing"))
-            stopEvent := history[2]
-            Expect(stopEvent.EventId).To(Equal("3"))
-            Expect(stopEvent.Transition.Event).To(Equal("stop"))
-            Expect(stopEvent.Transition.To).To(Equal("stopped"))
-
-            select {
-            case <-done:
-                Succeed()
-            case <-time.After(100 * time.Millisecond):
-                Fail("timed out waiting for Listener to exit")
-            }
+            event := history[0]
+            Expect(event.EventId).To(Equal("1"))
+            Expect(event.Originator).To(Equal("test"))
+            Expect(event.Transition.Event).To(Equal("start"))
+            Expect(event.Transition.From).To(Equal("stopped"))
+            Expect(event.Transition.To).To(Equal("running"))
+            Expect(event.Details).To(Equal("this is a test"))
+            event = history[1]
+            Expect(event.EventId).To(Equal("2"))
+            Expect(event.Transition.Event).To(Equal("brake"))
+            Expect(event.Transition.To).To(Equal("slowing"))
+            Expect(event.Details).To(Equal("a test is this not"))
         })
     })
 })

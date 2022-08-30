@@ -62,18 +62,14 @@ type ConfiguredStateMachine struct {
 }
 
 func NewStateMachine(configuration *protos.Configuration) (*ConfiguredStateMachine, error) {
-    if configuration.Name == "" {
+    if configuration.Name == "" || configuration.Version == "" {
         Logger.Error("Missing configuration name")
         return nil, MalformedConfigurationError
-    }
-    if configuration.Version == "" {
-        configuration.Version = "v1"
     }
     return &ConfiguredStateMachine{
         FSM: &protos.FiniteStateMachine{
             ConfigId: configuration.Name + ":" + configuration.Version,
             State:    configuration.StartingState,
-            //History:  make([]string, 0),
         },
         Config: configuration,
     }, nil
