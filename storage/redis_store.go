@@ -22,8 +22,10 @@ import (
     "context"
     "fmt"
     "github.com/go-redis/redis/v8"
-    "github.com/massenz/go-statemachine/api"
+    "github.com/golang/protobuf/proto"
+    . "github.com/massenz/go-statemachine/api"
     slf4go "github.com/massenz/slf4go/logging"
+    "github.com/massenz/statemachine-proto/golang/api"
     "math/rand"
     "time"
 )
@@ -97,7 +99,7 @@ func (csm *RedisStore) GetConfig(id string) (*api.Configuration, bool) {
         return nil, false
     }
     var cfg api.Configuration
-    if err = cfg.UnmarshalBinary(data); err != nil {
+    if err = proto.Unmarshal(data, &cfg); err != nil {
         csm.logger.Error("cannot unmarshal data, %q", err)
         return nil, false
     }
@@ -143,20 +145,20 @@ func (csm *RedisStore) get(id string) ([]byte, error) {
     }
 }
 
-func (csm *RedisStore) PutConfig(id string, cfg *api.Configuration) (err error) {
+func (csm *RedisStore) PutConfig(cfg *api.Configuration) (err error) {
     ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
     defer cancel()
 
-    if id == "" {
-        csm.logger.Error("Cannot store a configuration with an empty ID")
-        return IllegalStoreError
-    }
-
     if cfg == nil {
-        csm.logger.Error("Attempting to store a nil configuration (%s)", id)
+        csm.logger.Error("Storing a nil configuration")
         return IllegalStoreError
     }
-    _, err = csm.client.Set(ctx, id, cfg, NeverExpire).Result()
+    value, err := proto.Marshal(cfg)
+    if err != nil {
+        csm.logger.Error("cannot marshal data, %q", err)
+        return err
+    }
+    _, err = csm.client.Set(ctx, GetVersionId(cfg), value, NeverExpire).Result()
     return
 }
 
@@ -168,7 +170,7 @@ func (csm *RedisStore) GetStateMachine(id string) (cfg *api.FiniteStateMachine, 
     }
 
     var stateMachine api.FiniteStateMachine
-    if err = stateMachine.UnmarshalBinary(data); err != nil {
+    if err = proto.Unmarshal(data, &stateMachine); err != nil {
         csm.logger.Error("cannot unmarshal data, %q", err)
     }
     return &stateMachine, true
@@ -179,7 +181,7 @@ func (csm *RedisStore) PutStateMachine(id string, stateMachine *api.FiniteStateM
     defer cancel()
 
     if id == "" {
-        csm.logger.Error("Cannot store a statemachine with an empty ID")
+        csm.logger.Error("Cannot store a State Machine with an empty ID")
         return IllegalStoreError
     }
 
@@ -187,7 +189,12 @@ func (csm *RedisStore) PutStateMachine(id string, stateMachine *api.FiniteStateM
         csm.logger.Error("Attempting to store a nil statemachine (%s)", id)
         return IllegalStoreError
     }
-    _, err = csm.client.Set(ctx, id, stateMachine, NeverExpire).Result()
+    value, err := proto.Marshal(stateMachine)
+    if err != nil {
+        csm.logger.Error("cannot marshal data, %q", err)
+        return err
+    }
+    _, err = csm.client.Set(ctx, id, value, NeverExpire).Result()
     return
 }
 

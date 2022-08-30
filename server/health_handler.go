@@ -41,7 +41,13 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
         Status:  "OK",
         Release: Release,
     }
-    if err := storeManager.Health(); err != nil {
+    var err error
+    if storeManager == nil {
+        err = fmt.Errorf("store manager is not initialized")
+    } else {
+        err = storeManager.Health()
+    }
+    if err != nil {
         logger.Error("Health check failed: %s", err)
         res.Status = "ERROR"
         response = MessageResponse{
@@ -53,7 +59,7 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
             Msg: res,
         }
     }
-    err := json.NewEncoder(w).Encode(response)
+    err = json.NewEncoder(w).Encode(response)
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return

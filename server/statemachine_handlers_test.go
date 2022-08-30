@@ -19,21 +19,22 @@
 package server_test
 
 import (
-    "bytes"
-    "encoding/json"
-    "github.com/massenz/go-statemachine/api"
-    "github.com/massenz/go-statemachine/pubsub"
-    "github.com/massenz/go-statemachine/storage"
-    log "github.com/massenz/slf4go/logging"
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
+
+    "bytes"
+    "encoding/json"
+    log "github.com/massenz/slf4go/logging"
     "io"
     "net/http"
     "net/http/httptest"
     "strings"
     "time"
 
+    "github.com/massenz/go-statemachine/pubsub"
     "github.com/massenz/go-statemachine/server"
+    "github.com/massenz/go-statemachine/storage"
+    "github.com/massenz/statemachine-proto/golang/api"
 )
 
 func ReaderFromRequest(request *server.StateMachineRequest) io.Reader {
@@ -77,7 +78,7 @@ var _ = Describe("Handlers", func() {
                     Transitions:   nil,
                     StartingState: "start",
                 }
-                Expect(store.PutConfig("test-config:v1", config)).ToNot(HaveOccurred())
+                Expect(store.PutConfig(config)).ToNot(HaveOccurred())
                 req = httptest.NewRequest(http.MethodPost, server.StatemachinesEndpoint,
                     ReaderFromRequest(request))
             })
@@ -124,7 +125,7 @@ var _ = Describe("Handlers", func() {
                     Transitions:   nil,
                     StartingState: "start",
                 }
-                Expect(store.PutConfig("test-config:v1", config)).ToNot(HaveOccurred())
+                Expect(store.PutConfig(config)).ToNot(HaveOccurred())
                 req = httptest.NewRequest(http.MethodPost, server.StatemachinesEndpoint,
                     ReaderFromRequest(request))
             })
@@ -224,7 +225,7 @@ var _ = Describe("Handlers", func() {
 
         It("with gibberish data will still fail gracefully", func() {
             cfg := api.Configuration{}
-            store.PutConfig("6789", &cfg)
+            Expect(store.PutConfig(&cfg)).ToNot(HaveOccurred())
             endpoint := strings.Join([]string{server.StatemachinesEndpoint, "6789"}, "/")
             req = httptest.NewRequest(http.MethodGet, endpoint, nil)
 
@@ -270,7 +271,7 @@ var _ = Describe("Handlers", func() {
                 State:    "stopped",
                 History:  nil,
             }
-            Expect(store.PutConfig(config.GetVersionId(), config)).ToNot(HaveOccurred())
+            Expect(store.PutConfig(config)).ToNot(HaveOccurred())
             Expect(store.PutStateMachine("sm-123", car)).ToNot(HaveOccurred())
 
         })

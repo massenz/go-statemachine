@@ -19,11 +19,13 @@
 package storage_test
 
 import (
-    "github.com/massenz/go-statemachine/api"
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
 
+    "github.com/massenz/go-statemachine/api"
     "github.com/massenz/go-statemachine/storage"
+
+    protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("InMemory Store", func() {
@@ -35,16 +37,16 @@ var _ = Describe("InMemory Store", func() {
         })
 
         Context("can be used to save and retrieve a Configuration", func() {
-            var cfg = &api.Configuration{}
+            var cfg = &protos.Configuration{}
             BeforeEach(func() {
                 cfg.Name = "my_conf"
                 cfg.Version = "v3"
                 cfg.StartingState = "start"
-                Expect(store.PutConfig(cfg.GetVersionId(), cfg)).ToNot(HaveOccurred())
+                Expect(store.PutConfig(cfg)).ToNot(HaveOccurred())
 
             })
             It("will give back the saved Configuration", func() {
-                found, ok := store.GetConfig(cfg.GetVersionId())
+                found, ok := store.GetConfig(api.GetVersionId(cfg))
                 Expect(ok).To(BeTrue())
                 Expect(found).ToNot(BeNil())
 
@@ -58,10 +60,10 @@ var _ = Describe("InMemory Store", func() {
 
         Context("can be used to save and retrieve a StateMachine", func() {
             var id = "1234"
-            var machine *api.FiniteStateMachine
+            var machine *protos.FiniteStateMachine
 
             BeforeEach(func() {
-                machine = &api.FiniteStateMachine{
+                machine = &protos.FiniteStateMachine{
                     ConfigId: id,
                     State:    "start",
                     History:  nil,

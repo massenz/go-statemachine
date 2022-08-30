@@ -19,8 +19,10 @@
 package storage
 
 import (
-    "github.com/massenz/go-statemachine/api"
+    "github.com/golang/protobuf/proto"
+    . "github.com/massenz/go-statemachine/api"
     log "github.com/massenz/slf4go/logging"
+    "github.com/massenz/statemachine-proto/golang/api"
     "sync"
     "time"
 )
@@ -63,7 +65,7 @@ func (csm *InMemoryStore) GetConfig(id string) (cfg *api.Configuration, ok bool)
     csm.logger.Debug("Found: %t", ok)
     if ok {
         cfg = &api.Configuration{}
-        err := cfg.UnmarshalBinary(cfgBytes)
+        err := proto.Unmarshal(cfgBytes, cfg)
         if err != nil {
             csm.logger.Error(err.Error())
             return nil, false
@@ -72,12 +74,15 @@ func (csm *InMemoryStore) GetConfig(id string) (cfg *api.Configuration, ok bool)
     return
 }
 
-func (csm *InMemoryStore) PutConfig(id string, cfg *api.Configuration) (err error) {
+func (csm *InMemoryStore) PutConfig(cfg *api.Configuration) error {
     csm.mux.Lock()
     defer csm.mux.Unlock()
-    val, err := cfg.MarshalBinary()
+
+    val, err := proto.Marshal(cfg)
     if err == nil {
-        csm.configurationsStore[id] = val
+        version := GetVersionId(cfg)
+        csm.logger.Debug("Storing Configuration [%s]", version)
+        csm.configurationsStore[version] = val
     }
     return err
 }
@@ -91,7 +96,7 @@ func (csm *InMemoryStore) GetStateMachine(id string) (machine *api.FiniteStateMa
     csm.logger.Debug("Found: %v", ok)
     if ok {
         machine = &api.FiniteStateMachine{}
-        if err := machine.UnmarshalBinary(machineBytes); err != nil {
+        if err := proto.Unmarshal(machineBytes, machine); err != nil {
             csm.logger.Error(err.Error())
             return nil, false
         }
@@ -103,7 +108,7 @@ func (csm *InMemoryStore) PutStateMachine(id string, machine *api.FiniteStateMac
     csm.mux.Lock()
     defer csm.mux.Unlock()
 
-    val, err := machine.MarshalBinary()
+    val, err := proto.Marshal(machine)
     if err == nil {
         csm.machinesStore[id] = val
     }

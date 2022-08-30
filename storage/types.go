@@ -20,8 +20,8 @@ package storage
 
 import (
     "fmt"
-    "github.com/massenz/go-statemachine/api"
     log "github.com/massenz/slf4go/logging"
+    protos "github.com/massenz/statemachine-proto/golang/api"
     "time"
 )
 
@@ -32,13 +32,13 @@ var (
 )
 
 type ConfigurationStorageManager interface {
-    GetConfig(id string) (cfg *api.Configuration, ok bool)
-    PutConfig(id string, cfg *api.Configuration) (err error)
+    GetConfig(versionId string) (cfg *protos.Configuration, ok bool)
+    PutConfig(cfg *protos.Configuration) (err error)
 }
 
 type FiniteStateMachineStorageManager interface {
-    GetStateMachine(id string) (fsm *api.FiniteStateMachine, ok bool)
-    PutStateMachine(id string, fsm *api.FiniteStateMachine) (err error)
+    GetStateMachine(id string) (fsm *protos.FiniteStateMachine, ok bool)
+    PutStateMachine(id string, fsm *protos.FiniteStateMachine) (err error)
 }
 
 type StoreManager interface {

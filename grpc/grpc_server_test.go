@@ -1,21 +1,23 @@
 package grpc_test
 
 import (
-    "context"
-    "fmt"
     . "github.com/JiaYongfei/respect/gomega"
-    "github.com/massenz/go-statemachine/api"
-    "github.com/massenz/go-statemachine/pubsub"
-    "github.com/massenz/go-statemachine/storage"
-    "github.com/massenz/slf4go/logging"
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
+
+    "context"
+    "fmt"
+    "github.com/massenz/slf4go/logging"
 
     g "google.golang.org/grpc"
     "net"
     "time"
 
+    . "github.com/massenz/go-statemachine/api"
     "github.com/massenz/go-statemachine/grpc"
+    "github.com/massenz/go-statemachine/pubsub"
+    "github.com/massenz/go-statemachine/storage"
+    "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("GrpcServer", func() {
@@ -157,15 +159,15 @@ var _ = Describe("GrpcServer", func() {
                 },
                 StartingState: "start",
             }
-            fsm = &api.FiniteStateMachine{ConfigId: cfg.GetVersionId()}
+            fsm = &api.FiniteStateMachine{ConfigId: GetVersionId(cfg)}
         })
         It("should store valid configurations", func() {
-            _, ok := store.GetConfig(cfg.GetVersionId())
+            _, ok := store.GetConfig(GetVersionId(cfg))
             Ω(ok).To(BeFalse())
             response, err := client.PutConfiguration(context.Background(), cfg)
             Ω(err).ToNot(HaveOccurred())
             Ω(response).ToNot(BeNil())
-            Ω(response.Id).To(Equal(cfg.GetVersionId()))
+            Ω(response.Id).To(Equal(GetVersionId(cfg)))
             found, ok := store.GetConfig(response.Id)
             Ω(ok).Should(BeTrue())
             Ω(found).Should(Respect(cfg))
@@ -182,9 +184,9 @@ var _ = Describe("GrpcServer", func() {
             Ω(err).To(HaveOccurred())
         })
         It("should retrieve a valid configuration", func() {
-            Ω(store.PutConfig(cfg.GetVersionId(), cfg)).To(Succeed())
+            Ω(store.PutConfig(cfg)).To(Succeed())
             response, err := client.GetConfiguration(context.Background(),
-                &api.GetRequest{Id: cfg.GetVersionId()})
+                &api.GetRequest{Id: GetVersionId(cfg)})
             Ω(err).ToNot(HaveOccurred())
             Ω(response).ToNot(BeNil())
             Ω(response).Should(Respect(cfg))
@@ -195,7 +197,7 @@ var _ = Describe("GrpcServer", func() {
         })
 
         It("should store a valid FSM", func() {
-            Ω(store.PutConfig(cfg.GetVersionId(), cfg)).To(Succeed())
+            Ω(store.PutConfig(cfg)).To(Succeed())
             resp, err := client.PutFiniteStateMachine(context.Background(), fsm)
             Ω(err).ToNot(HaveOccurred())
             Ω(resp).ToNot(BeNil())
@@ -209,7 +211,7 @@ var _ = Describe("GrpcServer", func() {
         })
         It("can retrieve a stored FSM", func() {
             id := "123456"
-            Ω(store.PutConfig(fsm.ConfigId, cfg))
+            Ω(store.PutConfig(cfg))
             Ω(store.PutStateMachine(id, fsm)).Should(Succeed())
             Ω(client.GetFiniteStateMachine(context.Background(), &api.GetRequest{Id: id})).Should(
                 Respect(fsm))

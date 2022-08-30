@@ -23,7 +23,7 @@ import (
     "flag"
     "fmt"
     "github.com/google/uuid"
-    "github.com/massenz/go-statemachine/api"
+    "github.com/massenz/statemachine-proto/golang/api"
     "google.golang.org/grpc"
     "google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -42,7 +42,7 @@ func main() {
 
     clientOptions := []grpc.DialOption{grpc.WithInsecure()}
     cc, _ := grpc.Dial(*serverAddr, clientOptions...)
-    client := api.NewEventsClient(cc)
+    client := api.NewStatemachineServiceClient(cc)
 
     response, err := client.ConsumeEvent(context.Background(),
         &api.EventRequest{
