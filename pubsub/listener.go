@@ -20,9 +20,11 @@ package pubsub
 
 import (
     "fmt"
-    "github.com/massenz/go-statemachine/api"
     log "github.com/massenz/slf4go/logging"
     "google.golang.org/protobuf/types/known/timestamppb"
+
+    . "github.com/massenz/go-statemachine/api"
+    "github.com/massenz/statemachine-proto/golang/api"
 )
 
 func NewEventsListener(options *ListenerOptions) *EventsListener {
@@ -69,7 +71,7 @@ func (listener *EventsListener) ListenForMessages() {
             continue
         }
 
-        cfgFsm := api.ConfiguredStateMachine{
+        cfgFsm := ConfiguredStateMachine{
             Config: cfg,
             FSM:    fsm,
         }

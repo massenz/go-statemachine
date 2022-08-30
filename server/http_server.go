@@ -19,72 +19,76 @@
 package server
 
 import (
-	"github.com/massenz/go-statemachine/storage"
-	log "github.com/massenz/slf4go/logging"
-	"net/http"
-	"time"
+    "github.com/massenz/go-statemachine/storage"
+    log "github.com/massenz/slf4go/logging"
+    "net/http"
+    "time"
 
-	"github.com/gorilla/mux"
+    "github.com/gorilla/mux"
 )
 
 const (
-	Api                    = "/api/v1"
-	HealthEndpoint         = "/health"
-	ConfigurationsEndpoint = Api + "/configurations"
-	StatemachinesEndpoint  = Api + "/statemachines"
+    Api                    = "/api/v1"
+    HealthEndpoint         = "/health"
+    ConfigurationsEndpoint = Api + "/configurations"
+    StatemachinesEndpoint  = Api + "/statemachines"
 )
 
 var (
-	shouldTrace  bool
-	logger       = log.NewLog("server")
-	storeManager storage.StoreManager
+    // Release carries the version of the binary, as set by the build script
+    // See: https://blog.alexellis.io/inject-build-time-vars-golang/
+    Release string
+
+    shouldTrace  bool
+    logger       = log.NewLog("server")
+    storeManager storage.StoreManager
 )
 
 func trace(endpoint string) func() {
-	if !shouldTrace {
-		return func() {}
-	}
-	start := time.Now()
-	logger.Trace("Handling: [%s]\n", endpoint)
-	return func() { logger.Trace("%s took %s\n", endpoint, time.Since(start)) }
+    if !shouldTrace {
+        return func() {}
+    }
+    start := time.Now()
+    logger.Trace("Handling: [%s]\n", endpoint)
+    return func() { logger.Trace("%s took %s\n", endpoint, time.Since(start)) }
 }
 
 func defaultContent(w http.ResponseWriter) {
-	w.Header().Add(ContentType, ApplicationJson)
+    w.Header().Add(ContentType, ApplicationJson)
 }
 
 func EnableTracing() {
-	shouldTrace = true
-	logger.Level = log.TRACE
+    shouldTrace = true
+    logger.Level = log.TRACE
 }
 
 func SetLogLevel(level log.LogLevel) {
-	logger.Level = level
+    logger.Level = level
 }
 
 // NewRouter returns a gorilla/mux Router for the server routes; exposed so
 // that path params are testable.
 func NewRouter() *mux.Router {
 
-	// TODO: Move all the Handlers to a `handlers` package.
-	r := mux.NewRouter()
-	r.HandleFunc(HealthEndpoint, HealthHandler).Methods("GET")
-	r.HandleFunc(ConfigurationsEndpoint, CreateConfigurationHandler).Methods("POST")
-	r.HandleFunc(ConfigurationsEndpoint+"/{cfg_id}", GetConfigurationHandler).Methods("GET")
-	r.HandleFunc(StatemachinesEndpoint, CreateStatemachineHandler).Methods("POST")
-	r.HandleFunc(StatemachinesEndpoint+"/{statemachine_id}", GetStatemachineHandler).Methods("GET")
-	return r
+    // TODO: Move all the Handlers to a `handlers` package.
+    r := mux.NewRouter()
+    r.HandleFunc(HealthEndpoint, HealthHandler).Methods("GET")
+    r.HandleFunc(ConfigurationsEndpoint, CreateConfigurationHandler).Methods("POST")
+    r.HandleFunc(ConfigurationsEndpoint+"/{cfg_id}", GetConfigurationHandler).Methods("GET")
+    r.HandleFunc(StatemachinesEndpoint, CreateStatemachineHandler).Methods("POST")
+    r.HandleFunc(StatemachinesEndpoint+"/{statemachine_id}", GetStatemachineHandler).Methods("GET")
+    return r
 }
 
 func NewHTTPServer(addr string, logLevel log.LogLevel) *http.Server {
-	logger.Level = logLevel
+    logger.Level = logLevel
 
-	return &http.Server{
-		Addr:    addr,
-		Handler: NewRouter(),
-	}
+    return &http.Server{
+        Addr:    addr,
+        Handler: NewRouter(),
+    }
 }
 
 func SetStore(store storage.StoreManager) {
-	storeManager = store
+    storeManager = store
 }

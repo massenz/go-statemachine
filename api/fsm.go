@@ -24,36 +24,44 @@ import (
     "github.com/google/uuid"
     log "github.com/massenz/slf4go/logging"
     tspb "google.golang.org/protobuf/types/known/timestamppb"
+
+    protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
-var MalformedConfigurationError = fmt.Errorf("this configuration cannot be parsed")
-var MissingNameConfigurationError = fmt.Errorf(
-    "configuration must always specify a name (and optionally a version)")
-var MissingStatesConfigurationError = fmt.Errorf(
-    "configuration must always specify at least one state")
-var MissingDestinationError = fmt.Errorf(
-    "event must always have a `Destination` statemachine")
-var MissingEventNameError = fmt.Errorf(
-    "events must always specify the event type")
-var MismatchStartingStateConfigurationError = fmt.Errorf(
-    "the StartingState must be one of the possible FSM states")
-var EmptyStartingStateConfigurationError = fmt.Errorf("the StartingState must be non-empty")
-var UnexpectedTransitionError = fmt.Errorf("unexpected event transition")
-var UnexpectedError = fmt.Errorf("the request was malformed")
-var UnreachableStateConfigurationError = "state %s is not used in any of the transitions"
+const (
+    ConfigurationVersionSeparator = ":"
+)
 
-// Logger is made accessible so that its `Level` can be changed
-// or can be sent to a `NullLog` during testing.
-var Logger = log.NewLog("fsm")
+var (
+    MalformedConfigurationError   = fmt.Errorf("this configuration cannot be parsed")
+    MissingNameConfigurationError = fmt.Errorf(
+        "configuration must always specify a name (and optionally a version)")
+    MissingStatesConfigurationError = fmt.Errorf(
+        "configuration must always specify at least one state")
+    MissingDestinationError = fmt.Errorf(
+        "event must always have a `Destination` statemachine")
+    MissingEventNameError = fmt.Errorf(
+        "events must always specify the event type")
+    MismatchStartingStateConfigurationError = fmt.Errorf(
+        "the StartingState must be one of the possible FSM states")
+    EmptyStartingStateConfigurationError = fmt.Errorf("the StartingState must be non-empty")
+    UnexpectedTransitionError            = fmt.Errorf("unexpected event transition")
+    UnexpectedError                      = fmt.Errorf("the request was malformed")
+    UnreachableStateConfigurationError   = "state %s is not used in any of the transitions"
+
+    // Logger is made accessible so that its `Level` can be changed
+    // or can be sent to a `NullLog` during testing.
+    Logger = log.NewLog("fsm")
+)
 
 // ConfiguredStateMachine is the internal representation of an FSM, which
 // carries within itself the configuration for ease of use.
 type ConfiguredStateMachine struct {
-    Config *Configuration
-    FSM    *FiniteStateMachine
+    Config *protos.Configuration
+    FSM    *protos.FiniteStateMachine
 }
 
-func NewStateMachine(configuration *Configuration) (*ConfiguredStateMachine, error) {
+func NewStateMachine(configuration *protos.Configuration) (*ConfiguredStateMachine, error) {
     if configuration.Name == "" {
         Logger.Error("Missing configuration name")
         return nil, MalformedConfigurationError
@@ -62,7 +70,7 @@ func NewStateMachine(configuration *Configuration) (*ConfiguredStateMachine, err
         configuration.Version = "v1"
     }
     return &ConfiguredStateMachine{
-        FSM: &FiniteStateMachine{
+        FSM: &protos.FiniteStateMachine{
             ConfigId: configuration.Name + ":" + configuration.Version,
             State:    configuration.StartingState,
             //History:  make([]string, 0),
@@ -73,11 +81,11 @@ func NewStateMachine(configuration *Configuration) (*ConfiguredStateMachine, err
 
 // SendEvent registers the event with the FSM and effects the transition, if valid.
 // It also creates a new Event, and stores in the provided cache.
-func (x *ConfiguredStateMachine) SendEvent(evt *Event) error {
+func (x *ConfiguredStateMachine) SendEvent(evt *protos.Event) error {
     // We need to clone the Event, as we will be mutating it,
     // and storing the pointer in the FSM's `History`:
     // we cannot be sure what the caller is going to do with it.
-    newEvent := proto.Clone(evt).(*Event)
+    newEvent := proto.Clone(evt).(*protos.Event)
     for _, t := range x.Config.Transitions {
         if t.From == x.FSM.State && t.Event == newEvent.Transition.Event {
             newEvent.Transition.From = x.FSM.State
@@ -105,11 +113,11 @@ func (x *ConfiguredStateMachine) SendEventAsString(evt string) error {
     return UnexpectedTransitionError
 }
 
-func NewEvent(evt string) *Event {
-    return &Event{
+func NewEvent(evt string) *protos.Event {
+    return &protos.Event{
         EventId:    uuid.New().String(),
         Timestamp:  tspb.Now(),
-        Transition: &Transition{Event: evt},
+        Transition: &protos.Transition{Event: evt},
     }
 }
 
@@ -118,18 +126,18 @@ func (x *ConfiguredStateMachine) Reset() {
     x.FSM.History = nil
 }
 
-func (x *Configuration) GetVersionId() string {
-    return x.Name + ":" + x.Version
+func GetVersionId(c *protos.Configuration) string {
+    return c.Name + ConfigurationVersionSeparator + c.Version
 }
 
 // HasState will check whether a given state is either origin or destination for the Transition
-func (x *Transition) HasState(state string) bool {
-    return state == x.From || state == x.To
+func HasState(transition *protos.Transition, state string) bool {
+    return state == transition.GetFrom() || state == transition.GetTo()
 }
 
-// HasState checks that `state` is one of the Configuration's `States`
-func (x *Configuration) HasState(state string) bool {
-    for _, s := range x.States {
+// CfgHasState checks that `state` is one of the Configuration's `States`
+func CfgHasState(configuration *protos.Configuration, state string) bool {
+    for _, s := range configuration.States {
         if s == state {
             return true
         }
@@ -142,8 +150,8 @@ func (x *Configuration) HasState(state string) bool {
 //
 // We also check that the reported FSM ConfigId, matches the Configuration's name, version.
 func (x *ConfiguredStateMachine) CheckValid() bool {
-    return x.Config.CheckValid() == nil && x.Config.HasState(x.FSM.State) &&
-        x.FSM.ConfigId == x.Config.GetVersionId()
+    return CheckValid(x.Config) == nil && CfgHasState(x.Config, x.FSM.State) &&
+        x.FSM.ConfigId == GetVersionId(x.Config)
 }
 
 // CheckValid will validate that there is at least one state,
@@ -152,24 +160,24 @@ func (x *ConfiguredStateMachine) CheckValid() bool {
 //
 // Finally, it will check that the name is valid,
 // and that the generated `ConfigId` is a valid URI segment.
-func (x *Configuration) CheckValid() error {
-    if x.Name == "" {
+func CheckValid(c *protos.Configuration) error {
+    if c.Name == "" {
         return MissingNameConfigurationError
     }
-    if len(x.States) == 0 {
+    if len(c.States) == 0 {
         return MissingStatesConfigurationError
     }
-    if x.StartingState == "" {
+    if c.StartingState == "" {
         return EmptyStartingStateConfigurationError
     }
-    if !x.HasState(x.StartingState) {
+    if !CfgHasState(c, c.StartingState) {
         return MismatchStartingStateConfigurationError
     }
     // TODO: we should actually build the full graph and check it's fully connected.
-    for _, s := range x.States {
+    for _, s := range c.States {
         found := false
-        for _, t := range x.Transitions {
-            if t.HasState(s) {
+        for _, t := range c.Transitions {
+            if HasState(t, s) {
                 found = true
                 break
             }
@@ -183,19 +191,27 @@ func (x *Configuration) CheckValid() error {
 
 //////// encoding interface /////////////
 
+type MyConfig struct {
+    protos.Configuration
+}
+
+type MyFSM struct {
+    protos.FiniteStateMachine
+}
+
 // MarshalBinary is needed to encode the data before storing in Redis,
 // and to retrieve it later.
 //
 // **NOTE** the receiver must be a concrete type (NOT a pointer) or the
 // serialization to Redis will fail.
-func (x Configuration) MarshalBinary() ([]byte, error) {
+func (x MyConfig) MarshalBinary() ([]byte, error) {
     return proto.Marshal(&x)
 }
 
 // UnmarshalBinary is the dual of MarshalBinary and will parse the
 // binary data into the receiver.
 // See: https://pkg.go.dev/encoding
-func (x *Configuration) UnmarshalBinary(data []byte) error {
+func (x *MyConfig) UnmarshalBinary(data []byte) error {
     res := proto.Unmarshal(data, x)
     return res
 }
@@ -204,11 +220,11 @@ func (x *Configuration) UnmarshalBinary(data []byte) error {
 // we can't really define an ABC for both types, and using proto.Message wouldn't
 // work either.
 
-func (x FiniteStateMachine) MarshalBinary() ([]byte, error) {
+func (x MyFSM) MarshalBinary() ([]byte, error) {
     return proto.Marshal(&x)
 }
 
-func (x *FiniteStateMachine) UnmarshalBinary(data []byte) error {
+func (x *MyFSM) UnmarshalBinary(data []byte) error {
     res := proto.Unmarshal(data, x)
     return res
 }

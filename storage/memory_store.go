@@ -19,89 +19,98 @@
 package storage
 
 import (
-	"github.com/massenz/go-statemachine/api"
-	log "github.com/massenz/slf4go/logging"
-	"sync"
-	"time"
+    "github.com/golang/protobuf/proto"
+    . "github.com/massenz/go-statemachine/api"
+    log "github.com/massenz/slf4go/logging"
+    "github.com/massenz/statemachine-proto/golang/api"
+    "sync"
+    "time"
 )
 
 func NewInMemoryStore() StoreManager {
-	return &InMemoryStore{
-		configurationsStore: make(map[string][]byte),
-		machinesStore:       make(map[string][]byte),
-		logger:              log.NewLog("memory_store"),
-	}
+    return &InMemoryStore{
+        configurationsStore: make(map[string][]byte),
+        machinesStore:       make(map[string][]byte),
+        logger:              log.NewLog("memory_store"),
+    }
 }
 
 type InMemoryStore struct {
-	logger              *log.Log
-	mux                 sync.RWMutex
-	configurationsStore map[string][]byte
-	machinesStore       map[string][]byte
+    logger              *log.Log
+    mux                 sync.RWMutex
+    configurationsStore map[string][]byte
+    machinesStore       map[string][]byte
 }
 
 func (csm *InMemoryStore) SetLogLevel(level log.LogLevel) {
-	csm.logger.Level = level
+    csm.logger.Level = level
 }
 
 // SetTimeout does not really make sense for an in-memory store, so this is a no-op
 func (csm *InMemoryStore) SetTimeout(_ time.Duration) {
-	// do nothing
+    // do nothing
+}
+
+func (csm *InMemoryStore) Health() error {
+    return nil
 }
 
 func (csm *InMemoryStore) GetConfig(id string) (cfg *api.Configuration, ok bool) {
-	csm.logger.Debug("Fetching Configuration [%s]", id)
+    csm.logger.Debug("Fetching Configuration [%s]", id)
 
-	csm.mux.RLock()
-	defer csm.mux.RUnlock()
+    csm.mux.RLock()
+    defer csm.mux.RUnlock()
 
-	cfgBytes, ok := csm.configurationsStore[id]
-	csm.logger.Debug("Found: %t", ok)
-	if ok {
-		cfg = &api.Configuration{}
-		err := cfg.UnmarshalBinary(cfgBytes)
-		if err != nil {
-			csm.logger.Error(err.Error())
-			return nil, false
-		}
-	}
-	return
+    cfgBytes, ok := csm.configurationsStore[id]
+    csm.logger.Debug("Found: %t", ok)
+    if ok {
+        cfg = &api.Configuration{}
+        err := proto.Unmarshal(cfgBytes, cfg)
+        if err != nil {
+            csm.logger.Error(err.Error())
+            return nil, false
+        }
+    }
+    return
 }
 
-func (csm *InMemoryStore) PutConfig(id string, cfg *api.Configuration) (err error) {
-	csm.mux.Lock()
-	defer csm.mux.Unlock()
-	val, err := cfg.MarshalBinary()
-	if err == nil {
-		csm.configurationsStore[id] = val
-	}
-	return err
+func (csm *InMemoryStore) PutConfig(cfg *api.Configuration) error {
+    csm.mux.Lock()
+    defer csm.mux.Unlock()
+
+    val, err := proto.Marshal(cfg)
+    if err == nil {
+        version := GetVersionId(cfg)
+        csm.logger.Debug("Storing Configuration [%s]", version)
+        csm.configurationsStore[version] = val
+    }
+    return err
 }
 
 func (csm *InMemoryStore) GetStateMachine(id string) (machine *api.FiniteStateMachine, ok bool) {
-	csm.logger.Debug("Fetching StateMachine [%s]", id)
-	csm.mux.RLock()
-	defer csm.mux.RUnlock()
+    csm.logger.Debug("Fetching StateMachine [%s]", id)
+    csm.mux.RLock()
+    defer csm.mux.RUnlock()
 
-	machineBytes, ok := csm.machinesStore[id]
-	csm.logger.Debug("Found: %v", ok)
-	if ok {
-		machine = &api.FiniteStateMachine{}
-		if err := machine.UnmarshalBinary(machineBytes); err != nil {
-			csm.logger.Error(err.Error())
-			return nil, false
-		}
-	}
-	return
+    machineBytes, ok := csm.machinesStore[id]
+    csm.logger.Debug("Found: %v", ok)
+    if ok {
+        machine = &api.FiniteStateMachine{}
+        if err := proto.Unmarshal(machineBytes, machine); err != nil {
+            csm.logger.Error(err.Error())
+            return nil, false
+        }
+    }
+    return
 }
 
 func (csm *InMemoryStore) PutStateMachine(id string, machine *api.FiniteStateMachine) (err error) {
-	csm.mux.Lock()
-	defer csm.mux.Unlock()
+    csm.mux.Lock()
+    defer csm.mux.Unlock()
 
-	val, err := machine.MarshalBinary()
-	if err == nil {
-		csm.machinesStore[id] = val
-	}
-	return
+    val, err := proto.Marshal(machine)
+    if err == nil {
+        csm.machinesStore[id] = val
+    }
+    return
 }

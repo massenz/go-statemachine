@@ -19,16 +19,17 @@
 package pubsub_test
 
 import (
-    "fmt"
     . "github.com/JiaYongfei/respect/gomega"
-    "github.com/massenz/go-statemachine/api"
-    "github.com/massenz/go-statemachine/storage"
-    log "github.com/massenz/slf4go/logging"
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
+
+    "fmt"
+    "github.com/massenz/slf4go/logging"
     "time"
 
     "github.com/massenz/go-statemachine/pubsub"
+    "github.com/massenz/go-statemachine/storage"
+    "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("A Listener", func() {
@@ -70,7 +71,7 @@ var _ = Describe("A Listener", func() {
                 ListenersPoolSize:    0,
             })
             // Set to DEBUG when diagnosing test failures
-            testListener.SetLogLevel(log.NONE)
+            testListener.SetLogLevel(logging.NONE)
         })
         It("can post error notifications", func() {
             defer close(notificationsCh)
@@ -94,25 +95,24 @@ var _ = Describe("A Listener", func() {
         })
         It("can receive events", func() {
             done := make(chan interface{})
-
             msg := pubsub.EventMessage{
                 Sender:      "1234",
-                EventId:     "feed-beef",
+                EventId:     "feed-dead-beef",
                 EventName:   "move",
-                Destination: "778899",
+                Destination: "99",
             }
             Expect(store.PutStateMachine(msg.Destination, &api.FiniteStateMachine{
-                ConfigId: "test.v1",
+                ConfigId: "test:v1",
                 State:    "start",
                 History:  nil,
             })).ToNot(HaveOccurred())
-            Expect(store.PutConfig("test.v1", &api.Configuration{
+            Expect(store.PutConfig(&api.Configuration{
                 Name:          "test",
                 Version:       "v1",
                 States:        []string{"start", "end"},
                 Transitions:   []*api.Transition{{From: "start", To: "end", Event: "move"}},
-                StartingState: "",
-            }))
+                StartingState: "start",
+            })).ToNot(HaveOccurred())
 
             go func() {
                 defer close(done)

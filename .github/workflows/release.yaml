@@ -1,52 +1,59 @@
-  on:
-    push:
-      branches:
-        - release
-  env:
-    AUTHOR: ${{ github.event.pusher.name }}
-    EMAIL: ${{ github.event.pusher.email }}
+# Upon pushing to the release branch a new tag will be created
+# in preparation for the release.
+#
+# Copyright (c) 2022 AlertAvert.com.  All rights reserved.
+# Author: Marco Massenzio (marco@alertavert.com)
+#
+name: Release
 
-  jobs:
-    Test:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v3
+on:
+  push:
+    branches:
+      - release
+env:
+  AUTHOR: ${{ github.event.pusher.name }}
+  EMAIL: ${{ github.event.pusher.email }}
 
-        # TODO: run this in a build container instead
-        - uses: arduino/setup-protoc@v1
-          with:
-            version: '3.19'
-        - name: Install protoc-gen & build
-          run: |
-            go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
-            go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
-            make all
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
 
-        - name: Create release tag
-          run: |
-            git config user.name "$AUTHOR"
-            git config user.email "<$EMAIL>"
-            TAG=$(./get-tag)
-            git tag -a $TAG -m "Release $TAG"
-            git push origin $TAG
-            echo TAG=$(./get-tag) >> $GITHUB_ENV
+      # TODO: run this in a build container instead
+      - uses: arduino/setup-protoc@v1
+        with:
+          version: '3.19'
+      - name: Install protoc-gen & build
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+          make build
 
-        - name: Build container
-          run: |
-            IMAGE=$(make container | grep "Successfully tagged" | awk '{print $3;}')
-            if [[ -z $(docker images -q $IMAGE) ]]; then
-              echo "Image $IMAGE not found"
-              exit 1
-            fi
-            echo IMAGE=$IMAGE >> $GITHUB_ENV
+      - name: Create release tag
+        run: |
+          git config user.name "$AUTHOR"
+          git config user.email "<$EMAIL>"
+          TAG=$(./get-tag)
+          git tag -a $TAG -m "Release $TAG"
+          git push --tags
+          echo TAG=${TAG} >> $GITHUB_ENV
 
-        - name: Push container
-          run: |
-            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
-            docker push $IMAGE
+      - name: Build container
+        run: |
+          IMAGE=$(make container | grep "Successfully tagged" | awk '{print $3;}')
+          if [[ -z $(docker images -q $IMAGE) ]]; then
+            echo "Image $IMAGE not found"
+            exit 1
+          fi
+          echo IMAGE=$IMAGE >> $GITHUB_ENV
 
-        - uses: ncipollo/release-action@v1
-          with:
-            # token: ${{ secrets.GITHUB_TOKEN }}
-            tag: ${{ env.TAG }}
-            generateReleaseNotes: true
+      - name: Push container
+        run: |
+          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
+          docker push $IMAGE
+
+      - uses: ncipollo/release-action@v1.10
+        with:
+          tag: ${{ env.TAG }}
+          generateReleaseNotes: true
