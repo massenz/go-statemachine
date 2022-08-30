@@ -53,7 +53,7 @@ jobs:
           docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
           docker push $IMAGE
 
-      - uses: ncipollo/release-action@v1.10
+      - uses: ncipollo/release-action@v1.10.0
         with:
           tag: ${{ env.TAG }}
           generateReleaseNotes: true
