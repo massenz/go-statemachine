@@ -8,7 +8,6 @@ import (
     "context"
     "fmt"
     "github.com/massenz/slf4go/logging"
-
     g "google.golang.org/grpc"
     "net"
     "time"

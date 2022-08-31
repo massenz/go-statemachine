@@ -19,19 +19,22 @@
 package pubsub_test
 
 import (
-    "encoding/json"
-    "fmt"
     . "github.com/JiaYongfei/respect/gomega"
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
+
+    "fmt"
+    "github.com/golang/protobuf/proto"
+    log "github.com/massenz/slf4go/logging"
     "time"
 
+    "github.com/massenz/go-statemachine/api"
     "github.com/massenz/go-statemachine/pubsub"
-    log "github.com/massenz/slf4go/logging"
+
+    protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("SQS Publisher", func() {
-
     Context("when correctly initialized", func() {
         var (
             testPublisher   *pubsub.SqsPublisher
@@ -45,15 +48,12 @@ var _ = Describe("SQS Publisher", func() {
             testPublisher.SetLogLevel(log.NONE)
         })
         It("can publish error notifications", func() {
-            msg := pubsub.EventMessage{
-                Sender:         "me",
-                Destination:    "some-fsm",
-                EventId:        "feed-beef",
-                EventName:      "test-me",
-                EventTimestamp: time.Now(),
-            }
+            msg := api.NewEvent("test-event")
+            msg.Originator = "me"
+            msg.EventId = "feed-beef"
+            msg.Details = `{"foo": "bar"}`
             detail := "more details about the error"
-            notification := pubsub.ErrorMessageWithDetail(fmt.Errorf("this is a test"), &msg, detail)
+            notification := pubsub.ErrorMessage(fmt.Errorf("this is a test"), msg, detail)
             done := make(chan interface{})
             go func() {
                 defer close(done)
@@ -63,16 +63,16 @@ var _ = Describe("SQS Publisher", func() {
             notificationsCh <- *notification
             res := getSqsMessage(getQueueName(notificationsQueue))
             Expect(res).ToNot(BeNil())
+
             body := *res.Body
-            var sentMsg pubsub.EventMessage
-            Expect(json.Unmarshal([]byte(body), &sentMsg)).ToNot(HaveOccurred())
-            Expect(sentMsg).To(Respect(msg))
+            var receivedEvt protos.Event
+            Expect(proto.UnmarshalText(body, &receivedEvt)).Should(Succeed())
+            Expect(receivedEvt).To(Respect(*msg))
 
             close(notificationsCh)
             select {
             case <-done:
                 Succeed()
-
             case <-time.After(timeout):
                 Fail("timed out waiting for Publisher to exit")
             }
@@ -102,27 +102,23 @@ var _ = Describe("SQS Publisher", func() {
 
         It("will send several messages within a reasonable timeframe", func() {
             go testPublisher.Publish(getQueueName(notificationsQueue))
-            for i := range [10]int{} {
-                msg := pubsub.EventMessage{
-                    Sender:         "someone",
-                    Destination:    fmt.Sprintf("dest-%d", i),
-                    EventId:        fmt.Sprintf("evt-%d", i),
-                    EventName:      "many-messages-test",
-                    EventTimestamp: time.Now(),
-                }
+            for range [10]int{} {
+                evt := api.NewEvent("many-messages-test")
                 detail := "more details about the error"
-                notificationsCh <- *pubsub.ErrorMessageWithDetail(fmt.Errorf("this is a test"), &msg, detail)
+                notificationsCh <- *pubsub.ErrorMessage(fmt.Errorf("this is a test"), evt, detail)
             }
             done := make(chan interface{})
             go func() {
+                // This is necessary as we make assertions in this goroutine,
+                //and we want to make sure we can see the errors if they fail.
+                defer GinkgoRecover()
                 defer close(done)
                 for range [10]int{} {
                     res := getSqsMessage(getQueueName(notificationsQueue))
                     Expect(res).ToNot(BeNil())
-                    body := *res.Body
-                    var sentMsg pubsub.EventMessage
-                    Expect(json.Unmarshal([]byte(body), &sentMsg)).ToNot(HaveOccurred())
-                    Expect(sentMsg.EventName).To(Equal("many-messages-test"))
+                    var receivedEvt protos.Event
+                    Expect(proto.UnmarshalText(*res.Body, &receivedEvt)).Should(Succeed())
+                    Expect(receivedEvt.Transition.Event).To(Equal("many-messages-test"))
                 }
             }()
             close(notificationsCh)

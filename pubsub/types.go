@@ -43,7 +43,7 @@ func (epe EventProcessingError) Error() string {
 // EventProcessingError fills the gap,
 // so we can serialize an EventErrorMessage with the embedded error.
 func (epe EventProcessingError) MarshalJSON() ([]byte, error) {
-    return json.Marshal(epe.err.Error())
+    return json.Marshal(epe.Error())
 }
 
 // UnmarshalJSON is the inverse of MarshalJSON and reads in an error description.
@@ -60,6 +60,7 @@ func NewEventProcessingError(err error) *EventProcessingError {
     return &EventProcessingError{err: err}
 }
 
+// FIXME: this will soon be replaced instead by a Protobuf message.
 // An EventErrorMessage encapsulates an error occurred while processing the `Message` and is
 // returned over the `notifications` channel to a `Publisher` for eventual upstream processing.
 type EventErrorMessage struct {

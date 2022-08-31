@@ -25,19 +25,21 @@ import (
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
 
-    "github.com/massenz/go-statemachine/pubsub"
     log "github.com/massenz/slf4go/logging"
+
+    "github.com/massenz/go-statemachine/api"
+    "github.com/massenz/go-statemachine/pubsub"
+    protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("SQS Subscriber", func() {
-
     Context("when correctly initialized", func() {
         var (
             testSubscriber *pubsub.SqsSubscriber
-            eventsCh       chan pubsub.EventMessage
+            eventsCh       chan protos.EventRequest
         )
         BeforeEach(func() {
-            eventsCh = make(chan pubsub.EventMessage)
+            eventsCh = make(chan protos.EventRequest)
             testSubscriber = pubsub.NewSqsSubscriber(eventsCh, &sqsUrl)
             Expect(testSubscriber).ToNot(BeNil())
             // Set to DEBUG when diagnosing failing tests
@@ -47,13 +49,13 @@ var _ = Describe("SQS Subscriber", func() {
             testSubscriber.PollingInterval = d
         })
         It("receives events", func() {
-            msg := pubsub.EventMessage{
-                Sender:      "me",
-                Destination: "some-fsm",
-                EventId:     "feed-beef",
-                EventName:   "test-me",
+            msg := protos.EventRequest{
+                Event: api.NewEvent("test-event"),
+                Dest:  "some-fsm",
             }
-            Expect(postSqsMessage(getQueueName(eventsQueue), &msg)).ToNot(HaveOccurred())
+            msg.Event.EventId = "feed-beef"
+            msg.Event.Originator = "test-subscriber"
+            Expect(postSqsMessage(getQueueName(eventsQueue), &msg)).Should(Succeed())
             done := make(chan interface{})
             doneTesting := make(chan interface{})
             go func() {
@@ -62,11 +64,12 @@ var _ = Describe("SQS Subscriber", func() {
             }()
 
             select {
-            case event := <-eventsCh:
-                testLog.Debug("Received Event -- Timestamp: %v", event.EventTimestamp)
-                // Workaround as we can't set the time sent
-                msg.EventTimestamp = event.EventTimestamp
-                Expect(event).To(Respect(msg))
+            case req := <-eventsCh:
+                testLog.Debug("Received Event -- Timestamp: %v", req.Event.Timestamp)
+                // We null the timestamp as we don't want to compare that with Respect
+                msg.Event.Timestamp = nil
+                req.Event.Timestamp = nil
+                Expect(req.Event).To(Respect(msg.Event))
                 close(doneTesting)
             case <-time.After(timeout):
                 Fail("timed out waiting to receive a message")

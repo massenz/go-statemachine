@@ -159,10 +159,7 @@ var _ = Describe("A Listener", func() {
                 },
                 Dest: "",
             }
-
-            go func() {
-                testListener.ListenForMessages()
-            }()
+            go func() {testListener.ListenForMessages()}()
             eventsCh <- request
             close(eventsCh)
 
