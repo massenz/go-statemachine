@@ -110,7 +110,7 @@ var _ = Describe("FSM Protocol Buffers", func() {
     })
 
     Describe("Finite State Machines", func() {
-        Context("with an unnamed configuration", func() {
+        Context("with a configuration", func() {
             var spaceship protos.Configuration
 
             BeforeEach(func() {
@@ -125,18 +125,18 @@ var _ = Describe("FSM Protocol Buffers", func() {
             })
 
             It("without name will fail", func() {
+                spaceship.Version = "v0.1"
                 _, err := NewStateMachine(&spaceship)
                 Expect(err).Should(HaveOccurred())
             })
-            It("will get a default version, if missing", func() {
+            It("will fail with a missing configuration version", func() {
                 spaceship.Name = "mars_orbiter"
-                s, err := NewStateMachine(&spaceship)
-                Expect(err).ShouldNot(HaveOccurred())
-                Expect(s.FSM.ConfigId).To(Equal("mars_orbiter:v1"))
+                _, err := NewStateMachine(&spaceship)
+                Expect(err).To(HaveOccurred())
             })
             It("will carry the configuration embedded", func() {
                 spaceship.Name = "mars_orbiter"
-                spaceship.Version = "v3"
+                spaceship.Version = "v1.0.1"
                 s, err := NewStateMachine(&spaceship)
                 Expect(err).ToNot(HaveOccurred())
                 Expect(s).ToNot(BeNil())
