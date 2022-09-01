@@ -14,6 +14,8 @@ build: cmd/main.go
 	go build -ldflags "-X main.Release=$(tag)" -o $(out) cmd/main.go
 	@chmod +x $(out)
 
+$(out): build
+
 services:
 	@docker-compose -f $(compose) up -d
 
@@ -22,10 +24,10 @@ queues:
 		aws --no-cli-pager --endpoint-url=http://localhost:4566 --region us-west-2 \
  			sqs create-queue --queue-name $$queue; done >/dev/null
 
-test: build services queues
+test: $(out) services queues
 	ginkgo -p $(pkgs)
 
-container:
+container: $(out)
 	docker build -f $(dockerfile) -t $(image):$(tag) .
 
 # Runs test coverage and displays the results in browser
@@ -34,5 +36,6 @@ cov: build services queues
 	@go tool cover -html=/tmp/cov.out
 
 clean:
-	@rm -f api/*.pb.go $(out)
+	@rm $(out)
 	@docker-compose -f $(compose) down
+	@docker rmi $(image):$(tag)

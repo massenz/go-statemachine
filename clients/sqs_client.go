@@ -23,11 +23,15 @@ import (
     "flag"
     "fmt"
     "github.com/aws/aws-sdk-go/aws"
+    "github.com/golang/protobuf/proto"
     "github.com/google/uuid"
+    "google.golang.org/protobuf/types/known/timestamppb"
     "os"
 
     "github.com/aws/aws-sdk-go/aws/session"
     "github.com/aws/aws-sdk-go/service/sqs"
+
+    protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var CTX = context.TODO()
@@ -55,12 +59,6 @@ func main() {
     event := flag.String("evt", "", "The Event for the FSM")
     flag.Parse()
 
-    if *fsmId == "" || *event == "" {
-        panic(fmt.Errorf("must specify both of -id and -evt"))
-    }
-    fmt.Printf("Publishing Event `%s` for FSM `%s` to SQS Topic: [%s]\n",
-        *event, *fsmId, *q)
-
     queue := NewSqs(endpoint)
     queueUrl, err := queue.GetQueueUrl(&sqs.GetQueueUrlInput{
         QueueName: q,
@@ -68,22 +66,25 @@ func main() {
     if err != nil {
         panic(err)
     }
-    _, err = queue.SendMessage(&sqs.SendMessageInput{
-        MessageAttributes: map[string]*sqs.MessageAttributeValue{
-            "DestinationId": {
-                DataType:    aws.String("String"),
-                StringValue: aws.String(*fsmId),
-            },
-            "EventId": {
-                DataType:    aws.String("String"),
-                StringValue: aws.String(uuid.NewString()),
-            },
-            "Sender": {
-                DataType:    aws.String("String"),
-                StringValue: aws.String("SQS Client"),
-            },
+
+    if *fsmId == "" || *event == "" {
+        panic(fmt.Errorf("must specify both of -id and -evt"))
+    }
+    fmt.Printf("Publishing Event `%s` for FSM `%s` to SQS Topic: [%s]\n", *event, *fsmId, *q)
+    order := NewOrderDetails(uuid.NewString(), "sqs-cust-1234", 99.99)
+    msg := &protos.EventRequest{
+        Event: &protos.Event{
+            EventId:    uuid.NewString(),
+            Timestamp:  timestamppb.Now(),
+            Transition: &protos.Transition{Event: *event},
+            Originator: "New SQS Client with Details",
+            Details:    order.String(),
         },
-        MessageBody: aws.String(*event),
+        Dest: *fsmId,
+    }
+
+    _, err = queue.SendMessage(&sqs.SendMessageInput{
+        MessageBody: aws.String(proto.MarshalTextString(msg)),
         QueueUrl:    queueUrl.QueueUrl,
     })
     if err != nil {

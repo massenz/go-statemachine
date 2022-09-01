@@ -23,12 +23,11 @@ import (
     "github.com/aws/aws-sdk-go/aws"
     "github.com/aws/aws-sdk-go/aws/session"
     "github.com/aws/aws-sdk-go/service/sqs"
+    "github.com/golang/protobuf/proto"
     "github.com/google/uuid"
     log "github.com/massenz/slf4go/logging"
     protos "github.com/massenz/statemachine-proto/golang/api"
-    "google.golang.org/protobuf/types/known/timestamppb"
     "os"
-    "strconv"
     "time"
 )
 
@@ -140,51 +139,35 @@ func (s *SqsSubscriber) Subscribe(topic string, done <-chan interface{}) {
 func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
     s.logger.Trace("Processing Message %v", msg.MessageId)
 
-    timestamp := msg.Attributes[sqs.MessageSystemAttributeNameSentTimestamp]
-    if timestamp == nil {
-        s.logger.Warn("No Timestamp in received event, using current time")
-        timestamp = aws.String(strconv.FormatInt(time.Now().Unix(), 10))
+    // The body of the message (the actual request) is mandatory.
+    if msg.Body == nil {
+        s.logger.Error("Message %v has no body", msg.MessageId)
+        // TODO: publish error to DLQ.
+        return
+    }
+    var request protos.EventRequest
+    err := proto.UnmarshalText(*msg.Body, &request)
+    if err != nil {
+        s.logger.Error("Message %v has invalid body: %s", msg.MessageId, err.Error())
+        // TODO: publish error to DLQ.
+        return
     }
 
-    // The body of the message (the actual event) and the destination (the FSM ID) are mandatory.
-    destId, hasDest := msg.MessageAttributes["DestinationId"]
-    if msg.Body != nil && hasDest {
-        // The Event ID is optional and, if missing, will be generated here.
-        eventId, hasId := msg.MessageAttributes["EventId"]
-        if !hasId {
-            eventId = &sqs.MessageAttributeValue{
-                DataType:    aws.String("String"),
-                StringValue: aws.String(uuid.NewString()),
-            }
-        }
-        // An SQS Message timestamp is a Unix milliseconds from epoch.
-        // TODO: We may need some amount of error-checking here.
-        ts, _ := strconv.ParseInt(*timestamp, 10, 64)
-        var request = protos.EventRequest{
-            Event: &protos.Event{
-                EventId:   *eventId.StringValue,
-                Timestamp: timestamppb.New(time.UnixMilli(ts)),
-                Transition: &protos.Transition{
-                    Event: *msg.Body,
-                },
-            },
-            Dest: *destId.StringValue,
-        }
-        if sender := msg.MessageAttributes["Sender"]; sender != nil {
-            request.Event.Originator = *sender.StringValue
-        }
-        if details := msg.MessageAttributes["Details"]; details != nil {
-            request.Event.Details = *details.StringValue
-        }
-        s.events <- request
-    } else {
-        errDetails := fmt.Sprintf("No Destination ID or Event in %v", msg.String())
+    destId := request.Dest
+    if destId == "" {
+        errDetails := fmt.Sprintf("No Destination ID in %v", request.String())
         s.logger.Error(errDetails)
         // TODO: publish error to DLQ.
+        return
     }
+    // The Event ID is optional and, if missing, will be generated here.
+    if request.Event.EventId == "" {
+        request.Event.EventId = uuid.NewString()
+    }
+    s.events <- request
 
     s.logger.Debug("Removing message %v from SQS", *msg.MessageId)
-    _, err := s.client.DeleteMessage(&sqs.DeleteMessageInput{
+    _, err = s.client.DeleteMessage(&sqs.DeleteMessageInput{
         QueueUrl:      queueUrl,
         ReceiptHandle: msg.ReceiptHandle,
     })

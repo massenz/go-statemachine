@@ -20,6 +20,7 @@ package pubsub_test
 
 import (
     "fmt"
+    "github.com/golang/protobuf/proto"
     "github.com/massenz/go-statemachine/pubsub"
     "github.com/massenz/statemachine-proto/golang/api"
     "os"
@@ -122,24 +123,9 @@ func getSqsMessage(queue string) *sqs.Message {
 // send it over the `queue`, so that we can test the Publisher can correctly receive it.
 func postSqsMessage(queue string, msg *api.EventRequest) error {
     q := pubsub.GetQueueUrl(testSqsClient, queue)
-    evt := msg.Event
-    testLog.Debug("Post Message -- Timestamp: %v", evt.Timestamp)
+    testLog.Debug("Post Message -- Timestamp: %v", msg.Event.Timestamp)
     _, err := testSqsClient.SendMessage(&sqs.SendMessageInput{
-        MessageAttributes: map[string]*sqs.MessageAttributeValue{
-            "DestinationId": {
-                DataType:    aws.String("String"),
-                StringValue: aws.String(msg.Dest),
-            },
-            "EventId": {
-                DataType:    aws.String("String"),
-                StringValue: aws.String(evt.EventId),
-            },
-            "Sender": {
-                DataType:    aws.String("String"),
-                StringValue: aws.String(evt.Originator),
-            },
-        },
-        MessageBody: aws.String(evt.Transition.Event),
+        MessageBody: aws.String(proto.MarshalTextString(msg)),
         QueueUrl:    &q,
     })
     return err
