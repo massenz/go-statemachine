@@ -20,7 +20,9 @@ package pubsub_test
 
 import (
     "fmt"
+    "github.com/golang/protobuf/proto"
     "github.com/massenz/go-statemachine/pubsub"
+    "github.com/massenz/statemachine-proto/golang/api"
     "os"
     "testing"
     "time"
@@ -119,25 +121,11 @@ func getSqsMessage(queue string) *sqs.Message {
 
 // postSqsMessage mirrors the decoding of the SQS Message in the Subscriber and will
 // send it over the `queue`, so that we can test the Publisher can correctly receive it.
-func postSqsMessage(queue string, msg *pubsub.EventMessage) error {
+func postSqsMessage(queue string, msg *api.EventRequest) error {
     q := pubsub.GetQueueUrl(testSqsClient, queue)
-    testLog.Debug("Post Message -- Timestamp: %v", msg.EventTimestamp)
+    testLog.Debug("Post Message -- Timestamp: %v", msg.Event.Timestamp)
     _, err := testSqsClient.SendMessage(&sqs.SendMessageInput{
-        MessageAttributes: map[string]*sqs.MessageAttributeValue{
-            "DestinationId": {
-                DataType:    aws.String("String"),
-                StringValue: aws.String(msg.Destination),
-            },
-            "EventId": {
-                DataType:    aws.String("String"),
-                StringValue: aws.String(msg.EventId),
-            },
-            "Sender": {
-                DataType:    aws.String("String"),
-                StringValue: aws.String(msg.Sender),
-            },
-        },
-        MessageBody: aws.String(msg.EventName),
+        MessageBody: aws.String(proto.MarshalTextString(msg)),
         QueueUrl:    &q,
     })
     return err

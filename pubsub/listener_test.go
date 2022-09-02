@@ -33,35 +33,15 @@ import (
 )
 
 var _ = Describe("A Listener", func() {
-    Context("from an EventMessage", func() {
-        It("can create a PB Event", func() {
-            msg := pubsub.EventMessage{
-                Sender:      "test-sender",
-                Destination: "test-destination",
-                EventId:     "test-abed",
-                EventName:   "an-event",
-                // 2022-05-09T22:52:39+0000
-                EventTimestamp: time.Unix(1652161959, 0),
-            }
-            evt := pubsub.NewPBEvent(msg)
-            Expect(evt).ToNot(BeNil())
-            Expect(evt.EventId).To(Equal(msg.EventId))
-            Expect(evt.Transition).ToNot(BeNil())
-            Expect(evt.Transition.Event).To(Equal(msg.EventName))
-            Expect(evt.Timestamp.AsTime().Unix()).To(Equal(msg.EventTimestamp.Unix()))
-            Expect(evt.Originator).To(Equal(msg.Sender))
-        })
-    })
-
     Context("when store-backed", func() {
         var (
             testListener    *pubsub.EventsListener
-            eventsCh        chan pubsub.EventMessage
+            eventsCh        chan api.EventRequest
             notificationsCh chan pubsub.EventErrorMessage
             store           storage.StoreManager
         )
         BeforeEach(func() {
-            eventsCh = make(chan pubsub.EventMessage)
+            eventsCh = make(chan api.EventRequest)
             notificationsCh = make(chan pubsub.EventErrorMessage)
             store = storage.NewInMemoryStore()
             testListener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
@@ -75,13 +55,16 @@ var _ = Describe("A Listener", func() {
         })
         It("can post error notifications", func() {
             defer close(notificationsCh)
-            msg := pubsub.EventMessage{
-                Sender:    "me",
-                EventId:   "feed-beef",
-                EventName: "test-me",
+            msg := api.Event{
+                EventId:    "feed-beef",
+                Originator: "me",
+                Transition: &api.Transition{
+                    Event: "test-me",
+                },
+                Details: "more details",
             }
-            detail := "more details about the error"
-            notification := pubsub.ErrorMessageWithDetail(fmt.Errorf("this is a test"), &msg, detail)
+            detail := "some error"
+            notification := pubsub.ErrorMessage(fmt.Errorf("this is a test"), &msg, detail)
             go testListener.PostErrorNotification(notification)
             select {
             case n := <-notificationsCh:
@@ -95,13 +78,19 @@ var _ = Describe("A Listener", func() {
         })
         It("can receive events", func() {
             done := make(chan interface{})
-            msg := pubsub.EventMessage{
-                Sender:      "1234",
-                EventId:     "feed-dead-beef",
-                EventName:   "move",
-                Destination: "99",
+            event := api.Event{
+                EventId:    "feed-beef",
+                Originator: "me",
+                Transition: &api.Transition{
+                    Event: "move",
+                },
+                Details: "more details",
             }
-            Expect(store.PutStateMachine(msg.Destination, &api.FiniteStateMachine{
+            request := api.EventRequest{
+                Event: &event,
+                Dest:  "test-fsm",
+            }
+            Expect(store.PutStateMachine(request.Dest, &api.FiniteStateMachine{
                 ConfigId: "test:v1",
                 State:    "start",
                 History:  nil,
@@ -118,86 +107,66 @@ var _ = Describe("A Listener", func() {
                 defer close(done)
                 testListener.ListenForMessages()
             }()
-            eventsCh <- msg
+            eventsCh <- request
             close(eventsCh)
 
             select {
             case n := <-notificationsCh:
                 Fail(fmt.Sprintf("unexpected error: %v", n.String()))
             case <-done:
-                fsm, ok := store.GetStateMachine(msg.Destination)
+                fsm, ok := store.GetStateMachine(request.Dest)
                 Expect(ok).ToNot(BeFalse())
                 Expect(fsm.State).To(Equal("end"))
+                Expect(len(fsm.History)).To(Equal(1))
+                Expect(fsm.History[0].Details).To(Equal("more details"))
+                Expect(fsm.History[0].Transition.Event).To(Equal("move"))
             case <-time.After(timeout):
                 Fail("the listener did not exit when the events channel was closed")
             }
         })
-        It("sends notifications for missing configurations", func() {
-            msg := pubsub.EventMessage{
-                Sender:      "1234",
-                EventId:     "feed-beef",
-                EventName:   "move",
-                Destination: "778899",
+        It("sends notifications for missing statemachine", func() {
+            event := api.Event{
+                EventId:    "feed-beef",
+                Originator: "me",
+                Transition: &api.Transition{
+                    Event: "move",
+                },
+                Details: "more details",
             }
-            Expect(store.PutStateMachine(msg.Destination, &api.FiniteStateMachine{
-                ConfigId: "test.v3",
-                State:    "start",
-                History:  nil,
-            })).ToNot(HaveOccurred())
+            request := api.EventRequest{
+                Event: &event,
+                Dest:  "fake-fsm",
+            }
             go func() {
                 testListener.ListenForMessages()
             }()
-            eventsCh <- msg
+            eventsCh <- request
             close(eventsCh)
 
             select {
             case n := <-notificationsCh:
                 Expect(n.Message).ToNot(BeNil())
-                Expect(n.Message.EventId).To(Equal(msg.EventId))
-                Expect(n.Error.Error()).To(Equal("configuration [test.v3] could not be found"))
+                Expect(n.Message.EventId).To(Equal(request.Event.EventId))
+                Expect(n.Error.Error()).To(Equal("statemachine [fake-fsm] could not be found"))
             case <-time.After(timeout):
                 Fail("the listener did not exit when the events channel was closed")
-            }
-        })
-        It("sends notifications for missing FSM", func() {
-            msg := pubsub.EventMessage{
-                Sender:      "1234",
-                EventId:     "feed-beef",
-                EventName:   "failed",
-                Destination: "fake",
-            }
-            go func() {
-                testListener.ListenForMessages()
-            }()
-            eventsCh <- msg
-            close(eventsCh)
-
-            select {
-            case n := <-notificationsCh:
-                Expect(n.Message).ToNot(BeNil())
-                Expect(n.Message.EventId).To(Equal(msg.EventId))
-                Expect(n.Error.Error()).To(Equal("statemachine [fake] could not be found"))
-
-            case <-time.After(timeout):
-                Fail("no error notification received")
             }
         })
         It("sends notifications for missing destinations", func() {
-            msg := pubsub.EventMessage{
-                Sender:    "1234",
-                EventId:   "feed-beef",
-                EventName: "failed",
+            request := api.EventRequest{
+                Event: &api.Event{
+                    EventId: "feed-beef",
+                },
+                Dest: "",
             }
-            go func() {
-                testListener.ListenForMessages()
-            }()
-            eventsCh <- msg
+            go func() {testListener.ListenForMessages()}()
+            eventsCh <- request
             close(eventsCh)
 
             select {
             case n := <-notificationsCh:
                 Expect(n.Message).ToNot(BeNil())
-                Expect(n.Message.EventId).To(Equal(msg.EventId))
+                Expect(n.Message.EventId).To(Equal(request.Event.EventId))
                 Expect(n.Error.Error()).To(Equal("no destination for event"))
             case <-time.After(timeout):
                 Fail("no error notification received")

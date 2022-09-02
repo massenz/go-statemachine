@@ -211,35 +211,51 @@ GET /api/v1/configurations/test.orders:v3
 
 ### SQS Messages
 
-> **NOTE**<br/>
-> **The format of the `Body` of the message will change, to include a `details` string**
+#### EventRequest
 
 To send an Event to an FSM via an SQS Message we use the [following code](clients/sqs_client.go):
 
 ```golang
-    _, err = queue.SendMessage(&sqs.SendMessageInput{
-        MessageAttributes: map[string]*sqs.MessageAttributeValue{
-            "DestinationId": {
-                DataType:    aws.String("String"),
-                StringValue: aws.String("6b5af0e8-9033-47e2-97db-337476f1402a"),
-            },
-            "EventId": {
-                DataType:    aws.String("String"),
-                StringValue: aws.String(uuid.NewString()),
-            },
-            "Sender": {
-                DataType:    aws.String("String"),
-                StringValue: aws.String("SQS Client"),
-            },
-        },
-        MessageBody: aws.String("backorder"),
-        QueueUrl:    queueUrl.QueueUrl,
-    })
+// This is the object you want to send across as Event's metadata.
+order := NewOrderDetails(uuid.NewString(), "sqs-cust-1234", 99.99)
+
+msg := &protos.EventRequest{
+    Event: &protos.Event{
+        // This is actually unnecessary; if no EventId is present, SM will
+        // generate one automatically and if the client does not need to store
+        // it somewhere else, it is safe to omit it.
+        EventId:    uuid.NewString(),
+
+        // This is also unnecessary, as SM will automatically generate a timestamp
+        // if one is not already present.
+        Timestamp:  timestamppb.Now(),
+
+        Transition: &protos.Transition{Event: "backorder"},
+        Originator: "New SQS Client with Details",
+
+        // Here you convert the Event metadata to a string by, e.g., JSON-serializing it.
+        Details:    order.String(),
+    },
+
+    // This is the unique ID for the entity you are sending the event to; MUST
+    // match the `id` of an existing `statemachine` (see the REST API).
+    Dest: "6b5af0e8-9033-47e2-97db-337476f1402a",
+}
+
+_, err = queue.SendMessage(&sqs.SendMessageInput{
+    // Here we serialize the Protobuf using text serialization.
+    MessageBody: aws.String(proto.MarshalTextString(msg)),
+    QueueUrl:    queueUrl.QueueUrl,
+})
 ```
 
-This will cause a `backorder` event to be sent to our FSM whose `id` matches the UUID in `dest`; if there are errors (eg, the FSM does not exist, or the event is not allowed for the machine's configuration and current state) errors may be optionally sent to the SQS queue configured via the `-errors` option (see [Running the Server](#running-the-server)): see the [`pubsub` code](pubsub/sqs_pub.go) code for details as to how we encode the error message as an SQS message.
+This will cause a `backorder` event to be sent to our FSM whose `id` matches the UUID in `Dest`; if there are errors (eg, the FSM does not exist, or the event is not allowed for the machine's configuration and current state) errors may be optionally sent to the SQS queue configured via the `-errors` option (see [Running the Server](#running-the-server)): see the [`pubsub` code](pubsub/sqs_pub.go) code for details as to how we encode the error message as an SQS message.
 
-`TODO: add encoding description of the notification message`
+See [`EventRequest` in `statemachine-proto`](https://github.com/massenz/statemachine-proto/blob/main/api/statemachine.proto#L86) for details on the event being sent.
+
+#### SQS Error notifications
+
+`TODO:` Once we refactor `EventErrorMessage` we should update this section too.
 
 
 ### gRPC Methods

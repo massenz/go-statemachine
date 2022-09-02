@@ -44,6 +44,8 @@ func main() {
     cc, _ := grpc.Dial(*serverAddr, clientOptions...)
     client := api.NewStatemachineServiceClient(cc)
 
+    // Fake order
+    order := NewOrderDetails(uuid.New().String(), "cust-1234", 123.55)
     response, err := client.ConsumeEvent(context.Background(),
         &api.EventRequest{
             Event: &api.Event{
@@ -52,7 +54,8 @@ func main() {
                 Transition: &api.Transition{
                     Event: *event,
                 },
-                Originator: "gRPC Client",
+                Details:    order.String(),
+                Originator: "new gRPC Client with details",
             },
             Dest: *fsmId,
         })
