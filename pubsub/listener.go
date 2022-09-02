@@ -20,11 +20,8 @@ package pubsub
 
 import (
     "fmt"
-    log "github.com/massenz/slf4go/logging"
-    "google.golang.org/protobuf/types/known/timestamppb"
-
     . "github.com/massenz/go-statemachine/api"
-    "github.com/massenz/statemachine-proto/golang/api"
+    log "github.com/massenz/slf4go/logging"
 )
 
 func NewEventsListener(options *ListenerOptions) *EventsListener {
@@ -52,22 +49,24 @@ func (listener *EventsListener) PostErrorNotification(error *EventErrorMessage) 
 func (listener *EventsListener) ListenForMessages() {
     listener.logger.Info("Events message listener started")
     for event := range listener.events {
-        listener.logger.Debug("Received event %s", event)
-        if event.Destination == "" {
-            listener.PostErrorNotification(ErrorMessage(fmt.Errorf("no destination for event"), &event))
+        listener.logger.Debug("Received event %s", event.Event.String())
+        if event.Dest == "" {
+            listener.PostErrorNotification(ErrorMessage(fmt.Errorf("no destination for event"),
+                event.Event, ""))
             continue
         }
-        fsm, ok := listener.store.GetStateMachine(event.Destination)
+        fsm, ok := listener.store.GetStateMachine(event.Dest)
         if !ok {
-            listener.PostErrorNotification(ErrorMessage(fmt.Errorf("statemachine [%s] could not be found",
-                event.Destination), &event))
+            listener.PostErrorNotification(ErrorMessage(
+                fmt.Errorf("statemachine [%s] could not be found", event.Dest), event.Event, ""))
             continue
         }
         // TODO: cache the configuration locally: they are immutable anyway.
         cfg, ok := listener.store.GetConfig(fsm.ConfigId)
         if !ok {
-            listener.PostErrorNotification(ErrorMessage(fmt.Errorf("configuration [%s] could not be found",
-                fsm.ConfigId), &event))
+            listener.PostErrorNotification(ErrorMessage(
+                fmt.Errorf("configuration [%s] could not be found",
+                    fsm.ConfigId), event.Event, ""))
             continue
         }
 
@@ -75,29 +74,17 @@ func (listener *EventsListener) ListenForMessages() {
             Config: cfg,
             FSM:    fsm,
         }
-        pbEvent := NewPBEvent(event)
-        if err := cfgFsm.SendEvent(pbEvent); err != nil {
-            listener.PostErrorNotification(ErrorMessageWithDetail(err, &event, fmt.Sprintf(
-                "FSM [%s] cannot process event `%s`", event.Destination, event.EventName)))
+        if err := cfgFsm.SendEvent(event.Event); err != nil {
+            listener.PostErrorNotification(ErrorMessage(err, event.Event, fmt.Sprintf(
+                "FSM [%s] cannot process event `%s`", event.Dest, event.Event.Transition.Event)))
             continue
         }
-        err := listener.store.PutStateMachine(event.Destination, fsm)
+        err := listener.store.PutStateMachine(event.Dest, fsm)
         if err != nil {
-            listener.PostErrorNotification(ErrorMessage(err, &event))
+            listener.PostErrorNotification(ErrorMessage(err, event.Event, "could not save FSM"))
             continue
         }
-        listener.logger.Debug("Event %s transitioned FSM [%s] to state `%s`",
-            event.EventName, event.Destination, fsm.State)
-    }
-}
-
-func NewPBEvent(message EventMessage) *api.Event {
-    return &api.Event{
-        EventId:    message.EventId,
-        Originator: message.Sender,
-        Timestamp:  timestamppb.New(message.EventTimestamp),
-        Transition: &api.Transition{
-            Event: message.EventName,
-        },
+        listener.logger.Info("Event %s transitioned FSM [%s] to state `%s`",
+            event.Event.Transition.Event, event.Dest, fsm.State)
     }
 }

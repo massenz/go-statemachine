@@ -30,6 +30,7 @@ import (
     "github.com/massenz/go-statemachine/server"
     "github.com/massenz/go-statemachine/storage"
     log "github.com/massenz/slf4go/logging"
+    protos "github.com/massenz/statemachine-proto/golang/api"
     "net"
     "sync"
 )
@@ -60,7 +61,7 @@ var (
     //  whether we can support a fully concurrent system with a
     //  buffered channel
     errorsCh chan pubsub.EventErrorMessage = nil
-    eventsCh                               = make(chan pubsub.EventMessage)
+    eventsCh                               = make(chan protos.EventRequest)
 
     wg sync.WaitGroup
 )
@@ -184,7 +185,7 @@ func setLogLevel(debug bool, trace bool) {
 // the local `port` and will send any incoming
 // `EventRequest` to the receiving channel.
 // This MUST be run as a go-routine, which never returns
-func startGrpcServer(port int, events chan<- pubsub.EventMessage) {
+func startGrpcServer(port int, events chan<- protos.EventRequest) {
     defer wg.Done()
     l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
     if err != nil {
