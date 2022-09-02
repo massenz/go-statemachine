@@ -25,7 +25,6 @@ import (
     "github.com/aws/aws-sdk-go/aws"
     "github.com/golang/protobuf/proto"
     "github.com/google/uuid"
-    "google.golang.org/protobuf/types/known/timestamppb"
     "os"
 
     "github.com/aws/aws-sdk-go/aws/session"
@@ -82,16 +81,16 @@ func main() {
             // This is actually unnecessary; if no EventId is present, SM will
             // generate one automatically and if the client does not need to store
             // it somewhere else, it is safe to omit it.
-            EventId:    uuid.NewString(),
+            //EventId:    uuid.NewString(),
 
             // This is also unnecessary, as SM will automatically generate a timestamp
             // if one is not already present.
-            Timestamp:  timestamppb.Now(),
+            //Timestamp:  timestamppb.Now(),
             Transition: &protos.Transition{Event: *event},
             Originator: "New SQS Client with Details",
 
             // Here you convert the Event metadata to a string by, e.g., JSON-serializing it.
-            Details:    order.String(),
+            Details: order.String(),
         },
 
         // This is the unique ID for the entity you are sending the event to; MUST

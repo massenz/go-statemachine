@@ -22,12 +22,10 @@ import (
     "context"
     "fmt"
     "github.com/google/uuid"
-    "github.com/massenz/slf4go/logging"
-    "google.golang.org/grpc"
-    "google.golang.org/protobuf/types/known/timestamppb"
-
     "github.com/massenz/go-statemachine/api"
     "github.com/massenz/go-statemachine/storage"
+    "github.com/massenz/slf4go/logging"
+    "google.golang.org/grpc"
 
     protos "github.com/massenz/statemachine-proto/golang/api"
 )
@@ -60,12 +58,10 @@ func (s *grpcSubscriber) ConsumeEvent(ctx context.Context, request *protos.Event
     if request.Event.Transition.Event == "" {
         return nil, api.MissingEventNameError
     }
-    if request.Event.EventId == "" {
-        request.Event.EventId = uuid.NewString()
-    }
-    if request.Event.Timestamp == nil {
-        request.Event.Timestamp = timestamppb.Now()
-    }
+
+    // If missing, add ID and timestamp.
+    api.UpdateEvent(request.Event)
+
     s.Logger.Trace("Sending Event to channel: %v", request.Event)
     // TODO: use the context and cancel the request if the channel cannot accept
     //       the event within the given timeout.

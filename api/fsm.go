@@ -185,42 +185,12 @@ func CheckValid(c *protos.Configuration) error {
     return nil
 }
 
-//////// encoding interface /////////////
-
-type MyConfig struct {
-    protos.Configuration
-}
-
-type MyFSM struct {
-    protos.FiniteStateMachine
-}
-
-// MarshalBinary is needed to encode the data before storing in Redis,
-// and to retrieve it later.
-//
-// **NOTE** the receiver must be a concrete type (NOT a pointer) or the
-// serialization to Redis will fail.
-func (x MyConfig) MarshalBinary() ([]byte, error) {
-    return proto.Marshal(&x)
-}
-
-// UnmarshalBinary is the dual of MarshalBinary and will parse the
-// binary data into the receiver.
-// See: https://pkg.go.dev/encoding
-func (x *MyConfig) UnmarshalBinary(data []byte) error {
-    res := proto.Unmarshal(data, x)
-    return res
-}
-
-// Identical implementation for the FiniteStateMachine, but necessary as
-// we can't really define an ABC for both types, and using proto.Message wouldn't
-// work either.
-
-func (x MyFSM) MarshalBinary() ([]byte, error) {
-    return proto.Marshal(&x)
-}
-
-func (x *MyFSM) UnmarshalBinary(data []byte) error {
-    res := proto.Unmarshal(data, x)
-    return res
+// UpdateEvent adds the ID and timestamp to the event, if not already set.
+func UpdateEvent(event *protos.Event) {
+    if event.EventId == "" {
+        event.EventId = uuid.NewString()
+    }
+    if event.Timestamp == nil {
+        event.Timestamp = tspb.Now()
+    }
 }
