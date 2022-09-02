@@ -6,7 +6,7 @@
     <kind value="FILE" />
     <package value="github.com/massenz/go-statemachine/clients" />
     <directory value="$PROJECT_DIR$" />
-    <filePath value="$PROJECT_DIR$/clients/grpc_client.go" />
+    <filePath value="$PROJECT_DIR$/clients/grpc_client.go|$PROJECT_DIR$/clients/orders.go" />
     <method v="2" />
   </configuration>
 </component>

@@ -20,22 +20,13 @@ package main
 
 import (
     "context"
-    "encoding/json"
     "flag"
     "fmt"
     "github.com/google/uuid"
     "github.com/massenz/statemachine-proto/golang/api"
     "google.golang.org/grpc"
     "google.golang.org/protobuf/types/known/timestamppb"
-    "time"
 )
-
-type OrderDetails struct {
-    OrderId    string
-    CustomerId string
-    OrderDate  time.Time
-    OrderTotal float64
-}
 
 func main() {
     serverAddr := flag.String("addr", ":4567", "The address (host:port) for the GRPC server")
@@ -54,14 +45,7 @@ func main() {
     client := api.NewStatemachineServiceClient(cc)
 
     // Fake order
-    order := OrderDetails{
-        OrderId:    uuid.New().String(),
-        CustomerId: uuid.New().String(),
-        OrderDate:  time.Now(),
-        OrderTotal: 100.0,
-    }
-    details, _ := json.Marshal(order)
-
+    order := NewOrderDetails(uuid.New().String(), "cust-1234", 123.55)
     response, err := client.ConsumeEvent(context.Background(),
         &api.EventRequest{
             Event: &api.Event{
@@ -70,7 +54,7 @@ func main() {
                 Transition: &api.Transition{
                     Event: *event,
                 },
-                Details:    string(details),
+                Details:    order.String(),
                 Originator: "new gRPC Client with details",
             },
             Dest: *fsmId,
