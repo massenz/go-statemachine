@@ -52,6 +52,8 @@ func NewSqs(endpoint *string) *sqs.SQS {
     return sqs.New(sess)
 }
 
+// main simulates a Client sending an SQS event message for an Order entity
+// whose status is being tracked by `sm-server`.
 func main() {
     endpoint := flag.String("endpoint", "", "Use http://localhost:4566 to use LocalStack")
     q := flag.String("q", "", "The SQS Queue to send an Event to")
@@ -71,15 +73,29 @@ func main() {
         panic(fmt.Errorf("must specify both of -id and -evt"))
     }
     fmt.Printf("Publishing Event `%s` for FSM `%s` to SQS Topic: [%s]\n", *event, *fsmId, *q)
+
+    // This is the object you want to send across as Event's metadata.
     order := NewOrderDetails(uuid.NewString(), "sqs-cust-1234", 99.99)
+
     msg := &protos.EventRequest{
         Event: &protos.Event{
+            // This is actually unnecessary; if no EventId is present, SM will
+            // generate one automatically and if the client does not need to store
+            // it somewhere else, it is safe to omit it.
             EventId:    uuid.NewString(),
+
+            // This is also unnecessary, as SM will automatically generate a timestamp
+            // if one is not already present.
             Timestamp:  timestamppb.Now(),
             Transition: &protos.Transition{Event: *event},
             Originator: "New SQS Client with Details",
+
+            // Here you convert the Event metadata to a string by, e.g., JSON-serializing it.
             Details:    order.String(),
         },
+
+        // This is the unique ID for the entity you are sending the event to; MUST
+        // match the `id` of an existing `statemachine` (see the REST API).
         Dest: *fsmId,
     }
 
