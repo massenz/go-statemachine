@@ -24,11 +24,13 @@ import (
     "github.com/aws/aws-sdk-go/aws/session"
     "github.com/aws/aws-sdk-go/service/sqs"
     "github.com/golang/protobuf/proto"
-    "github.com/google/uuid"
     log "github.com/massenz/slf4go/logging"
-    protos "github.com/massenz/statemachine-proto/golang/api"
     "os"
     "time"
+
+    "github.com/massenz/go-statemachine/api"
+
+    protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 // TODO: should we need to generalize and abstract the implementation of a Subscriber?
@@ -160,10 +162,8 @@ func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
         // TODO: publish error to DLQ.
         return
     }
-    // The Event ID is optional and, if missing, will be generated here.
-    if request.Event.EventId == "" {
-        request.Event.EventId = uuid.NewString()
-    }
+    // The Event ID and timestamp are optional and, if missing, will be generated here.
+    api.UpdateEvent(request.Event)
     s.events <- request
 
     s.logger.Debug("Removing message %v from SQS", *msg.MessageId)
