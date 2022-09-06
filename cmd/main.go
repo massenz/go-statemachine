@@ -195,6 +195,7 @@ func startGrpcServer(port int, events chan<- protos.EventRequest) {
     grpcServer, err := grpc.NewGrpcServer(&grpc.Config{
         EventsChannel: events,
         Logger:        logger,
+        Store:         store,
     })
     err = grpcServer.Serve(l)
     if err != nil {

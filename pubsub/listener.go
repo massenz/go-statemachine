@@ -84,7 +84,7 @@ func (listener *EventsListener) ListenForMessages() {
             listener.PostErrorNotification(ErrorMessage(err, event.Event, "could not save FSM"))
             continue
         }
-        listener.logger.Info("Event %s transitioned FSM [%s] to state `%s`",
+        listener.logger.Info("Event `%s` transitioned FSM [%s] to state `%s`",
             event.Event.Transition.Event, event.Dest, fsm.State)
     }
 }

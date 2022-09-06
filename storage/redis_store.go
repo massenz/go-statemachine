@@ -54,6 +54,10 @@ func (csm *RedisStore) SetTimeout(duration time.Duration) {
     csm.Timeout = duration
 }
 
+func (csm *RedisStore) GetTimeout() time.Duration {
+    return csm.Timeout
+}
+
 func NewRedisStore(address string, db int, timeout time.Duration, maxRetries int) StoreManager {
     logger := slf4go.NewLog(fmt.Sprintf("redis://%s/%d", address, db))
     return &RedisStore{
