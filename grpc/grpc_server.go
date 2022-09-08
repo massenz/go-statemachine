@@ -41,12 +41,17 @@ type Config struct {
 
 var _ protos.StatemachineServiceServer = (*grpcSubscriber)(nil)
 
+const (
+    DefaultTimeout = 200 * time.Millisecond
+)
+
 type grpcSubscriber struct {
     protos.UnimplementedStatemachineServiceServer
     *Config
 }
 
-func (s *grpcSubscriber) ConsumeEvent(ctx context.Context, request *protos.EventRequest) (*protos.EventResponse, error) {
+func (s *grpcSubscriber) ProcessEvent(ctx context.Context, request *protos.EventRequest) (*protos.
+EventResponse, error) {
     if request.Dest == "" {
         return nil, status.Error(codes.FailedPrecondition, api.MissingDestinationError.Error())
     }
@@ -65,7 +70,10 @@ func (s *grpcSubscriber) ConsumeEvent(ctx context.Context, request *protos.Event
     s.Logger.Trace("Sending Event to channel: %v", request.Event)
     select {
     case s.EventsChannel <- *request:
-        return &protos.EventResponse{EventId: request.Event.EventId}, nil
+        return &protos.EventResponse{
+            EventId: request.Event.EventId,
+            //Status:  status.New(codes.OK, "Event processed"),
+        }, nil
     case <-time.After(timeout):
         s.Logger.Error("Timeout exceeded when trying to post event to internal channel")
         return nil, status.Error(codes.DeadlineExceeded, "cannot post event")
@@ -86,7 +94,6 @@ func (s *grpcSubscriber) PutConfiguration(ctx context.Context, cfg *protos.Confi
     return &protos.PutResponse{
         Id:     api.GetVersionId(cfg),
         Config: cfg,
-        Fsm:    nil,
     }, nil
 }
 
@@ -131,10 +138,9 @@ func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context,
 func NewGrpcServer(config *Config) (*grpc.Server, error) {
     // Unless explicitly configured, we use for the server the same timeout as for the Redis store
     if config.Timeout == 0 {
-        config.Timeout = config.Store.GetTimeout()
+        config.Timeout = DefaultTimeout
     }
     gsrv := grpc.NewServer()
-    protos.RegisterStatemachineServiceServer(gsrv,
-        &grpcSubscriber{Config: config})
+    protos.RegisterStatemachineServiceServer(gsrv, &grpcSubscriber{Config: config})
     return gsrv, nil
 }
