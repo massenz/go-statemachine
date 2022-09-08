@@ -60,8 +60,8 @@ var (
     // TODO: for now blocking channels; we will need to confirm
     //  whether we can support a fully concurrent system with a
     //  buffered channel
-    errorsCh chan pubsub.EventErrorMessage = nil
-    eventsCh                               = make(chan protos.EventRequest)
+    errorsCh chan protos.EventResponse = nil
+    eventsCh                           = make(chan protos.EventRequest)
 
     wg sync.WaitGroup
 )
@@ -128,7 +128,7 @@ func main() {
 
     if *dlqTopic != "" {
         logger.Info("Configuring DLQ Topic: %s", *dlqTopic)
-        errorsCh = make(chan pubsub.EventErrorMessage)
+        errorsCh = make(chan protos.EventResponse)
         defer close(errorsCh)
         pub = pubsub.NewSqsPublisher(errorsCh, awsEndpoint)
         if pub == nil {
