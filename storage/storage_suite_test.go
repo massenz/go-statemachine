@@ -11,13 +11,12 @@ package storage_test
 
 import (
 	"context"
+	internals "github.com/massenz/go-statemachine/internal/testing"
 	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	internals "github.com/massenz/go-statemachine/internals/testing"
 )
 
 func TestStorage(t *testing.T) {

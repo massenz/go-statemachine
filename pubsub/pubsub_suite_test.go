@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang/protobuf/proto"
+	internals "github.com/massenz/go-statemachine/internal/testing"
 	"os"
 	"testing"
 	"time"
@@ -24,7 +25,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
-	internals "github.com/massenz/go-statemachine/internals/testing"
 	"github.com/massenz/go-statemachine/pubsub"
 	"github.com/massenz/statemachine-proto/golang/api"
 )

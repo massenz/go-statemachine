@@ -47,8 +47,7 @@ var (
 	//  buffered channel
 	notificationsCh chan protos.EventResponse = nil
 	eventsCh                                  = make(chan protos.EventRequest)
-
-	wg sync.WaitGroup
+	wg              sync.WaitGroup
 )
 
 func main() {
@@ -66,6 +65,7 @@ func main() {
 		"Verbose logs; better to avoid on Production services")
 	var eventsTopic = flag.String("events", "", "Topi name to receive events from")
 	var grpcPort = flag.Int("grpc-port", 7398, "The port for the gRPC server")
+	var noTls = flag.Bool("insecure", false, "If set, TLS will be disabled (NOT recommended)")
 	var localOnly = flag.Bool("local", false,
 		"If set, it only listens to incoming requests from the local host")
 	var maxRetries = flag.Int("max-retries", storage.DefaultMaxRetries,
@@ -107,11 +107,8 @@ func main() {
 	}
 	server.SetStore(store)
 
-	// TODO: we should allow to start the server using solely the gRPC interface,
-	//  without SQS to receive events.
 	if *eventsTopic == "" {
-		logger.Fatal(fmt.Errorf("no event topic configured, state machines will not " +
-			"be able to receive events"))
+		logger.Warn("no PubSub event topic configured, events can only be sent via gRPC calls")
 	}
 	if *acksTopic != "" && *notifyErrorsOnly {
 		logger.Fatal(fmt.Errorf("cannot set an acks topic while disabling errors notifications"))
@@ -154,7 +151,7 @@ func main() {
 	go listener.ListenForMessages()
 
 	logger.Info("gRPC server running at tcp://:%d", *grpcPort)
-	go startGrpcServer(*grpcPort, eventsCh)
+	go startGrpcServer(*grpcPort, *noTls, eventsCh)
 
 	// TODO: configure & start server using TLS, if configured to do so.
 	scheme := "http"
@@ -187,7 +184,7 @@ func setLogLevel(debug bool, trace bool) {
 // the local `port` and will send any incoming
 // `EventRequest` to the receiving channel.
 // This MUST be run as a go-routine, which never returns
-func startGrpcServer(port int, events chan<- protos.EventRequest) {
+func startGrpcServer(port int, disableTls bool, events chan<- protos.EventRequest) {
 	defer wg.Done()
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
@@ -198,9 +195,13 @@ func startGrpcServer(port int, events chan<- protos.EventRequest) {
 		EventsChannel: events,
 		Logger:        logger,
 		Store:         store,
+		TlsEnabled:    !disableTls,
 	})
+	if err != nil {
+		log.RootLog.Fatal(err)
+	}
 	err = grpcServer.Serve(l)
 	if err != nil {
-		panic(err)
+		log.RootLog.Fatal(err)
 	}
 }

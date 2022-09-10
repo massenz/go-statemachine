@@ -14,13 +14,40 @@ import (
 	"flag"
 	"fmt"
 	"github.com/massenz/go-statemachine/api"
+	"github.com/massenz/go-statemachine/clients/common"
+	"github.com/massenz/go-statemachine/grpc"
+	slf4go "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
-	"google.golang.org/grpc"
+	g "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"time"
 )
+
+func NewClient(address string, hasTls bool) protos.StatemachineServiceClient {
+	var creds credentials.TransportCredentials
+	if !hasTls {
+		fmt.Println("WARN: TLS Disabled")
+		creds = insecure.NewCredentials()
+	} else {
+		clientTlsConfig, err := grpc.SetupTLSConfig(&grpc.Config{
+			Logger:        slf4go.RootLog,
+			ServerAddress: address,
+			TlsEnabled:    true,
+			TlsCerts:      "certs",
+			TlsMutual:     false,
+		})
+		if err != nil {
+			panic(err)
+		}
+		creds = credentials.NewTLS(clientTlsConfig)
+	}
+	cc, _ := g.Dial(address, g.WithTransportCredentials(creds))
+	return protos.NewStatemachineServiceClient(cc)
+}
 
 func getStatusCode(response interface{}) codes.Code {
 	// Get the gRPC status from the response
@@ -28,23 +55,21 @@ func getStatusCode(response interface{}) codes.Code {
 	if !ok {
 		return codes.Unknown
 	}
-
 	// Return the status code
 	return s.Code()
 }
 
 func main() {
-	serverAddr := flag.String("addr", "localhost:7398",
+	var noTls = flag.Bool("insecure", false, "If set, TLS will be disabled (NOT recommended)")
+	var serverAddr = flag.String("addr", "localhost:7398",
 		"The address (host:port) for the GRPC server")
-
-	clientOptions := []grpc.DialOption{grpc.WithInsecure()}
-	cc, _ := grpc.Dial(*serverAddr, clientOptions...)
-	client := protos.NewStatemachineServiceClient(cc)
+	flag.Parse()
+	client := NewClient(*serverAddr, !*noTls)
 
 	start := time.Now()
 	// Creates the new configuration, ignore error if it already exists
 	var config protos.Configuration
-	err := ReadConfig("data/orders.json", &config)
+	err := common.ReadConfig("data/orders.json", &config)
 	if err != nil {
 		fmt.Println("Could not parse configuration", err)
 		return
@@ -79,7 +104,7 @@ func main() {
 	fmt.Println(string(fsm))
 
 	// Fake order
-	order := NewOrderDetails(putResponse.Id, "cust-1234", 123.55)
+	order := common.NewOrderDetails(putResponse.Id, "cust-1234", 123.55)
 
 	for _, event := range []string{"accept", "ship", "deliver", "sign"} {
 		if err := sendEvent(client, order, event); err != nil {
@@ -90,7 +115,7 @@ func main() {
 	fmt.Println("Total time:", time.Since(start))
 }
 
-func sendEvent(client protos.StatemachineServiceClient, order *OrderDetails, event string) (err error) {
+func sendEvent(client protos.StatemachineServiceClient, order *common.OrderDetails, event string) (err error) {
 	// Once created, we want to `accept` the order
 	evt := api.NewEvent(event)
 	evt.Details = order.String()

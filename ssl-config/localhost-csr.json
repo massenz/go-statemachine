@@ -1,0 +1,16 @@
+{
+    "CN": "127.0.0.1",
+    "hosts": [
+        "localhost",
+        "127.0.0.1"
+    ],
+    "names": [
+        {
+            "O": "AlertAvert.com",
+            "OU": "Engineering",
+            "L": "Sunnyvale",
+            "ST": "CA",
+            "C": "US"
+        }
+    ]
+}
