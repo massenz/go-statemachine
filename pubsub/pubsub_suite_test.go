@@ -110,6 +110,10 @@ func getSqsMessage(queue string) *sqs.Message {
         QueueUrl: &q,
     })
     Expect(err).ToNot(HaveOccurred())
+    // It could be that the message is not yet available, so we need to retry
+    if len(out.Messages) == 0 {
+        return nil
+    }
     Expect(len(out.Messages)).To(Equal(1))
     _, err = testSqsClient.DeleteMessage(&sqs.DeleteMessageInput{
         QueueUrl:      &q,
