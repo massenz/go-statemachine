@@ -324,10 +324,15 @@ As the event processing is asynchronous, the `response` will only contain the `e
 ## Prerequisites
 
 **Ginkgo testing framework**<br/>
-Run this:
+We are using [Ginkgo](https://onsi.github.io/ginkgo/) at **v1** (`v1.16.5`).
 
-    go get github.com/onsi/ginkgo/v1/ginkgo &&
-        go get github.com/onsi/gomega/...
+To install the CLI run this:
+
+    go install github.com/onsi/ginkgo/ginkgo
+
+> **Beware** Gingko now is at `v2` and will install that one by default if you follow the instruction on the site: use instead the command above and run `go mod tidy` before running the tests/builds to download packages<br/>
+> (see [this issue](https://github.com/onsi/ginkgo/issues/945) for more details)
+ 
 
 **Protocol Buffers definitions**<br/>
 They are kept in the [statemachine-proto](https://github.com/massenz/statemachine-proto) repository; nothing specific is needed to use them; however, if you want to review the messages and services definitions, you can see them there.
