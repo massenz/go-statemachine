@@ -51,6 +51,12 @@ func (csm *InMemoryStore) SetTimeout(_ time.Duration) {
     // do nothing
 }
 
+// GetTimeout does not really make sense for an in-memory store,
+// so this just returns a relatively meaningless value (200 msec).
+func (csm *InMemoryStore) GetTimeout() time.Duration {
+    return 200 * time.Millisecond
+}
+
 func (csm *InMemoryStore) Health() error {
     return nil
 }

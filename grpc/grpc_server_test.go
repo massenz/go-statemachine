@@ -4,11 +4,13 @@ import (
     . "github.com/JiaYongfei/respect/gomega"
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
+    "google.golang.org/grpc/codes"
 
     "context"
     "fmt"
     "github.com/massenz/slf4go/logging"
     g "google.golang.org/grpc"
+    "google.golang.org/grpc/status"
     "net"
     "time"
 
@@ -20,13 +22,11 @@ import (
 
 var _ = Describe("GrpcServer", func() {
 
-    Context("when configured", func() {
+    Context("when processing events", func() {
         var testCh chan api.EventRequest
         var listener net.Listener
         var client api.StatemachineServiceClient
         var done func()
-        var store = storage.NewInMemoryStore()
-        store.SetLogLevel(logging.NONE)
 
         BeforeEach(func() {
             var err error
@@ -42,7 +42,6 @@ var _ = Describe("GrpcServer", func() {
             l.Level = logging.NONE
             server, err := grpc.NewGrpcServer(&grpc.Config{
                 EventsChannel: testCh,
-                Store:         store,
                 Logger:        l,
             })
             Ω(err).ToNot(HaveOccurred())
@@ -53,13 +52,10 @@ var _ = Describe("GrpcServer", func() {
             }()
             done = func() {
                 server.Stop()
-                cc.Close()
-                listener.Close()
             }
         })
-
-        It("should process events", func() {
-            response, err := client.ConsumeEvent(context.Background(), &api.EventRequest{
+        It("should succeed for well-formed events", func() {
+            response, err := client.ProcessEvent(context.Background(), &api.EventRequest{
                 Event: &api.Event{
                     EventId: "1",
                     Transition: &api.Transition{
@@ -85,7 +81,7 @@ var _ = Describe("GrpcServer", func() {
             }
         })
         It("should create an ID for events without", func() {
-            response, err := client.ConsumeEvent(context.Background(), &api.EventRequest{
+            response, err := client.ProcessEvent(context.Background(), &api.EventRequest{
                 Event: &api.Event{
                     Transition: &api.Transition{
                         Event: "test-vt",
@@ -107,7 +103,7 @@ var _ = Describe("GrpcServer", func() {
             }
         })
         It("should fail for missing destination", func() {
-            _, err := client.ConsumeEvent(context.Background(), &api.EventRequest{
+            _, err := client.ProcessEvent(context.Background(), &api.EventRequest{
                 Event: &api.Event{
                     Transition: &api.Transition{
                         Event: "test-vt",
@@ -115,7 +111,7 @@ var _ = Describe("GrpcServer", func() {
                     Originator: "test",
                 },
             })
-            Ω(err).To(HaveOccurred())
+            assertStatusCode(codes.FailedPrecondition, err)
             done()
             select {
             case evt := <-testCh:
@@ -125,7 +121,7 @@ var _ = Describe("GrpcServer", func() {
             }
         })
         It("should fail for missing event", func() {
-            _, err := client.ConsumeEvent(context.Background(), &api.EventRequest{
+            _, err := client.ProcessEvent(context.Background(), &api.EventRequest{
                 Event: &api.Event{
                     Transition: &api.Transition{
                         Event: "",
@@ -134,7 +130,7 @@ var _ = Describe("GrpcServer", func() {
                 },
                 Dest: "9876",
             })
-            Ω(err).To(HaveOccurred())
+            assertStatusCode(codes.FailedPrecondition, err)
             done()
             select {
             case evt := <-testCh:
@@ -143,10 +139,44 @@ var _ = Describe("GrpcServer", func() {
                 Succeed()
             }
         })
+    })
 
-        // Store management tests
-        var cfg *api.Configuration
-        var fsm *api.FiniteStateMachine
+    Context("when retrieving data from the store", func() {
+        var (
+            listener net.Listener
+            client   api.StatemachineServiceClient
+            cfg      *api.Configuration
+            fsm      *api.FiniteStateMachine
+            done     func()
+            store    = storage.NewInMemoryStore()
+        )
+        store.SetLogLevel(logging.NONE)
+
+        // Server setup
+        BeforeEach(func() {
+            listener, _ = net.Listen("tcp", ":0")
+            cc, _ := g.Dial(listener.Addr().String(), g.WithInsecure())
+            client = api.NewStatemachineServiceClient(cc)
+            // Use this to log errors when diagnosing test failures; then set to NONE once done.
+            l := logging.NewLog("grpc-server-test")
+            l.Level = logging.NONE
+            server, _ := grpc.NewGrpcServer(&grpc.Config{
+                Store:  store,
+                Logger: l,
+            })
+
+            go func() {
+                Ω(server.Serve(listener)).Should(Succeed())
+            }()
+            done = func() {
+                server.Stop()
+            }
+        })
+        // Server shutdown
+        AfterEach(func() {
+            done()
+        })
+        // Store setup
         BeforeEach(func() {
             cfg = &api.Configuration{
                 Name:    "test-conf",
@@ -179,7 +209,7 @@ var _ = Describe("GrpcServer", func() {
                 StartingState: "",
             }
             _, err := client.PutConfiguration(context.Background(), invalid)
-            Ω(err).To(HaveOccurred())
+            assertStatusCode(codes.InvalidArgument, err)
         })
         It("should retrieve a valid configuration", func() {
             Ω(store.PutConfig(cfg)).To(Succeed())
@@ -191,9 +221,8 @@ var _ = Describe("GrpcServer", func() {
         })
         It("should return an empty configuration for an invalid ID", func() {
             _, err := client.GetConfiguration(context.Background(), &api.GetRequest{Id: "fake"})
-            Ω(err).To(HaveOccurred())
+            assertStatusCode(codes.NotFound, err)
         })
-
         It("should store a valid FSM", func() {
             Ω(store.PutConfig(cfg)).To(Succeed())
             resp, err := client.PutFiniteStateMachine(context.Background(), fsm)
@@ -205,7 +234,7 @@ var _ = Describe("GrpcServer", func() {
         It("should fail with an invalid Config ID", func() {
             invalid := &api.FiniteStateMachine{ConfigId: "fake"}
             _, err := client.PutFiniteStateMachine(context.Background(), invalid)
-            Ω(err).Should(HaveOccurred())
+            assertStatusCode(codes.FailedPrecondition, err)
         })
         It("can retrieve a stored FSM", func() {
             id := "123456"
@@ -216,7 +245,14 @@ var _ = Describe("GrpcServer", func() {
         })
         It("will return an error for an invalid ID", func() {
             _, err := client.GetFiniteStateMachine(context.Background(), &api.GetRequest{Id: "fake"})
-            Ω(err).Should(HaveOccurred())
+            assertStatusCode(codes.NotFound, err)
         })
     })
 })
+
+func assertStatusCode(code codes.Code, err error) {
+    Ω(err).To(HaveOccurred())
+    s, ok := status.FromError(err)
+    Ω(ok).To(BeTrue())
+    Ω(s.Code()).To(Equal(code))
+}

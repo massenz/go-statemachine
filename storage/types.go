@@ -46,5 +46,6 @@ type StoreManager interface {
     ConfigurationStorageManager
     FiniteStateMachineStorageManager
     SetTimeout(duration time.Duration)
+    GetTimeout() time.Duration
     Health() error
 }

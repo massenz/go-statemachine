@@ -25,7 +25,7 @@ import (
 
     "fmt"
     "github.com/golang/protobuf/proto"
-    log "github.com/massenz/slf4go/logging"
+    "github.com/massenz/slf4go/logging"
     "time"
 
     "github.com/massenz/go-statemachine/api"
@@ -38,36 +38,39 @@ var _ = Describe("SQS Publisher", func() {
     Context("when correctly initialized", func() {
         var (
             testPublisher   *pubsub.SqsPublisher
-            notificationsCh chan pubsub.EventErrorMessage
+            notificationsCh chan protos.EventResponse
         )
         BeforeEach(func() {
-            notificationsCh = make(chan pubsub.EventErrorMessage)
+            notificationsCh = make(chan protos.EventResponse)
             testPublisher = pubsub.NewSqsPublisher(notificationsCh, &sqsUrl)
             Expect(testPublisher).ToNot(BeNil())
             // Set to DEBUG when diagnosing test failures
-            testPublisher.SetLogLevel(log.NONE)
+            testPublisher.SetLogLevel(logging.NONE)
         })
         It("can publish error notifications", func() {
-            msg := api.NewEvent("test-event")
-            msg.Originator = "me"
-            msg.EventId = "feed-beef"
-            msg.Details = `{"foo": "bar"}`
-            detail := "more details about the error"
-            notification := pubsub.ErrorMessage(fmt.Errorf("this is a test"), msg, detail)
+            notification := protos.EventResponse{
+                EventId: "feed-beef",
+                Outcome: &protos.EventOutcome{
+                    Code:    protos.EventOutcome_InternalError,
+                    Dest:    "me",
+                    Details: "error details",
+                },
+            }
             done := make(chan interface{})
             go func() {
                 defer close(done)
                 go testPublisher.Publish(getQueueName(notificationsQueue))
-
             }()
-            notificationsCh <- *notification
+            notificationsCh <- notification
             res := getSqsMessage(getQueueName(notificationsQueue))
             Expect(res).ToNot(BeNil())
+            Expect(res.Body).ToNot(BeNil())
 
+            // Emulate SQS Client behavior
             body := *res.Body
-            var receivedEvt protos.Event
+            var receivedEvt protos.EventResponse
             Expect(proto.UnmarshalText(body, &receivedEvt)).Should(Succeed())
-            Expect(receivedEvt).To(Respect(*msg))
+            Expect(receivedEvt).To(Respect(notification))
 
             close(notificationsCh)
             select {
@@ -77,7 +80,30 @@ var _ = Describe("SQS Publisher", func() {
                 Fail("timed out waiting for Publisher to exit")
             }
         })
+        It("won't publish successful outcomes", func() {
+            notification := protos.EventResponse{
+                EventId: "dead-beef",
+                Outcome: &protos.EventOutcome{
+                    Code: protos.EventOutcome_Ok,
+                },
+            }
+            done := make(chan interface{})
+            go func() {
+                defer close(done)
+                go testPublisher.Publish(getQueueName(notificationsQueue))
+            }()
+            notificationsCh <- notification
+            m := getSqsMessage(getQueueName(notificationsQueue))
+            Expect(m).To(BeNil())
+            close(notificationsCh)
 
+            select {
+            case <-done:
+                Succeed()
+            case <-time.After(100 * time.Millisecond):
+                Fail("timed out waiting for Publisher to exit")
+            }
+        })
         It("will terminate gracefully when the notifications channel is closed", func() {
             done := make(chan interface{})
             go func() {
@@ -92,20 +118,25 @@ var _ = Describe("SQS Publisher", func() {
                 Fail("Publisher did not exit within timeout")
             }
         })
-
         It("will survive an empty Message", func() {
             go testPublisher.Publish(getQueueName(notificationsQueue))
-            notificationsCh <- pubsub.EventErrorMessage{}
+            notificationsCh <- protos.EventResponse{}
             close(notificationsCh)
             getSqsMessage(getQueueName(notificationsQueue))
         })
-
-        It("will send several messages within a reasonable timeframe", func() {
+        It("will send several messages within a short timeframe", func() {
             go testPublisher.Publish(getQueueName(notificationsQueue))
-            for range [10]int{} {
-                evt := api.NewEvent("many-messages-test")
-                detail := "more details about the error"
-                notificationsCh <- *pubsub.ErrorMessage(fmt.Errorf("this is a test"), evt, detail)
+            for i := range [10]int{} {
+                evt := api.NewEvent("do-something")
+                evt.EventId = fmt.Sprintf("event-%d", i)
+                notificationsCh <- protos.EventResponse{
+                    EventId: evt.EventId,
+                    Outcome: &protos.EventOutcome{
+                        Code:    protos.EventOutcome_InternalError,
+                        Dest:    fmt.Sprintf("test-%d", i),
+                        Details: "more details about the error",
+                    },
+                }
             }
             done := make(chan interface{})
             go func() {
@@ -113,12 +144,16 @@ var _ = Describe("SQS Publisher", func() {
                 //and we want to make sure we can see the errors if they fail.
                 defer GinkgoRecover()
                 defer close(done)
-                for range [10]int{} {
+                for i := range [10]int{} {
                     res := getSqsMessage(getQueueName(notificationsQueue))
                     Expect(res).ToNot(BeNil())
-                    var receivedEvt protos.Event
+                    Expect(res.Body).ToNot(BeNil())
+                    var receivedEvt protos.EventResponse
                     Expect(proto.UnmarshalText(*res.Body, &receivedEvt)).Should(Succeed())
-                    Expect(receivedEvt.Transition.Event).To(Equal("many-messages-test"))
+                    Expect(receivedEvt.EventId).To(Equal(fmt.Sprintf("event-%d", i)))
+                    Expect(receivedEvt.Outcome.Code).To(Equal(protos.EventOutcome_InternalError))
+                    Expect(receivedEvt.Outcome.Details).To(Equal("more details about the error"))
+                    Expect(receivedEvt.Outcome.Dest).To(ContainSubstring("test-"))
                 }
             }()
             close(notificationsCh)

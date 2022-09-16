@@ -255,8 +255,40 @@ See [`EventRequest` in `statemachine-proto`](https://github.com/massenz/statemac
 
 #### SQS Error notifications
 
-`TODO:` Once we refactor `EventErrorMessage` we should update this section too.
+Event processing outcomes are returned in [`EventResponse` protocol buffers](https://github.com/massenz/statemachine-proto/blob/main/api/statemachine.proto#L112), which are then serialized inside the `body` of the SQS message; to retrieve the actual Go struct, you can use code such as this (see [test code](pubsub/sqs_pub_test.go#L148) for actual working code):
 
+```go
+// `res` is what AWS SQS Client will return to the Messages slice
+var res *sqs.Message = getSqsMessage(getQueueName(notificationsQueue))
+var receivedEvt protos.EventResponse
+err := proto.UnmarshalText(*res.Body, &receivedEvt)
+if err == nill {
+    // you know what to do
+}
+
+receivedEvt.EventId --> is the ID of the Event that failed
+if receivedEvt.Outcome.Code == protos.EventOutcome_InternalError {
+    // whatever...
+}
+return fmt.Errorf("cannot process event to statemachine [%s]: %s, 
+    receivedEvt.Outcome.Dest, receivedEvt.Outcome.Details)
+
+```
+
+The possible error codes are (see the `.proto` definition for the up-to-date values):
+
+```protobuf
+  enum StatusCode {
+    Ok = 0;
+    GenericError = 1;
+    EventNotAllowed = 2;
+    FsmNotFound = 3;
+    TransitionNotAllowed = 4;
+    InternalError = 5;
+    MissingDestination = 6;
+    ConfigurationNotFound = 7;
+  }
+```
 
 ### gRPC Methods
 
@@ -267,7 +299,7 @@ Please refer to [gRPC documentation](https://grpc.io/docs/), the [example gRPC c
 The TL;DR version of all the above is that code like this:
 
 ```golang
-response, err := client.ConsumeEvent(context.Background(),
+response, err := client.ProcessEvent(context.Background(),
     &api.EventRequest{
         Event: &api.Event{
             EventId:   uuid.NewString(),
@@ -282,6 +314,9 @@ response, err := client.ConsumeEvent(context.Background(),
 ```
 
 like in the SQS example, will cause a `backorder` event to be sent to our FSM whose `id` matches the UUID in `dest`; the `response` message will contain either the ID of the event, or a suitable error will be returned.
+
+**NOTE**<br/>
+As the event processing is asynchronous, the `response` will only contain the `event_id` and an empty `outcome`; use the `event_id` and the `GetEventOutcome(GetRequest)` to retrieve the result of event processing (or directly fetch the FSM via the `GetStatemachine()` method to confirm it has transitioned to the expected state - or not).
 
 
 # Build & Run

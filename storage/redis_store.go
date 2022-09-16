@@ -35,12 +35,7 @@ const (
     DefaultRedisPort  = "6379"
     DefaultRedisDb    = 0
     DefaultMaxRetries = 3
-)
-
-var (
-    // Despite what Go thinks, yeah, this IS a constant
-    DefaultTimeout, _ = time.ParseDuration("200ms")
-    DefaultContext    = context.Background()
+    DefaultTimeout    = 200 * time.Millisecond
 )
 
 type RedisStore struct {
@@ -52,6 +47,10 @@ type RedisStore struct {
 
 func (csm *RedisStore) SetTimeout(duration time.Duration) {
     csm.Timeout = duration
+}
+
+func (csm *RedisStore) GetTimeout() time.Duration {
+    return csm.Timeout
 }
 
 func NewRedisStore(address string, db int, timeout time.Duration, maxRetries int) StoreManager {
@@ -119,7 +118,7 @@ func (csm *RedisStore) get(id string) ([]byte, error) {
     }()
     for {
         var ctx context.Context
-        ctx, cancel = context.WithTimeout(DefaultContext, csm.Timeout)
+        ctx, cancel = context.WithTimeout(context.Background(), csm.Timeout)
         attemptsLeft--
         cmd := csm.client.Get(ctx, id)
         data, err := cmd.Bytes()
@@ -146,7 +145,7 @@ func (csm *RedisStore) get(id string) ([]byte, error) {
 }
 
 func (csm *RedisStore) PutConfig(cfg *api.Configuration) (err error) {
-    ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
+    ctx, cancel := context.WithTimeout(context.Background(), csm.Timeout)
     defer cancel()
 
     if cfg == nil {
@@ -177,7 +176,7 @@ func (csm *RedisStore) GetStateMachine(id string) (cfg *api.FiniteStateMachine, 
 }
 
 func (csm *RedisStore) PutStateMachine(id string, stateMachine *api.FiniteStateMachine) (err error) {
-    ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
+    ctx, cancel := context.WithTimeout(context.Background(), csm.Timeout)
     defer cancel()
 
     if id == "" {
@@ -199,7 +198,7 @@ func (csm *RedisStore) PutStateMachine(id string, stateMachine *api.FiniteStateM
 }
 
 func (csm *RedisStore) Health() error {
-    ctx, cancel := context.WithTimeout(DefaultContext, csm.Timeout)
+    ctx, cancel := context.WithTimeout(context.Background(), csm.Timeout)
     defer cancel()
 
     _, err := csm.client.Ping(ctx).Result()

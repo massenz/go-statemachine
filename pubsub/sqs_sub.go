@@ -36,14 +36,6 @@ import (
 // TODO: should we need to generalize and abstract the implementation of a Subscriber?
 //  This would be necessary if we were to implement a different message broker (e.g., Kafka)
 
-type SqsSubscriber struct {
-    logger          *log.Log
-    client          *sqs.SQS
-    events          chan<- protos.EventRequest
-    Timeout         time.Duration
-    PollingInterval time.Duration
-}
-
 // getSqsClient connects to AWS and obtains an SQS client; passing `nil` as the `sqsUrl` will
 // connect by default to AWS; use a different (possibly local) URL for a LocalStack test deployment.
 func getSqsClient(sqsUrl *string) *sqs.SQS {
@@ -172,6 +164,7 @@ func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
         ReceiptHandle: msg.ReceiptHandle,
     })
     if err != nil {
+        // FIXME: add retries
         errDetails := fmt.Sprintf("Failed to remove message %v from SQS", msg.MessageId)
         s.logger.Error("%s: %v", errDetails, err)
         // TODO: publish error to DLQ, should also retry removal here.

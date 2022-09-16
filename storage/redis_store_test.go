@@ -49,7 +49,7 @@ var _ = Describe("RedisStore", func() {
         var cfg = &api.Configuration{}
 
         testTimeout, _ := time.ParseDuration("2s")
-        ctx, _ := context.WithTimeout(storage.DefaultContext, testTimeout)
+        ctx, _ := context.WithTimeout(context.Background(), testTimeout)
 
         BeforeEach(func() {
             cfg.Name = "my_conf"

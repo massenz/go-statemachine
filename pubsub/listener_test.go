@@ -19,7 +19,6 @@
 package pubsub_test
 
 import (
-    . "github.com/JiaYongfei/respect/gomega"
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
 
@@ -29,20 +28,20 @@ import (
 
     "github.com/massenz/go-statemachine/pubsub"
     "github.com/massenz/go-statemachine/storage"
-    "github.com/massenz/statemachine-proto/golang/api"
+    protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("A Listener", func() {
     Context("when store-backed", func() {
         var (
             testListener    *pubsub.EventsListener
-            eventsCh        chan api.EventRequest
-            notificationsCh chan pubsub.EventErrorMessage
+            eventsCh        chan protos.EventRequest
+            notificationsCh chan protos.EventResponse
             store           storage.StoreManager
         )
         BeforeEach(func() {
-            eventsCh = make(chan api.EventRequest)
-            notificationsCh = make(chan pubsub.EventErrorMessage)
+            eventsCh = make(chan protos.EventRequest)
+            notificationsCh = make(chan protos.EventResponse)
             store = storage.NewInMemoryStore()
             testListener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
                 EventsChannel:        eventsCh,
@@ -55,22 +54,30 @@ var _ = Describe("A Listener", func() {
         })
         It("can post error notifications", func() {
             defer close(notificationsCh)
-            msg := api.Event{
+            msg := protos.Event{
                 EventId:    "feed-beef",
                 Originator: "me",
-                Transition: &api.Transition{
+                Transition: &protos.Transition{
                     Event: "test-me",
                 },
                 Details: "more details",
             }
             detail := "some error"
-            notification := pubsub.ErrorMessage(fmt.Errorf("this is a test"), &msg, detail)
+            notification := &protos.EventResponse{
+                EventId: msg.GetEventId(),
+                Outcome: &protos.EventOutcome{
+                    Code:    protos.EventOutcome_MissingDestination,
+                    Details: detail,
+                },
+            }
             go testListener.PostErrorNotification(notification)
             select {
             case n := <-notificationsCh:
-                Expect(n.Error.Error()).To(Equal("this is a test"))
-                Expect(n.Message).ToNot(BeNil())
-                Expect(*n.Message).To(Respect(msg))
+                Expect(n.EventId).To(Equal(msg.GetEventId()))
+                Expect(n.Outcome).ToNot(BeNil())
+                Expect(n.Outcome.Dest).To(BeEmpty())
+                Expect(n.Outcome.Details).To(Equal(detail))
+                Expect(n.Outcome.Code).To(Equal(protos.EventOutcome_MissingDestination))
 
             case <-time.After(timeout):
                 Fail("timed out waiting for notification")
@@ -78,28 +85,28 @@ var _ = Describe("A Listener", func() {
         })
         It("can receive events", func() {
             done := make(chan interface{})
-            event := api.Event{
+            event := protos.Event{
                 EventId:    "feed-beef",
                 Originator: "me",
-                Transition: &api.Transition{
+                Transition: &protos.Transition{
                     Event: "move",
                 },
                 Details: "more details",
             }
-            request := api.EventRequest{
+            request := protos.EventRequest{
                 Event: &event,
                 Dest:  "test-fsm",
             }
-            Expect(store.PutStateMachine(request.Dest, &api.FiniteStateMachine{
+            Expect(store.PutStateMachine(request.Dest, &protos.FiniteStateMachine{
                 ConfigId: "test:v1",
                 State:    "start",
                 History:  nil,
             })).ToNot(HaveOccurred())
-            Expect(store.PutConfig(&api.Configuration{
+            Expect(store.PutConfig(&protos.Configuration{
                 Name:          "test",
                 Version:       "v1",
                 States:        []string{"start", "end"},
-                Transitions:   []*api.Transition{{From: "start", To: "end", Event: "move"}},
+                Transitions:   []*protos.Transition{{From: "start", To: "end", Event: "move"}},
                 StartingState: "start",
             })).ToNot(HaveOccurred())
 
@@ -124,16 +131,16 @@ var _ = Describe("A Listener", func() {
                 Fail("the listener did not exit when the events channel was closed")
             }
         })
-        It("sends notifications for missing statemachine", func() {
-            event := api.Event{
+        It("sends notifications for missing state-machine", func() {
+            event := protos.Event{
                 EventId:    "feed-beef",
                 Originator: "me",
-                Transition: &api.Transition{
+                Transition: &protos.Transition{
                     Event: "move",
                 },
                 Details: "more details",
             }
-            request := api.EventRequest{
+            request := protos.EventRequest{
                 Event: &event,
                 Dest:  "fake-fsm",
             }
@@ -142,32 +149,32 @@ var _ = Describe("A Listener", func() {
             }()
             eventsCh <- request
             close(eventsCh)
-
             select {
             case n := <-notificationsCh:
-                Expect(n.Message).ToNot(BeNil())
-                Expect(n.Message.EventId).To(Equal(request.Event.EventId))
-                Expect(n.Error.Error()).To(Equal("statemachine [fake-fsm] could not be found"))
+                Expect(n.EventId).To(Equal(request.Event.EventId))
+                Expect(n.Outcome).ToNot(BeNil())
+                Expect(n.Outcome.Dest).To(Equal(request.Dest))
+                Expect(n.Outcome.Code).To(Equal(protos.EventOutcome_FsmNotFound))
             case <-time.After(timeout):
                 Fail("the listener did not exit when the events channel was closed")
             }
         })
         It("sends notifications for missing destinations", func() {
-            request := api.EventRequest{
-                Event: &api.Event{
+            request := protos.EventRequest{
+                Event: &protos.Event{
                     EventId: "feed-beef",
                 },
                 Dest: "",
             }
-            go func() {testListener.ListenForMessages()}()
+            go func() { testListener.ListenForMessages() }()
             eventsCh <- request
             close(eventsCh)
 
             select {
             case n := <-notificationsCh:
-                Expect(n.Message).ToNot(BeNil())
-                Expect(n.Message.EventId).To(Equal(request.Event.EventId))
-                Expect(n.Error.Error()).To(Equal("no destination for event"))
+                Expect(n.EventId).To(Equal(request.Event.EventId))
+                Expect(n.Outcome).ToNot(BeNil())
+                Expect(n.Outcome.Code).To(Equal(protos.EventOutcome_MissingDestination))
             case <-time.After(timeout):
                 Fail("no error notification received")
             }
