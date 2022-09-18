@@ -48,7 +48,7 @@ var _ = Describe("RedisStore", func() {
         var rdb *redis.Client
         var cfg = &api.Configuration{}
 
-        testTimeout, _ := time.ParseDuration("2s")
+        testTimeout, _ := time.ParseDuration("20ms")
         ctx, _ := context.WithTimeout(context.Background(), testTimeout)
 
         BeforeEach(func() {
@@ -62,10 +62,10 @@ var _ = Describe("RedisStore", func() {
             Expect(store).ToNot(BeNil())
             store.SetTimeout(testTimeout)
             // Mute unnecessary logging during tests; re-enable (
-            //and set to DEBUG) when diagnosing failures.
+            // and set to DEBUG) when diagnosing failures.
             store.SetLogLevel(log.NONE)
 
-            // This is used to go "behind the back" or our StoreManager and mess with it for testing
+            // This is used to go "behind the back" of our StoreManager and mess with it for testing
             // purposes. Do NOT do this in your code.
             rdb = redis.NewClient(&redis.Options{
                 Addr: localAddress,
@@ -74,9 +74,9 @@ var _ = Describe("RedisStore", func() {
         })
 
         It("can get a configuration back", func() {
-            id := "1234"
+            id := GetVersionId(cfg)
             val, _ := proto.Marshal(cfg)
-            res, err := rdb.Set(ctx, id, val, testTimeout).Result()
+            res, err := rdb.Set(ctx, storage.NewKeyForConfig(id), val, testTimeout).Result()
             Expect(err).ToNot(HaveOccurred())
             Expect(res).To(Equal("OK"))
 
@@ -112,8 +112,7 @@ var _ = Describe("RedisStore", func() {
         })
 
         It("should not fail for a non-existent FSM", func() {
-            id := "fake"
-            data, ok := store.GetStateMachine(id)
+            data, ok := store.GetStateMachine("fake", "bad-config")
             Expect(ok).To(BeFalse())
             Expect(data).To(BeNil())
         })
@@ -127,12 +126,13 @@ var _ = Describe("RedisStore", func() {
             }
             // Storing the FSM behind the store's back
             val, _ := proto.Marshal(fsm)
-            res, err := rdb.Set(ctx, id, val, testTimeout).Result()
+            key := storage.NewKeyForMachine(id, fsm.ConfigId)
+            res, err := rdb.Set(ctx, key, val, testTimeout).Result()
 
             Expect(err).ToNot(HaveOccurred())
             Expect(res).To(Equal("OK"))
 
-            data, ok := store.GetStateMachine(id)
+            data, ok := store.GetStateMachine(id, "cfg_id")
             Expect(ok).To(BeTrue())
             Expect(data).ToNot(BeNil())
             Expect(data.State).To(Equal(fsm.State))
@@ -150,10 +150,8 @@ var _ = Describe("RedisStore", func() {
                     {Transition: &api.Transition{Event: "pending"}, Originator: "bot"},
                 },
             }
-
             Expect(store.PutStateMachine(id, fsm)).ToNot(HaveOccurred())
-
-            val, err := rdb.Get(ctx, id).Bytes()
+            val, err := rdb.Get(ctx, storage.NewKeyForMachine(id, "patient.onboard")).Bytes()
             Expect(err).ToNot(HaveOccurred())
 
             Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())

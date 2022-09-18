@@ -5,6 +5,7 @@ import (
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
     "google.golang.org/grpc/codes"
+    "strings"
 
     "context"
     "fmt"
@@ -240,11 +241,18 @@ var _ = Describe("GrpcServer", func() {
             id := "123456"
             Ω(store.PutConfig(cfg))
             Ω(store.PutStateMachine(id, fsm)).Should(Succeed())
-            Ω(client.GetFiniteStateMachine(context.Background(), &api.GetRequest{Id: id})).Should(
-                Respect(fsm))
+            Ω(client.GetFiniteStateMachine(context.Background(),
+                &api.GetRequest{
+                    Id: strings.Join([]string{cfg.Name, id}, storage.KeyPrefixIDSeparator),
+                })).Should(Respect(fsm))
         })
-        It("will return an error for an invalid ID", func() {
+        It("will return an Invalid error for an invalid ID", func() {
             _, err := client.GetFiniteStateMachine(context.Background(), &api.GetRequest{Id: "fake"})
+            assertStatusCode(codes.InvalidArgument, err)
+        })
+        It("will return a NotFound error for a missing ID", func() {
+            _, err := client.GetFiniteStateMachine(context.Background(),
+                &api.GetRequest{Id: "cfg#fake"})
             assertStatusCode(codes.NotFound, err)
         })
     })

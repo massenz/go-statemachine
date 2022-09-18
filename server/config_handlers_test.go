@@ -51,12 +51,13 @@ var _ = Describe("Configuration Handlers", func() {
     // Disabling verbose logging, as it pollutes test output;
     // set it back to DEBUG when tests fail, and you need to
     // diagnose the failure.
-    server.SetLogLevel(log.WARN)
+    server.SetLogLevel(log.NONE)
 
     Context("when creating configurations", func() {
         BeforeEach(func() {
             writer = httptest.NewRecorder()
             store = storage.NewInMemoryStore()
+            store.SetLogLevel(log.NONE)
             server.SetStore(store)
         })
         Context("with a valid JSON", func() {
@@ -123,65 +124,54 @@ var _ = Describe("Configuration Handlers", func() {
         })
     })
     Context("when retrieving configurations", func() {
+        var spaceship = api.Configuration{
+            Name:          "spaceship",
+            Version:       "v1",
+            StartingState: "earth",
+            States:        []string{"earth", "orbit", "mars"},
+            Transitions: []*api.Transition{
+                {From: "earth", To: "orbit", Event: "launch"},
+                {From: "orbit", To: "mars", Event: "land"},
+            },
+        }
+        var cfgId string
         BeforeEach(func() {
             writer = httptest.NewRecorder()
             // We need an empty, clean store for each test to avoid cross-polluting it.
             store = storage.NewInMemoryStore()
+            store.SetLogLevel(log.NONE)
             server.SetStore(store)
+
+            Expect(store.PutConfig(&spaceship)).ToNot(HaveOccurred())
+            cfgId = GetVersionId(&spaceship)
         })
-        Context("with a valid cfg_id", func() {
-            var spaceship = api.Configuration{
-                Name:          "spaceship",
-                Version:       "v1",
-                StartingState: "earth",
-                States:        []string{"earth", "orbit", "mars"},
-                Transitions: []*api.Transition{
-                    {From: "earth", To: "orbit", Event: "launch"},
-                    {From: "orbit", To: "mars", Event: "land"},
-                },
+        It("with a valid ID should succeed", func() {
+            endpoint := strings.Join([]string{server.ConfigurationsEndpoint, cfgId}, "/")
+            req = httptest.NewRequest(http.MethodGet, endpoint, nil)
+            var result api.Configuration
+            router.ServeHTTP(writer, req)
+            Expect(writer.Code).To(Equal(http.StatusOK))
+            Expect(json.NewDecoder(writer.Body).Decode(&result)).ToNot(HaveOccurred())
+            Expect(GetVersionId(&result)).To(Equal(cfgId))
+            Expect(result.States).To(Equal(spaceship.States))
+            Expect(len(result.Transitions)).To(Equal(len(spaceship.Transitions)))
+            for n, t := range result.Transitions {
+                Expect(t.From).To(Equal(spaceship.Transitions[n].From))
+                Expect(t.To).To(Equal(spaceship.Transitions[n].To))
+                Expect(t.Event).To(Equal(spaceship.Transitions[n].Event))
             }
-            var cfgId = GetVersionId(&spaceship)
-            BeforeEach(func() {
-                Expect(store.PutConfig(&spaceship)).ToNot(HaveOccurred())
-                endpoint := strings.Join([]string{server.ConfigurationsEndpoint, cfgId}, "/")
-                req = httptest.NewRequest(http.MethodGet, endpoint, nil)
-            })
-
-            It("should succeed", func() {
-                var result api.Configuration
-                router.ServeHTTP(writer, req)
-                Expect(writer.Code).To(Equal(http.StatusOK))
-                Expect(json.NewDecoder(writer.Body).Decode(&result)).ToNot(HaveOccurred())
-                Expect(GetVersionId(&result)).To(Equal(cfgId))
-                Expect(result.States).To(Equal(spaceship.States))
-                Expect(len(result.Transitions)).To(Equal(len(spaceship.Transitions)))
-                for n, t := range result.Transitions {
-                    Expect(t.From).To(Equal(spaceship.Transitions[n].From))
-                    Expect(t.To).To(Equal(spaceship.Transitions[n].To))
-                    Expect(t.Event).To(Equal(spaceship.Transitions[n].Event))
-                }
-            })
         })
-
-        Context("with an invalid Id", func() {
-            BeforeEach(func() {
-                endpoint := server.ConfigurationsEndpoint + "/fake:v3"
-                req = httptest.NewRequest(http.MethodGet, endpoint, nil)
-            })
-            It("will return Not Found", func() {
-                router.ServeHTTP(writer, req)
-                Expect(writer.Code).To(Equal(http.StatusNotFound))
-            })
+        It("with an invalid ID, it will return Not Found", func() {
+            endpoint := server.ConfigurationsEndpoint + "/fake:v3"
+            req = httptest.NewRequest(http.MethodGet, endpoint, nil)
+            router.ServeHTTP(writer, req)
+            Expect(writer.Code).To(Equal(http.StatusNotFound))
         })
-        Context("without Id", func() {
-            BeforeEach(func() {
-                endpoint := server.ConfigurationsEndpoint
-                req = httptest.NewRequest(http.MethodGet, endpoint, nil)
-            })
-            It("it will fail", func() {
-                router.ServeHTTP(writer, req)
-                Expect(writer.Code).To(Equal(http.StatusMethodNotAllowed))
-            })
+        It("without ID, it will fail with a NOT ALLOWED error", func() {
+            endpoint := server.ConfigurationsEndpoint
+            req = httptest.NewRequest(http.MethodGet, endpoint, nil)
+            router.ServeHTTP(writer, req)
+            Expect(writer.Code).To(Equal(http.StatusMethodNotAllowed))
         })
     })
 })

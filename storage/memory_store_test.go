@@ -35,56 +35,58 @@ var _ = Describe("InMemory Store", func() {
         It("can create an in-memory store", func() {
             Expect(store).ToNot(BeNil())
         })
+    })
 
-        Context("can be used to save and retrieve a Configuration", func() {
-            var cfg = &protos.Configuration{}
-            BeforeEach(func() {
-                cfg.Name = "my_conf"
-                cfg.Version = "v3"
-                cfg.StartingState = "start"
-                Expect(store.PutConfig(cfg)).ToNot(HaveOccurred())
-
-            })
-            It("will give back the saved Configuration", func() {
-                found, ok := store.GetConfig(api.GetVersionId(cfg))
-                Expect(ok).To(BeTrue())
-                Expect(found).ToNot(BeNil())
-
-                Expect(found.Name).To(Equal(cfg.Name))
-                Expect(found.Version).To(Equal(cfg.Version))
-                Expect(found.StartingState).To(Equal(cfg.StartingState))
-
-            })
+    Context("can be used to save and retrieve a Configuration", func() {
+        var store = storage.NewInMemoryStore()
+        var cfg = &protos.Configuration{}
+        BeforeEach(func() {
+            cfg.Name = "my_conf"
+            cfg.Version = "v3"
+            cfg.StartingState = "start"
+            Expect(store.PutConfig(cfg)).ToNot(HaveOccurred())
 
         })
+        It("will give back the saved Configuration", func() {
+            found, ok := store.GetConfig(api.GetVersionId(cfg))
+            Expect(ok).To(BeTrue())
+            Expect(found).ToNot(BeNil())
 
-        Context("can be used to save and retrieve a StateMachine", func() {
-            var id = "1234"
-            var machine *protos.FiniteStateMachine
+            Expect(found.Name).To(Equal(cfg.Name))
+            Expect(found.Version).To(Equal(cfg.Version))
+            Expect(found.StartingState).To(Equal(cfg.StartingState))
 
-            BeforeEach(func() {
-                machine = &protos.FiniteStateMachine{
-                    ConfigId: id,
-                    State:    "start",
-                    History:  nil,
-                }
-                Expect(store.PutStateMachine(id, machine)).ToNot(HaveOccurred())
-            })
-            It("will give it back unchanged", func() {
-                found, ok := store.GetStateMachine(id)
-                Expect(ok).To(BeTrue())
-                Expect(found).ToNot(BeNil())
-                Expect(found.ConfigId).To(Equal(machine.ConfigId))
-                Expect(found.History).To(Equal(machine.History))
-                Expect(found.State).To(Equal(machine.State))
-            })
-
-            It("will return nil for a non-existent id", func() {
-                found, ok := store.GetStateMachine("fake")
-                Expect(ok).To(BeFalse())
-                Expect(found).To(BeNil())
-            })
         })
 
     })
+
+    Context("can be used to save and retrieve a StateMachine", func() {
+        var store = storage.NewInMemoryStore()
+        var id = "1234"
+        var machine *protos.FiniteStateMachine
+
+        BeforeEach(func() {
+            machine = &protos.FiniteStateMachine{
+                ConfigId: "test:v1",
+                State:    "start",
+                History:  nil,
+            }
+            Expect(store.PutStateMachine(id, machine)).ToNot(HaveOccurred())
+        })
+        It("will give it back unchanged", func() {
+            found, ok := store.GetStateMachine(id, "test")
+            Expect(ok).To(BeTrue())
+            Expect(found).ToNot(BeNil())
+            Expect(found.ConfigId).To(Equal(machine.ConfigId))
+            Expect(found.History).To(Equal(machine.History))
+            Expect(found.State).To(Equal(machine.State))
+        })
+
+        It("will return nil for a non-existent id", func() {
+            found, ok := store.GetStateMachine("fake", "test")
+            Expect(ok).To(BeFalse())
+            Expect(found).To(BeNil())
+        })
+    })
+
 })
