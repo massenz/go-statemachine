@@ -19,24 +19,24 @@
 package storage_test
 
 import (
+    . "github.com/JiaYongfei/respect/gomega"
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
 
+    "google.golang.org/protobuf/types/known/timestamppb"
+
     "github.com/massenz/go-statemachine/api"
     "github.com/massenz/go-statemachine/storage"
-
     protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("InMemory Store", func() {
     Context("for local testing", func() {
-        var store = storage.NewInMemoryStore()
-
-        It("can create an in-memory store", func() {
+        It("can be created", func() {
+            var store = storage.NewInMemoryStore()
             Expect(store).ToNot(BeNil())
         })
     })
-
     Context("can be used to save and retrieve a Configuration", func() {
         var store = storage.NewInMemoryStore()
         var cfg = &protos.Configuration{}
@@ -45,21 +45,13 @@ var _ = Describe("InMemory Store", func() {
             cfg.Version = "v3"
             cfg.StartingState = "start"
             Expect(store.PutConfig(cfg)).ToNot(HaveOccurred())
-
         })
         It("will give back the saved Configuration", func() {
             found, ok := store.GetConfig(api.GetVersionId(cfg))
             Expect(ok).To(BeTrue())
-            Expect(found).ToNot(BeNil())
-
-            Expect(found.Name).To(Equal(cfg.Name))
-            Expect(found.Version).To(Equal(cfg.Version))
-            Expect(found.StartingState).To(Equal(cfg.StartingState))
-
+            Expect(found).To(Respect(cfg))
         })
-
     })
-
     Context("can be used to save and retrieve a StateMachine", func() {
         var store = storage.NewInMemoryStore()
         var id = "1234"
@@ -81,12 +73,38 @@ var _ = Describe("InMemory Store", func() {
             Expect(found.History).To(Equal(machine.History))
             Expect(found.State).To(Equal(machine.State))
         })
-
         It("will return nil for a non-existent id", func() {
             found, ok := store.GetStateMachine("fake", "test")
             Expect(ok).To(BeFalse())
             Expect(found).To(BeNil())
         })
+        It("will return an error for a nil FSM", func() {
+            machine.ConfigId = "missing"
+            Expect(store.PutStateMachine(id, nil)).To(HaveOccurred())
+        })
     })
-
+    Context("can be used to save and retrieve Events", func() {
+        var store = storage.NewInMemoryStore()
+        var id = "1234"
+        var event = &protos.Event{
+            EventId:    id,
+            Timestamp:  timestamppb.Now(),
+            Transition: &protos.Transition{Event: "start"},
+            Originator: "test",
+            Details:    "some details",
+        }
+        BeforeEach(func() {
+            Expect(store.PutEvent(event, "test-cfg", storage.NeverExpire)).ToNot(HaveOccurred())
+        })
+        It("will give it back unchanged", func() {
+            found, ok := store.GetEvent(id, "test-cfg")
+            Expect(ok).To(BeTrue())
+            Expect(found).ToNot(BeNil())
+            Expect(found).To(Respect(event))
+        })
+        It("will return false for a non-existent id", func() {
+            _, ok := store.GetEvent("fake", "test-cfg")
+            Expect(ok).To(BeFalse())
+        })
+    })
 })

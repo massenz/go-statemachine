@@ -41,7 +41,7 @@ type InMemoryStore struct {
     backingStore map[string][]byte
 }
 
-func (csm *InMemoryStore) get(key string, value proto.Message) (ok bool) {
+func (csm *InMemoryStore) get(key string, value proto.Message) bool {
     csm.mux.RLock()
     defer csm.mux.RUnlock()
 
@@ -71,7 +71,8 @@ func (csm *InMemoryStore) put(key string, value proto.Message) error {
 
 func (csm *InMemoryStore) GetAllInState(cfg string, state string) []*protos.FiniteStateMachine {
     // TODO [#33] Ability to query for all machines in a given state
-    panic("implement me")
+    csm.logger.Error("Not implemented")
+    return nil
 }
 
 func (csm *InMemoryStore) GetEvent(id string, cfg string) (*protos.Event, bool) {
@@ -87,12 +88,13 @@ func (csm *InMemoryStore) PutEvent(event *protos.Event, cfg string, ttl time.Dur
 
 func (csm *InMemoryStore) AddEventOutcome(id string, cfg string, response *protos.EventOutcome, ttl time.Duration) error {
     // TODO [#34] Store event outcomes
-    panic("implement me")
+    return NotImplementedError
 }
 
 func (csm *InMemoryStore) GetOutcomeForEvent(id string, cfg string) (*protos.EventOutcome, bool) {
     // TODO [#34] Store event outcomes
-    panic("implement me")
+    csm.logger.Error("Not implemented")
+    return nil, false
 }
 
 func (csm *InMemoryStore) GetConfig(id string) (cfg *protos.Configuration, ok bool) {
@@ -138,9 +140,9 @@ func (csm *InMemoryStore) SetTimeout(_ time.Duration) {
 }
 
 // GetTimeout does not really make sense for an in-memory store,
-// so this just returns a relatively meaningless value (200 msec).
+// so this just returns a NeverExpire constant.
 func (csm *InMemoryStore) GetTimeout() time.Duration {
-    return 200 * time.Millisecond
+    return NeverExpire
 }
 
 func (csm *InMemoryStore) Health() error {

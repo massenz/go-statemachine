@@ -29,6 +29,7 @@ var (
     IllegalStoreError   = fmt.Errorf("error storing invalid data")
     ConfigNotFoundError = fmt.Errorf("configuration not found")
     FSMNotFoundError    = fmt.Errorf("statemachine not found")
+    NotImplementedError = fmt.Errorf("this functionality has not been implemented yet")
 )
 
 type ConfigurationStorageManager interface {

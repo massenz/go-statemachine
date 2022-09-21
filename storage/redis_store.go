@@ -49,7 +49,8 @@ type RedisStore struct {
 
 func (csm *RedisStore) GetAllInState(cfg string, state string) []*protos.FiniteStateMachine {
     // TODO [#33] Ability to query for all machines in a given state
-    panic("implement me")
+    csm.logger.Error("Not implemented")
+    return nil
 }
 
 func (csm *RedisStore) GetConfig(id string) (*protos.Configuration, bool) {
@@ -106,12 +107,13 @@ func (csm *RedisStore) PutStateMachine(id string, stateMachine *protos.FiniteSta
 
 func (csm *RedisStore) AddEventOutcome(id string, cfg string, response *protos.EventOutcome, ttl time.Duration) error {
     // TODO [#34] Store event outcomes
-    panic("implement me")
+    return NotImplementedError
 }
 
 func (csm *RedisStore) GetOutcomeForEvent(id string, cfg string) (*protos.EventOutcome, bool) {
     // TODO [#34] Store event outcomes
-    panic("implement me")
+    csm.logger.Error("Not implemented")
+    return nil, false
 }
 
 func (csm *RedisStore) SetTimeout(duration time.Duration) {
@@ -120,6 +122,10 @@ func (csm *RedisStore) SetTimeout(duration time.Duration) {
 
 func (csm *RedisStore) GetTimeout() time.Duration {
     return csm.Timeout
+}
+
+func NewRedisStoreWithDefaults(address string) StoreManager {
+    return NewRedisStore(address, DefaultRedisDb, DefaultTimeout, DefaultMaxRetries)
 }
 
 func NewRedisStore(address string, db int, timeout time.Duration, maxRetries int) StoreManager {
