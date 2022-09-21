@@ -23,6 +23,7 @@ import (
     . "github.com/massenz/go-statemachine/api"
     log "github.com/massenz/slf4go/logging"
     protos "github.com/massenz/statemachine-proto/golang/api"
+    "strings"
 )
 
 func NewEventsListener(options *ListenerOptions) *EventsListener {
@@ -58,7 +59,18 @@ func (listener *EventsListener) ListenForMessages() {
                 fmt.Sprintf("no destination specified")))
             continue
         }
-        fsm, ok := listener.store.GetStateMachine(request.Dest)
+        // TODO: this is an API change and needs to be documented
+        // Destination comrpises both the type (configuration name) and ID of the statemachine,
+        // separated by the # character: <type>#<id> (e.g., `order#1234`)
+        dest := strings.Split(request.Dest, "#")
+        if len(dest) != 2 {
+            listener.PostErrorNotification(makeResponse(&request,
+                protos.EventOutcome_MissingDestination,
+                fmt.Sprintf("invalid destination: %s", request.Dest)))
+            continue
+        }
+        smType, smId := dest[0], dest[1]
+        fsm, ok := listener.store.GetStateMachine(smId, smType)
         if !ok {
             listener.PostErrorNotification(makeResponse(&request,
                 protos.EventOutcome_FsmNotFound,
@@ -84,7 +96,9 @@ func (listener *EventsListener) ListenForMessages() {
                     request.GetEvent().GetTransition().GetEvent(), err)))
             continue
         }
-        err := listener.store.PutStateMachine(request.Dest, fsm)
+        listener.logger.Info("Event `%s` transitioned FSM [%s] to state `%s` - updating store",
+            request.Event.Transition.Event, smId, fsm.State)
+        err := listener.store.PutStateMachine(smId, fsm)
         if err != nil {
             listener.PostErrorNotification(makeResponse(&request,
                 protos.EventOutcome_InternalError,
@@ -92,8 +106,6 @@ func (listener *EventsListener) ListenForMessages() {
                     request.Dest, err)))
             continue
         }
-        listener.logger.Info("Event `%s` transitioned FSM [%s] to state `%s`",
-            request.Event.Transition.Event, request.Dest, fsm.State)
     }
 }
 

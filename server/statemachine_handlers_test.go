@@ -88,7 +88,7 @@ var _ = Describe("Handlers", func() {
                 router.ServeHTTP(writer, req)
                 Expect(writer.Code).To(Equal(http.StatusCreated))
                 Expect(writer.Header().Get("Location")).To(Equal(
-                    server.StatemachinesEndpoint + "/test-machine"))
+                    server.StatemachinesEndpoint + "/test-config/test-machine"))
                 response := server.StateMachineResponse{}
                 Expect(json.Unmarshal(writer.Body.Bytes(), &response)).ToNot(HaveOccurred())
 
@@ -100,14 +100,14 @@ var _ = Describe("Handlers", func() {
             It("should fill the cache", func() {
                 router.ServeHTTP(writer, req)
                 Expect(writer.Code).To(Equal(http.StatusCreated))
-                _, found := store.GetStateMachine("test-machine")
+                _, found := store.GetStateMachine("test-machine", "test-config")
                 Expect(found).To(BeTrue())
             })
 
             It("should store the correct data", func() {
                 router.ServeHTTP(writer, req)
                 Expect(writer.Code).To(Equal(http.StatusCreated))
-                fsm, found := store.GetStateMachine("test-machine")
+                fsm, found := store.GetStateMachine("test-machine", "test-config")
                 Expect(found).To(BeTrue())
                 Expect(fsm).ToNot(BeNil())
                 Expect(fsm.ConfigId).To(Equal("test-config:v1"))
@@ -142,7 +142,7 @@ var _ = Describe("Handlers", func() {
                 Expect(response.ID).ToNot(BeEmpty())
 
                 Expect(strings.HasSuffix(location, response.ID)).To(BeTrue())
-                _, found := store.GetStateMachine(response.ID)
+                _, found := store.GetStateMachine(response.ID, "test-config")
                 Expect(found).To(BeTrue())
             })
 
@@ -192,15 +192,14 @@ var _ = Describe("Handlers", func() {
         })
 
         It("can be retrieved with a valid ID", func() {
-            endpoint := strings.Join([]string{server.StatemachinesEndpoint, id}, "/")
+            store.SetLogLevel(log.NONE)
+            endpoint := strings.Join([]string{server.StatemachinesEndpoint, "order.card", id}, "/")
             req = httptest.NewRequest(http.MethodGet, endpoint, nil)
-
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusOK))
 
             var result server.StateMachineResponse
             Expect(json.NewDecoder(writer.Body).Decode(&result)).ToNot(HaveOccurred())
-
             Expect(result.ID).To(Equal(id))
             sm := result.StateMachine
             Expect(sm.ConfigId).To(Equal(fsm.ConfigId))
@@ -259,7 +258,7 @@ var _ = Describe("Handlers", func() {
         })
 
         It("it should show them", func() {
-            found, _ := store.GetStateMachine(fsmId)
+            found, _ := store.GetStateMachine(fsmId, "car")
             car := ConfiguredStateMachine{
                 Config: config,
                 FSM:    found,
@@ -280,7 +279,7 @@ var _ = Describe("Handlers", func() {
             })).To(Succeed())
             Expect(store.PutStateMachine(fsmId, car.FSM)).To(Succeed())
 
-            endpoint := strings.Join([]string{server.StatemachinesEndpoint, fsmId}, "/")
+            endpoint := strings.Join([]string{server.StatemachinesEndpoint, config.Name, fsmId}, "/")
             req = httptest.NewRequest(http.MethodGet, endpoint, nil)
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusOK))

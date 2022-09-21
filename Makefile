@@ -5,6 +5,7 @@ bin := build/bin
 out := $(bin)/sm-server
 tag := $(shell ./get-tag)
 image := massenz/statemachine
+module := $(shell go list -m)
 
 compose := docker/docker-compose.yaml
 dockerfile := docker/Dockerfile
@@ -22,7 +23,7 @@ srcs := $(filter-out $(test_srcs),$(all_go))
 # Builds the server
 #
 $(out): cmd/main.go $(srcs)
-	go build -ldflags "-X main.Release=$(tag)" -o $(out) cmd/main.go
+	go build -ldflags "-X $(module)/server.Release=$(tag)" -o $(out) cmd/main.go
 	@chmod +x $(out)
 
 build: $(out)
@@ -42,7 +43,7 @@ queues:
  			sqs create-queue --queue-name $$queue; done >/dev/null
 
 test: $(srcs) $(test_srcs) services queues
-	ginkgo -p $(pkgs)
+	ginkgo $(pkgs)
 
 container: $(out)
 	docker build -f $(dockerfile) -t $(image):$(tag) .

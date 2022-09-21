@@ -43,6 +43,7 @@ var _ = Describe("A Listener", func() {
             eventsCh = make(chan protos.EventRequest)
             notificationsCh = make(chan protos.EventResponse)
             store = storage.NewInMemoryStore()
+            store.SetLogLevel(logging.NONE)
             testListener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
                 EventsChannel:        eventsCh,
                 NotificationsChannel: notificationsCh,
@@ -73,11 +74,11 @@ var _ = Describe("A Listener", func() {
             go testListener.PostErrorNotification(notification)
             select {
             case n := <-notificationsCh:
-                Expect(n.EventId).To(Equal(msg.GetEventId()))
-                Expect(n.Outcome).ToNot(BeNil())
-                Expect(n.Outcome.Dest).To(BeEmpty())
-                Expect(n.Outcome.Details).To(Equal(detail))
-                Expect(n.Outcome.Code).To(Equal(protos.EventOutcome_MissingDestination))
+                Ω(n.EventId).To(Equal(msg.GetEventId()))
+                Ω(n.Outcome).ToNot(BeNil())
+                Ω(n.Outcome.Dest).To(BeEmpty())
+                Ω(n.Outcome.Details).To(Equal(detail))
+                Ω(n.Outcome.Code).To(Equal(protos.EventOutcome_MissingDestination))
 
             case <-time.After(timeout):
                 Fail("timed out waiting for notification")
@@ -95,19 +96,19 @@ var _ = Describe("A Listener", func() {
             }
             request := protos.EventRequest{
                 Event: &event,
-                Dest:  "test-fsm",
+                Dest:  "test#12345-faa44",
             }
-            Expect(store.PutStateMachine(request.Dest, &protos.FiniteStateMachine{
-                ConfigId: "test:v1",
-                State:    "start",
-                History:  nil,
-            })).ToNot(HaveOccurred())
-            Expect(store.PutConfig(&protos.Configuration{
+            Ω(store.PutConfig(&protos.Configuration{
                 Name:          "test",
                 Version:       "v1",
                 States:        []string{"start", "end"},
                 Transitions:   []*protos.Transition{{From: "start", To: "end", Event: "move"}},
                 StartingState: "start",
+            })).ToNot(HaveOccurred())
+            Ω(store.PutStateMachine("12345-faa44", &protos.FiniteStateMachine{
+                ConfigId: "test:v1",
+                State:    "start",
+                History:  nil,
             })).ToNot(HaveOccurred())
 
             go func() {
@@ -121,12 +122,12 @@ var _ = Describe("A Listener", func() {
             case n := <-notificationsCh:
                 Fail(fmt.Sprintf("unexpected error: %v", n.String()))
             case <-done:
-                fsm, ok := store.GetStateMachine(request.Dest)
-                Expect(ok).ToNot(BeFalse())
-                Expect(fsm.State).To(Equal("end"))
-                Expect(len(fsm.History)).To(Equal(1))
-                Expect(fsm.History[0].Details).To(Equal("more details"))
-                Expect(fsm.History[0].Transition.Event).To(Equal("move"))
+                fsm, ok := store.GetStateMachine("12345-faa44", "test")
+                Ω(ok).ToNot(BeFalse())
+                Ω(fsm.State).To(Equal("end"))
+                Ω(len(fsm.History)).To(Equal(1))
+                Ω(fsm.History[0].Details).To(Equal("more details"))
+                Ω(fsm.History[0].Transition.Event).To(Equal("move"))
             case <-time.After(timeout):
                 Fail("the listener did not exit when the events channel was closed")
             }
@@ -142,7 +143,7 @@ var _ = Describe("A Listener", func() {
             }
             request := protos.EventRequest{
                 Event: &event,
-                Dest:  "fake-fsm",
+                Dest:  "test#fake-fsm",
             }
             go func() {
                 testListener.ListenForMessages()
@@ -151,10 +152,10 @@ var _ = Describe("A Listener", func() {
             close(eventsCh)
             select {
             case n := <-notificationsCh:
-                Expect(n.EventId).To(Equal(request.Event.EventId))
-                Expect(n.Outcome).ToNot(BeNil())
-                Expect(n.Outcome.Dest).To(Equal(request.Dest))
-                Expect(n.Outcome.Code).To(Equal(protos.EventOutcome_FsmNotFound))
+                Ω(n.EventId).To(Equal(request.Event.EventId))
+                Ω(n.Outcome).ToNot(BeNil())
+                Ω(n.Outcome.Dest).To(Equal(request.Dest))
+                Ω(n.Outcome.Code).To(Equal(protos.EventOutcome_FsmNotFound))
             case <-time.After(timeout):
                 Fail("the listener did not exit when the events channel was closed")
             }
@@ -172,9 +173,9 @@ var _ = Describe("A Listener", func() {
 
             select {
             case n := <-notificationsCh:
-                Expect(n.EventId).To(Equal(request.Event.EventId))
-                Expect(n.Outcome).ToNot(BeNil())
-                Expect(n.Outcome.Code).To(Equal(protos.EventOutcome_MissingDestination))
+                Ω(n.EventId).To(Equal(request.Event.EventId))
+                Ω(n.Outcome).ToNot(BeNil())
+                Ω(n.Outcome.Code).To(Equal(protos.EventOutcome_MissingDestination))
             case <-time.After(timeout):
                 Fail("no error notification received")
             }

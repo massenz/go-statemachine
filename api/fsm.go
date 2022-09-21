@@ -24,6 +24,7 @@ import (
     "github.com/google/uuid"
     log "github.com/massenz/slf4go/logging"
     tspb "google.golang.org/protobuf/types/known/timestamppb"
+    "strings"
 
     protos "github.com/massenz/statemachine-proto/golang/api"
 )
@@ -68,7 +69,7 @@ func NewStateMachine(configuration *protos.Configuration) (*ConfiguredStateMachi
     }
     return &ConfiguredStateMachine{
         FSM: &protos.FiniteStateMachine{
-            ConfigId: configuration.Name + ":" + configuration.Version,
+            ConfigId: strings.Join([]string{configuration.Name, configuration.Version}, ConfigurationVersionSeparator),
             State:    configuration.StartingState,
         },
         Config: configuration,

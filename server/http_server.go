@@ -22,6 +22,7 @@ import (
     "github.com/massenz/go-statemachine/storage"
     log "github.com/massenz/slf4go/logging"
     "net/http"
+    "strings"
     "time"
 
     "github.com/gorilla/mux"
@@ -69,20 +70,19 @@ func SetLogLevel(level log.LogLevel) {
 // NewRouter returns a gorilla/mux Router for the server routes; exposed so
 // that path params are testable.
 func NewRouter() *mux.Router {
-
-    // TODO: Move all the Handlers to a `handlers` package.
     r := mux.NewRouter()
     r.HandleFunc(HealthEndpoint, HealthHandler).Methods("GET")
     r.HandleFunc(ConfigurationsEndpoint, CreateConfigurationHandler).Methods("POST")
-    r.HandleFunc(ConfigurationsEndpoint+"/{cfg_id}", GetConfigurationHandler).Methods("GET")
+    r.HandleFunc(strings.Join([]string{ConfigurationsEndpoint, "{cfg_id}"}, "/"),
+        GetConfigurationHandler).Methods("GET")
     r.HandleFunc(StatemachinesEndpoint, CreateStatemachineHandler).Methods("POST")
-    r.HandleFunc(StatemachinesEndpoint+"/{statemachine_id}", GetStatemachineHandler).Methods("GET")
+    r.HandleFunc(strings.Join([]string{StatemachinesEndpoint, "{cfg_name}", "{sm_id}"}, "/"),
+        GetStatemachineHandler).Methods("GET")
     return r
 }
 
 func NewHTTPServer(addr string, logLevel log.LogLevel) *http.Server {
     logger.Level = logLevel
-
     return &http.Server{
         Addr:    addr,
         Handler: NewRouter(),

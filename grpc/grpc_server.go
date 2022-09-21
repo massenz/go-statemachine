@@ -27,6 +27,7 @@ import (
     "google.golang.org/grpc"
     "google.golang.org/grpc/codes"
     "google.golang.org/grpc/status"
+    "strings"
     "time"
 
     protos "github.com/massenz/statemachine-proto/golang/api"
@@ -72,7 +73,6 @@ EventResponse, error) {
     case s.EventsChannel <- *request:
         return &protos.EventResponse{
             EventId: request.Event.EventId,
-            //Status:  status.New(codes.OK, "Event processed"),
         }, nil
     case <-time.After(timeout):
         s.Logger.Error("Timeout exceeded when trying to post event to internal channel")
@@ -123,10 +123,18 @@ func (s *grpcSubscriber) PutFiniteStateMachine(ctx context.Context,
     return &protos.PutResponse{Id: id, Fsm: fsm}, nil
 }
 
-func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context,
-    request *protos.GetRequest) (*protos.FiniteStateMachine, error) {
-    s.Logger.Trace("looking up FSM %s", request.GetId())
-    fsm, ok := s.Store.GetStateMachine(request.GetId())
+func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context, request *protos.GetRequest) (
+    *protos.FiniteStateMachine, error) {
+    // TODO: use Context to set a timeout, and then pass it on to the Store.
+    //       This may require a pretty large refactoring of the store interface.
+    s.Logger.Debug("looking up FSM %s", request.GetId())
+    // The ID in the request contains the FSM ID,
+    // prefixed by the Config Name (which defines the "type" of FSM)
+    splitId := strings.Split(request.GetId(), storage.KeyPrefixIDSeparator)
+    if len(splitId) != 2 {
+        return nil, status.Errorf(codes.InvalidArgument, "invalid FSM ID: %s", request.GetId())
+    }
+    fsm, ok := s.Store.GetStateMachine(splitId[1], splitId[0])
     if !ok {
         return nil, status.Error(codes.NotFound, storage.FSMNotFoundError.Error())
     }
