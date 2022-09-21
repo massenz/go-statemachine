@@ -44,8 +44,6 @@ func SetLogLevel(services []log.Loggable, level log.LogLevel) {
 }
 
 var (
-    Release string
-
     logger                      = log.NewLog("sm-server")
     serverLogLevel log.LogLevel = log.INFO
 
@@ -94,9 +92,7 @@ func main() {
         "Timeout for Redis (as a Duration string, e.g. 1s, 20ms, etc.)")
     flag.Parse()
 
-    logger.Info("Starting State Machine Server - Release: %s", Release)
-    // FIXME: why injecting a build with "-X ldflag=server.Release" doesn't work, but main.Release does?
-    server.Release = Release
+    logger.Info("Starting State Machine Server - Rel. %s", server.Release)
 
     if *localOnly {
         logger.Info("Listening on local interface only")
