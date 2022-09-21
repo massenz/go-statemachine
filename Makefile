@@ -43,7 +43,7 @@ queues:
  			sqs create-queue --queue-name $$queue; done >/dev/null
 
 test: $(srcs) $(test_srcs) services queues
-	ginkgo -p $(pkgs)
+	ginkgo $(pkgs)
 
 container: $(out)
 	docker build -f $(dockerfile) -t $(image):$(tag) .

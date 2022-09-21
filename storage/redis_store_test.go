@@ -66,6 +66,8 @@ var _ = Describe("RedisStore", func() {
                 Addr: localAddress,
                 DB:   storage.DefaultRedisDb,
             })
+            // Cleaning up the DB to prevent "dirty" store to impact test results
+            rdb.FlushDB(context.Background())
         })
         It("is healthy", func() {
             Expect(store.Health()).To(Succeed())
@@ -92,7 +94,8 @@ var _ = Describe("RedisStore", func() {
         It("can save configurations", func() {
             var found protos.Configuration
             Expect(store.PutConfig(cfg)).ToNot(HaveOccurred())
-            val, err := rdb.Get(context.Background(), api.GetVersionId(cfg)).Bytes()
+            val, err := rdb.Get(context.Background(),
+                storage.NewKeyForConfig(api.GetVersionId(cfg))).Bytes()
             Expect(err).ToNot(HaveOccurred())
 
             Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
