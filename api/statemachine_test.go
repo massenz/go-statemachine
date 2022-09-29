@@ -166,19 +166,19 @@ var _ = Describe("FSM Protocol Buffers", func() {
                 lander, err := NewStateMachine(&spaceship)
                 Expect(err).ToNot(HaveOccurred())
                 Expect(lander.FSM.State).To(Equal("earth"))
-                Expect(lander.SendEventAsString("launch")).ShouldNot(HaveOccurred())
+                Expect(lander.SendEvent(NewEvent("launch"))).ShouldNot(HaveOccurred())
                 Expect(lander.FSM.State).To(Equal("orbit"))
-                Expect(lander.SendEventAsString("land")).ShouldNot(HaveOccurred())
+                Expect(lander.SendEvent(NewEvent("land"))).ShouldNot(HaveOccurred())
                 Expect(lander.FSM.State).To(Equal("mars"))
             })
             It("should fail for an unsupported transition", func() {
                 lander, _ := NewStateMachine(&spaceship)
-                Expect(lander.SendEventAsString("navigate")).Should(HaveOccurred())
+                Expect(lander.SendEvent(NewEvent("navigate"))).Should(HaveOccurred())
             })
             It("can be reset", func() {
                 lander, _ := NewStateMachine(&spaceship)
-                Expect(lander.SendEventAsString("launch")).ShouldNot(HaveOccurred())
-                Expect(lander.SendEventAsString("land")).ShouldNot(HaveOccurred())
+                Expect(lander.SendEvent(NewEvent("launch"))).ShouldNot(HaveOccurred())
+                Expect(lander.SendEvent(NewEvent("land"))).ShouldNot(HaveOccurred())
                 Expect(lander.FSM.State).To(Equal("mars"))
 
                 // Never mind, Elon, let's go home...
@@ -211,8 +211,8 @@ var _ = Describe("FSM Protocol Buffers", func() {
                 Expect(fsm.FSM).ToNot(BeNil())
                 Expect(fsm.FSM.State).To(Equal("start"))
 
-                Expect(fsm.SendEventAsString("accepted")).ToNot(HaveOccurred())
-                Expect(fsm.SendEventAsString("shipped")).ToNot(HaveOccurred())
+                Expect(fsm.SendEvent(NewEvent("accepted"))).ToNot(HaveOccurred())
+                Expect(fsm.SendEvent(NewEvent("shipped"))).ToNot(HaveOccurred())
 
                 Expect(fsm.FSM.State).To(Equal("shipping"))
                 Expect(len(fsm.FSM.History)).To(Equal(2))

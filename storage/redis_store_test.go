@@ -19,16 +19,15 @@
 package storage_test
 
 import (
-    . "github.com/JiaYongfei/respect/gomega"
-    . "github.com/onsi/ginkgo"
-    . "github.com/onsi/gomega"
-
     "context"
     "fmt"
+    . "github.com/JiaYongfei/respect/gomega"
     "github.com/go-redis/redis/v8"
     "github.com/golang/protobuf/proto"
     "github.com/google/uuid"
     slf4go "github.com/massenz/slf4go/logging"
+    . "github.com/onsi/ginkgo"
+    . "github.com/onsi/gomega"
     "os"
 
     "github.com/massenz/go-statemachine/api"
@@ -101,10 +100,6 @@ var _ = Describe("RedisStore", func() {
             Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
             Expect(&found).To(Respect(cfg))
         })
-        It("should not save nil values", func() {
-            Expect(store.PutConfig(nil)).To(HaveOccurred())
-        })
-
         It("should not fail for a non-existent FSM", func() {
             data, ok := store.GetStateMachine("fake", "bad-config")
             Expect(ok).To(BeFalse())
@@ -146,18 +141,15 @@ var _ = Describe("RedisStore", func() {
             Expect(err).ToNot(HaveOccurred())
 
             Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
-            // NOTE: this fails, even though the protos are actually identical:
+            // NOTE: this fails, even though the Protobufs are actually identical:
             //      Expect(found).To(Respect(*fsm))
-            // it strangely fails on the History field, which is a slice and it actually matches.
+            // it strangely fails on the History field, which is a slice, and actually matches.
             Expect(found.ConfigId).To(Equal(fsm.ConfigId))
             Expect(found.State).To(Equal(fsm.State))
             Expect(found.ConfigId).To(Equal(fsm.ConfigId))
             Expect(found.History).To(HaveLen(len(fsm.History)))
             Expect(found.History[0]).To(Respect(fsm.History[0]))
             Expect(found.History[1]).To(Respect(fsm.History[1]))
-        })
-        It("should return an error on a nil value store", func() {
-            Expect(store.PutConfig(nil)).To(HaveOccurred())
         })
         It("can get events back", func() {
             id := uuid.New().String()
@@ -181,6 +173,56 @@ var _ = Describe("RedisStore", func() {
             var found protos.Event
             Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
             Expect(&found).To(Respect(ev))
+        })
+        It("will return an error for a non-existent event", func() {
+            _, ok := store.GetEvent("fake", "orders")
+            Expect(ok).To(BeFalse())
+        })
+        It("can save an event Outcome", func() {
+            id := uuid.New().String()
+            cfg := "orders"
+            response := &protos.EventOutcome{
+                Code:    protos.EventOutcome_Ok,
+                Dest:    "1234-feed-beef",
+                Details: "this was just a test",
+            }
+            Expect(store.AddEventOutcome(id, cfg, response, storage.NeverExpire)).ToNot(HaveOccurred())
+
+            key := storage.NewKeyForOutcome(id, cfg)
+            val, err := rdb.Get(context.Background(), key).Bytes()
+            Expect(err).ToNot(HaveOccurred())
+            var found protos.EventOutcome
+            Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
+            Expect(&found).To(Respect(response))
+        })
+        It("can get an event Outcome", func() {
+            id := uuid.New().String()
+            cfg := "orders"
+            response := &protos.EventOutcome{
+                Code:    protos.EventOutcome_Ok,
+                Dest:    "1234-feed-beef",
+                Details: "this was just a test",
+            }
+            key := storage.NewKeyForOutcome(id, cfg)
+            val, _ := proto.Marshal(response)
+            _, err := rdb.Set(context.Background(), key, val, storage.NeverExpire).Result()
+            Expect(err).ToNot(HaveOccurred())
+            found, ok := store.GetOutcomeForEvent(id, cfg)
+            Expect(ok).To(BeTrue())
+            Expect(found).To(Respect(response))
+        })
+        It("should gracefully handle a nil Configuration", func() {
+            Expect(store.PutConfig(nil)).To(HaveOccurred())
+        })
+        It("should gracefully handle a nil Statemachine", func() {
+            Expect(store.PutStateMachine("fake", nil)).To(HaveOccurred())
+        })
+        It("should gracefully handle a nil Event", func() {
+            Expect(store.PutEvent(nil, "orders", storage.NeverExpire)).To(HaveOccurred())
+        })
+        It("should gracefully handle a nil Outcome", func() {
+            Expect(store.AddEventOutcome("fake", "test", nil,
+                storage.NeverExpire)).To(HaveOccurred())
         })
     })
 })

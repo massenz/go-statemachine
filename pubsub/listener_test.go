@@ -22,7 +22,6 @@ import (
     . "github.com/onsi/ginkgo"
     . "github.com/onsi/gomega"
 
-    "fmt"
     "github.com/massenz/slf4go/logging"
     "time"
 
@@ -71,7 +70,7 @@ var _ = Describe("A Listener", func() {
                     Details: detail,
                 },
             }
-            go testListener.PostErrorNotification(notification)
+            go testListener.PostNotificationAndReportOutcome(notification)
             select {
             case n := <-notificationsCh:
                 Ω(n.EventId).To(Equal(msg.GetEventId()))
@@ -85,7 +84,6 @@ var _ = Describe("A Listener", func() {
             }
         })
         It("can receive events", func() {
-            done := make(chan interface{})
             event := protos.Event{
                 EventId:    "feed-beef",
                 Originator: "me",
@@ -112,16 +110,21 @@ var _ = Describe("A Listener", func() {
             })).ToNot(HaveOccurred())
 
             go func() {
-                defer close(done)
                 testListener.ListenForMessages()
             }()
             eventsCh <- request
             close(eventsCh)
 
             select {
-            case n := <-notificationsCh:
-                Fail(fmt.Sprintf("unexpected error: %v", n.String()))
-            case <-done:
+            case notification := <-notificationsCh:
+                // First we want to test that the outcome was successful
+                Ω(notification.EventId).To(Equal(event.GetEventId()))
+                Ω(notification.Outcome).ToNot(BeNil())
+                Ω(notification.Outcome.Dest).To(Equal(request.GetDest()))
+                Ω(notification.Outcome.Details).To(ContainSubstring("transitioned"))
+                Ω(notification.Outcome.Code).To(Equal(protos.EventOutcome_Ok))
+
+                // Now we want to test that the state machine was updated
                 fsm, ok := store.GetStateMachine("12345-faa44", "test")
                 Ω(ok).ToNot(BeFalse())
                 Ω(fsm.State).To(Equal("end"))
