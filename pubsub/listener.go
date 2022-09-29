@@ -21,6 +21,7 @@ package pubsub
 import (
     "fmt"
     . "github.com/massenz/go-statemachine/api"
+    "github.com/massenz/go-statemachine/storage"
     log "github.com/massenz/slf4go/logging"
     protos "github.com/massenz/statemachine-proto/golang/api"
     "strings"
@@ -40,13 +41,16 @@ func (listener *EventsListener) SetLogLevel(level log.LogLevel) {
     listener.logger.Level = level
 }
 
-func (listener *EventsListener) PostErrorNotification(errorResponse *protos.EventResponse) {
-    listener.logger.Error("[Event ID: %s]: %s", errorResponse.EventId, errorResponse.GetOutcome().Details)
-
+func (listener *EventsListener) PostNotificationAndReportOutcome(errorResponse *protos.EventResponse) {
+    if errorResponse.Outcome.Code != protos.EventOutcome_Ok {
+        listener.logger.Error("[Event ID: %s]: %s", errorResponse.EventId, errorResponse.GetOutcome().Details)
+    }
     if listener.notifications != nil {
-        listener.logger.Debug("Posting notification of error: %v", errorResponse.GetEventId())
+        listener.logger.Debug("Posting notification: %v", errorResponse.GetEventId())
         listener.notifications <- *errorResponse
     }
+    listener.logger.Debug("Reporting outcome: %v", errorResponse.GetEventId())
+    listener.reportOutcome(errorResponse)
 }
 
 func (listener *EventsListener) ListenForMessages() {
@@ -54,25 +58,26 @@ func (listener *EventsListener) ListenForMessages() {
     for request := range listener.events {
         listener.logger.Debug("Received request %s", request.Event.String())
         if request.Dest == "" {
-            listener.PostErrorNotification(makeResponse(&request,
+            listener.PostNotificationAndReportOutcome(makeResponse(&request,
                 protos.EventOutcome_MissingDestination,
                 fmt.Sprintf("no destination specified")))
             continue
         }
         // TODO: this is an API change and needs to be documented
-        // Destination comrpises both the type (configuration name) and ID of the statemachine,
+        // Destination comprises both the type (configuration name) and ID of the statemachine,
         // separated by the # character: <type>#<id> (e.g., `order#1234`)
         dest := strings.Split(request.Dest, "#")
         if len(dest) != 2 {
-            listener.PostErrorNotification(makeResponse(&request,
+            listener.PostNotificationAndReportOutcome(makeResponse(&request,
                 protos.EventOutcome_MissingDestination,
-                fmt.Sprintf("invalid destination: %s", request.Dest)))
+                fmt.Sprintf("invalid destination [%s] expected <config.name>#<FSM.ID>",
+                    request.Dest)))
             continue
         }
         smType, smId := dest[0], dest[1]
         fsm, ok := listener.store.GetStateMachine(smId, smType)
         if !ok {
-            listener.PostErrorNotification(makeResponse(&request,
+            listener.PostNotificationAndReportOutcome(makeResponse(&request,
                 protos.EventOutcome_FsmNotFound,
                 fmt.Sprintf("statemachine [%s] could not be found", request.Dest)))
             continue
@@ -80,7 +85,7 @@ func (listener *EventsListener) ListenForMessages() {
         // TODO: cache the configuration locally: they are immutable anyway.
         cfg, ok := listener.store.GetConfig(fsm.ConfigId)
         if !ok {
-            listener.PostErrorNotification(makeResponse(&request,
+            listener.PostNotificationAndReportOutcome(makeResponse(&request,
                 protos.EventOutcome_ConfigurationNotFound,
                 fmt.Sprintf("configuration [%s] could not be found", fsm.ConfigId)))
             continue
@@ -90,7 +95,7 @@ func (listener *EventsListener) ListenForMessages() {
             FSM:    fsm,
         }
         if err := cfgFsm.SendEvent(request.Event); err != nil {
-            listener.PostErrorNotification(makeResponse(&request,
+            listener.PostNotificationAndReportOutcome(makeResponse(&request,
                 protos.EventOutcome_TransitionNotAllowed,
                 fmt.Sprintf("event [%s] could not be processed: %v",
                     request.GetEvent().GetTransition().GetEvent(), err)))
@@ -100,12 +105,25 @@ func (listener *EventsListener) ListenForMessages() {
             request.Event.Transition.Event, smId, fsm.State)
         err := listener.store.PutStateMachine(smId, fsm)
         if err != nil {
-            listener.PostErrorNotification(makeResponse(&request,
+            listener.PostNotificationAndReportOutcome(makeResponse(&request,
                 protos.EventOutcome_InternalError,
                 fmt.Sprintf("could not update statemachine [%s] in store: %v",
                     request.Dest, err)))
             continue
         }
+        // All good, we want to report success too.
+        listener.PostNotificationAndReportOutcome(makeResponse(&request,
+            protos.EventOutcome_Ok,
+            fmt.Sprintf("event [%s] transitioned FSM [%s] to state [%s]",
+                request.Event.Transition.Event, smId, fsm.State)))
+    }
+}
+
+func (listener *EventsListener) reportOutcome(response *protos.EventResponse) {
+    smType := strings.Split(response.Outcome.Dest, "#")[0]
+    if err := listener.store.AddEventOutcome(response.EventId, smType, response.Outcome,
+        storage.NeverExpire); err != nil {
+        listener.logger.Error("could not add outcome to store: %v", err)
     }
 }
 

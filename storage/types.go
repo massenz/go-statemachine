@@ -46,8 +46,18 @@ type FiniteStateMachineStorageManager interface {
 type EventStorageManager interface {
     GetEvent(id string, cfg string) (*protos.Event, bool)
     PutEvent(event *protos.Event, cfg string, ttl time.Duration) error
-    AddEventOutcome(id string, cfg string, response *protos.EventOutcome, ttl time.Duration) error
-    GetOutcomeForEvent(id string, cfg string) (*protos.EventOutcome, bool)
+
+    // AddEventOutcome adds the outcome of an event to the storage, given the `eventId` and the
+    // "type" (`Configuration.Name`) of the FSM that received the event.
+    //
+    // Optionally, it will remove the outcome after a given `ttl` (time-to-live); use
+    // `NeverExpire` to keep the outcome forever.
+    AddEventOutcome(eventId string, cfgName string, response *protos.EventOutcome,
+        ttl time.Duration) error
+
+    // GetOutcomeForEvent returns the outcome of an event, given the `eventId` and the "type" of the
+    // FSM that received the event.
+    GetOutcomeForEvent(eventId string, cfgName string) (*protos.EventOutcome, bool)
 }
 
 type StoreManager interface {

@@ -23,7 +23,7 @@ import (
     "github.com/golang/protobuf/proto"
     "github.com/google/uuid"
     log "github.com/massenz/slf4go/logging"
-    tspb "google.golang.org/protobuf/types/known/timestamppb"
+    "google.golang.org/protobuf/types/known/timestamppb"
     "strings"
 
     protos "github.com/massenz/statemachine-proto/golang/api"
@@ -95,29 +95,6 @@ func (x *ConfiguredStateMachine) SendEvent(evt *protos.Event) error {
     return UnexpectedTransitionError
 }
 
-// SendEventAsString is a convenience method which also creates the `Event` proto.
-func (x *ConfiguredStateMachine) SendEventAsString(evt string) error {
-    for _, t := range x.Config.Transitions {
-        if t.From == x.FSM.State && t.Event == evt {
-            event := NewEvent(evt)
-            event.Transition.From = x.FSM.State
-            x.FSM.State = t.To
-            event.Transition.To = x.FSM.State
-            x.FSM.History = append(x.FSM.History, event)
-            return nil
-        }
-    }
-    return UnexpectedTransitionError
-}
-
-func NewEvent(evt string) *protos.Event {
-    return &protos.Event{
-        EventId:    uuid.New().String(),
-        Timestamp:  tspb.Now(),
-        Transition: &protos.Transition{Event: evt},
-    }
-}
-
 func (x *ConfiguredStateMachine) Reset() {
     x.FSM.State = x.Config.StartingState
     x.FSM.History = nil
@@ -186,12 +163,21 @@ func CheckValid(c *protos.Configuration) error {
     return nil
 }
 
+// NewEvent creates a new Event, with the given `eventName` transition.
+func NewEvent(eventName string) *protos.Event {
+    var event = protos.Event{
+        Transition: &protos.Transition{Event: eventName},
+    }
+    UpdateEvent(&event)
+    return &event
+}
+
 // UpdateEvent adds the ID and timestamp to the event, if not already set.
 func UpdateEvent(event *protos.Event) {
     if event.EventId == "" {
         event.EventId = uuid.NewString()
     }
     if event.Timestamp == nil {
-        event.Timestamp = tspb.Now()
+        event.Timestamp = timestamppb.Now()
     }
 }

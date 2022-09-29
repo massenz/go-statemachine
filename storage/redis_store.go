@@ -95,25 +95,39 @@ func (csm *RedisStore) PutConfig(cfg *protos.Configuration) error {
 }
 
 func (csm *RedisStore) PutEvent(event *protos.Event, cfg string, ttl time.Duration) error {
+    if event == nil {
+        return IllegalStoreError
+    }
     key := NewKeyForEvent(event.EventId, cfg)
     return csm.put(key, event, ttl)
 }
 
 func (csm *RedisStore) PutStateMachine(id string, stateMachine *protos.FiniteStateMachine) error {
+    if stateMachine == nil {
+        return IllegalStoreError
+    }
     configName := strings.Split(stateMachine.ConfigId, api.ConfigurationVersionSeparator)[0]
     key := NewKeyForMachine(id, configName)
     return csm.put(key, stateMachine, NeverExpire)
 }
 
 func (csm *RedisStore) AddEventOutcome(id string, cfg string, response *protos.EventOutcome, ttl time.Duration) error {
-    // TODO [#34] Store event outcomes
-    return NotImplementedError
+    if response == nil {
+        return IllegalStoreError
+    }
+    key := NewKeyForOutcome(id, cfg)
+    return csm.put(key, response, ttl)
 }
 
 func (csm *RedisStore) GetOutcomeForEvent(id string, cfg string) (*protos.EventOutcome, bool) {
-    // TODO [#34] Store event outcomes
-    csm.logger.Error("Not implemented")
-    return nil, false
+    key := NewKeyForOutcome(id, cfg)
+    var outcome protos.EventOutcome
+    err := csm.get(key, &outcome)
+    if err != nil {
+        csm.logger.Error("Error retrieving outcome for event `%s`: %s", key, err.Error())
+        return nil, false
+    }
+    return &outcome, true
 }
 
 func (csm *RedisStore) SetTimeout(duration time.Duration) {

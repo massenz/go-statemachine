@@ -87,14 +87,14 @@ func (csm *InMemoryStore) PutEvent(event *protos.Event, cfg string, ttl time.Dur
 }
 
 func (csm *InMemoryStore) AddEventOutcome(id string, cfg string, response *protos.EventOutcome, ttl time.Duration) error {
-    // TODO [#34] Store event outcomes
-    return NotImplementedError
+    key := NewKeyForOutcome(id, cfg)
+    return csm.put(key, response)
 }
 
 func (csm *InMemoryStore) GetOutcomeForEvent(id string, cfg string) (*protos.EventOutcome, bool) {
-    // TODO [#34] Store event outcomes
-    csm.logger.Error("Not implemented")
-    return nil, false
+    key := NewKeyForOutcome(id, cfg)
+    var outcome protos.EventOutcome
+    return &outcome, csm.get(key, &outcome)
 }
 
 func (csm *InMemoryStore) GetConfig(id string) (cfg *protos.Configuration, ok bool) {
