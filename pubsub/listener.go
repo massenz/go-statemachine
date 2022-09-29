@@ -41,16 +41,16 @@ func (listener *EventsListener) SetLogLevel(level log.LogLevel) {
     listener.logger.Level = level
 }
 
-func (listener *EventsListener) PostNotificationAndReportOutcome(errorResponse *protos.EventResponse) {
-    if errorResponse.Outcome.Code != protos.EventOutcome_Ok {
-        listener.logger.Error("[Event ID: %s]: %s", errorResponse.EventId, errorResponse.GetOutcome().Details)
+func (listener *EventsListener) PostNotificationAndReportOutcome(eventResponse *protos.EventResponse) {
+    if eventResponse.Outcome.Code != protos.EventOutcome_Ok {
+        listener.logger.Error("[Event ID: %s]: %s", eventResponse.EventId, eventResponse.GetOutcome().Details)
     }
     if listener.notifications != nil {
-        listener.logger.Debug("Posting notification: %v", errorResponse.GetEventId())
-        listener.notifications <- *errorResponse
+        listener.logger.Debug("Posting notification: %v", eventResponse.GetEventId())
+        listener.notifications <- *eventResponse
     }
-    listener.logger.Debug("Reporting outcome: %v", errorResponse.GetEventId())
-    listener.reportOutcome(errorResponse)
+    listener.logger.Debug("Reporting outcome: %v", eventResponse.GetEventId())
+    listener.reportOutcome(eventResponse)
 }
 
 func (listener *EventsListener) ListenForMessages() {
