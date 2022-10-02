@@ -22,7 +22,6 @@ import (
     "encoding/json"
     "fmt"
     "github.com/gorilla/mux"
-    . "github.com/massenz/go-statemachine/api"
     "net/http"
 )
 
@@ -30,14 +29,9 @@ func GetEventHandler(w http.ResponseWriter, r *http.Request) {
     defer trace(r.RequestURI)()
     defaultContent(w)
 
+    // We don't really need to check for the presence of the parameter,
+    // as the Mux router takes care of all the error handling for us.
     vars := mux.Vars(r)
-    if vars == nil {
-        logger.Error("Unexpected missing path parameter evtId in Request URI: %s",
-            r.RequestURI)
-        http.Error(w, UnexpectedError.Error(), http.StatusMethodNotAllowed)
-        return
-    }
-
     cfgName := vars["cfg_name"]
     evtId := vars["evt_id"]
     logger.Debug("Looking up Event: %s#%s", cfgName, evtId)
@@ -60,16 +54,9 @@ func GetOutcomeHandler(w http.ResponseWriter, r *http.Request) {
     defaultContent(w)
 
     vars := mux.Vars(r)
-    if vars == nil {
-        logger.Error("Unexpected missing path parameter evtId in Request URI: %s",
-            r.RequestURI)
-        http.Error(w, UnexpectedError.Error(), http.StatusMethodNotAllowed)
-        return
-    }
-
     cfgName := vars["cfg_name"]
     evtId := vars["evt_id"]
-    logger.Debug("Looking up Event: %s#%s", cfgName, evtId)
+    logger.Debug("Looking up Outcome for Event: %s#%s", cfgName, evtId)
 
     outcome, ok := storeManager.GetOutcomeForEvent(evtId, cfgName)
     if !ok {
@@ -77,7 +64,6 @@ func GetOutcomeHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
     logger.Debug("Found Event Outcome: %s", outcome.String())
-
     err := json.NewEncoder(w).Encode(MakeOutcomeResponse(outcome))
     if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
