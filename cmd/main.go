@@ -32,6 +32,7 @@ import (
     log "github.com/massenz/slf4go/logging"
     protos "github.com/massenz/statemachine-proto/golang/api"
     "net"
+    "strings"
     "sync"
 )
 
@@ -76,7 +77,11 @@ func main() {
     var localOnly = flag.Bool("local", false,
         "If set, it only listens to incoming requests from the local host")
     var port = flag.Int("http-port", 7399, "HTTP Server port for the REST API")
-    var redisUrl = flag.String("redis", "", "URI for the Redis cluster (host:port)")
+    var redisUrl = flag.String("redis", "", "For single node redis instances: URI "+
+        "for the Redis instance (host:port). For redis clusters: a comma-separated list of redis nodes. "+
+        "If using an ElastiCache redis cluster with cluster mode enabled, you can supply the configuration endpoint.")
+    var cluster = flag.Bool("cluster", false,
+        "Needs to be set if connecting to a Redis instance with cluster mode enabled")
     var awsEndpoint = flag.String("endpoint-url", "",
         "HTTP URL for AWS SQS to connect to; usually best left undefined, "+
             "unless required for local testing purposes (LocalStack uses http://localhost:4566)")
@@ -102,13 +107,20 @@ func main() {
     }
     addr := fmt.Sprintf("%s:%d", host, *port)
 
-    if *redisUrl == "" {
-        logger.Warn("in-memory storage configured, all data will NOT survive a server restart")
-        store = storage.NewInMemoryStore()
-    } else {
+    if *cluster {
+        redisNodes := strings.Split(*redisUrl, ",")
+        logger.Info("Connecting to Redis cluster at with the following nodes:")
+        for _, n := range redisNodes {
+            logger.Info(n)
+        }
+        store = storage.NewRedisClusterStore(redisNodes, *timeout, *maxRetries)
+    } else if *redisUrl != "" {
         logger.Info("Connecting to Redis server at %s", *redisUrl)
         logger.Info("with timeout: %s, max-retries: %d", *timeout, *maxRetries)
         store = storage.NewRedisStore(*redisUrl, 1, *timeout, *maxRetries)
+    } else {
+        logger.Warn("in-memory storage configured, all data will NOT survive a server restart")
+        store = storage.NewInMemoryStore()
     }
     server.SetStore(store)
 
