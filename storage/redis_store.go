@@ -20,6 +20,7 @@ package storage
 
 import (
     "context"
+    "crypto/tls"
     "fmt"
     "github.com/go-redis/redis/v8"
     "github.com/golang/protobuf/proto"
@@ -42,7 +43,7 @@ const (
 
 type RedisStore struct {
     logger     *slf4go.Log
-    client     *redis.Client
+    client     RedisClient
     Timeout    time.Duration
     MaxRetries int
 }
@@ -142,11 +143,30 @@ func NewRedisStoreWithDefaults(address string) StoreManager {
     return NewRedisStore(address, DefaultRedisDb, DefaultTimeout, DefaultMaxRetries)
 }
 
+func NewRedisClusterStore(addresses []string, timeout time.Duration, maxRetries int) StoreManager {
+    logger := slf4go.NewLog(fmt.Sprintf("redis cluster: %v nodes", len(addresses)))
+
+    return &RedisStore{
+        logger: logger,
+        client: redis.NewClusterClient(&redis.ClusterOptions{
+            TLSConfig: &tls.Config{
+                MinVersion: tls.VersionTLS12,
+            },
+            Addrs: addresses,
+        }),
+        Timeout:    timeout,
+        MaxRetries: maxRetries,
+    }
+}
+
 func NewRedisStore(address string, db int, timeout time.Duration, maxRetries int) StoreManager {
     logger := slf4go.NewLog(fmt.Sprintf("redis://%s/%d", address, db))
     return &RedisStore{
         logger: logger,
         client: redis.NewClient(&redis.Options{
+            TLSConfig: &tls.Config{
+                MinVersion: tls.VersionTLS12,
+            },
             Addr: address,
             DB:   db, // 0 means default DB
         }),

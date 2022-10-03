@@ -25,12 +25,12 @@ then
   endpoint="--endpoint-url ${AWS_ENDPOINT}"
 fi
 
-echo -e "./sm-server -port ${SERVER_PORT}  ${endpoint:-} ${DEBUG}\n\
+echo -e "./sm-server -port ${SERVER_PORT}  ${endpoint:-} ${CLUSTER} ${DEBUG}\n\
     -redis ${REDIS}:${REDIS_PORT} -timeout ${TIMEOUT:-25ms} -max-retries ${RETRIES:-3}\n\
     -events ${EVENTS_Q} -errors ${ERRORS_Q}\n\
     $@"
 
-./sm-server -http-port "${SERVER_PORT}"  ${endpoint:-} ${DEBUG} \
+./sm-server -http-port "${SERVER_PORT}"  ${endpoint:-} ${CLUSTER} ${DEBUG} \
     -redis ${REDIS}:${REDIS_PORT} -timeout ${TIMEOUT:-25ms} -max-retries ${RETRIES:-3} \
     -events "${EVENTS_Q}" -errors "${ERRORS_Q}" \
     "$@"
