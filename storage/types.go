@@ -19,9 +19,7 @@
 package storage
 
 import (
-    "context"
     "fmt"
-    "github.com/go-redis/redis/v8"
     log "github.com/massenz/slf4go/logging"
     protos "github.com/massenz/statemachine-proto/golang/api"
     "time"
@@ -70,10 +68,4 @@ type StoreManager interface {
     SetTimeout(duration time.Duration)
     GetTimeout() time.Duration
     Health() error
-}
-
-type RedisClient interface {
-    Get(ctx context.Context, id string) *redis.StringCmd
-    Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
-    Ping(ctx context.Context) *redis.StatusCmd
 }
