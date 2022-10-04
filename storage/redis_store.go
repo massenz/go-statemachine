@@ -141,20 +141,14 @@ func (csm *RedisStore) GetTimeout() time.Duration {
 }
 
 func NewRedisStoreWithDefaults(address string) StoreManager {
-    return NewRedisStore(address, DefaultRedisDb, DefaultTimeout, DefaultMaxRetries)
+    return NewRedisStore(address, false, false, DefaultRedisDb, DefaultTimeout, DefaultMaxRetries)
 }
 
-func NewRedisClusterStore(addresses []string, timeout time.Duration, maxRetries int) StoreManager {
-    logger := slf4go.NewLog(fmt.Sprintf("redis cluster: %v nodes", len(addresses)))
-
+func NewRedisStore(address string, tlsEnabled bool, isCluster bool, db int, timeout time.Duration,
+    maxRetries int) StoreManager {
     return &RedisStore{
-        logger: logger,
-        client: redis.NewClusterClient(&redis.ClusterOptions{
-            TLSConfig: &tls.Config{
-                MinVersion: tls.VersionTLS12,
-            },
-            Addrs: addresses,
-        }),
+        logger:     slf4go.NewLog("redis"),
+        client:     createRedisClient(address, tlsEnabled, isCluster, db),
         Timeout:    timeout,
         MaxRetries: maxRetries,
     }

@@ -32,7 +32,6 @@ import (
     log "github.com/massenz/slf4go/logging"
     protos "github.com/massenz/statemachine-proto/golang/api"
     "net"
-    "strings"
     "sync"
 )
 
@@ -107,20 +106,13 @@ func main() {
     }
     addr := fmt.Sprintf("%s:%d", host, *port)
 
-    if *cluster {
-        redisNodes := strings.Split(*redisUrl, ",")
-        logger.Info("Connecting to Redis cluster at with the following nodes:")
-        for _, n := range redisNodes {
-            logger.Info(n)
-        }
-        store = storage.NewRedisClusterStore(redisNodes, *timeout, *maxRetries)
-    } else if *redisUrl != "" {
-        logger.Info("Connecting to Redis server at %s", *redisUrl)
-        logger.Info("with timeout: %s, max-retries: %d", *timeout, *maxRetries)
-        store = storage.NewRedisStore(*redisUrl, 1, *timeout, *maxRetries)
-    } else {
+    if *redisUrl == "" {
         logger.Warn("in-memory storage configured, all data will NOT survive a server restart")
         store = storage.NewInMemoryStore()
+    } else {
+        logger.Info("Connecting to Redis server at %s", *redisUrl)
+        logger.Info("with timeout: %s, max-retries: %d", *timeout, *maxRetries)
+        store = storage.NewRedisStore(*redisUrl, *tlsEnabled, *cluster, 1, *timeout, *maxRetries)
     }
     server.SetStore(store)
 
