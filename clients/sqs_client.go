@@ -106,5 +106,5 @@ func main() {
     if err != nil {
         panic(err)
     }
-    fmt.Println("Sent event to queue", *q)
+    fmt.Printf("Sent event [%s] to queue %s\n", msg.Event.EventId, *q)
 }

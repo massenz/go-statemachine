@@ -90,10 +90,13 @@ func (listener *EventsListener) ListenForMessages() {
                 fmt.Sprintf("configuration [%s] could not be found", fsm.ConfigId)))
             continue
         }
+        previousState := fsm.State
         cfgFsm := ConfiguredStateMachine{
             Config: cfg,
             FSM:    fsm,
         }
+        listener.logger.Debug("Preparing to send event `%s` for FSM [%s] (current state: %s)",
+            request.Event.Transition.Event, smId, previousState)
         if err := cfgFsm.SendEvent(request.Event); err != nil {
             listener.PostNotificationAndReportOutcome(makeResponse(&request,
                 protos.EventOutcome_TransitionNotAllowed,
@@ -101,8 +104,8 @@ func (listener *EventsListener) ListenForMessages() {
                     request.GetEvent().GetTransition().GetEvent(), err)))
             continue
         }
-        listener.logger.Info("Event `%s` transitioned FSM [%s] to state `%s` - updating store",
-            request.Event.Transition.Event, smId, fsm.State)
+        listener.logger.Debug("Event `%s` transitioned FSM [%s] to state `%s` from state `%s` - updating store",
+            request.Event.Transition.Event, smId, fsm.State, previousState)
         err := listener.store.PutStateMachine(smId, fsm)
         if err != nil {
             listener.PostNotificationAndReportOutcome(makeResponse(&request,

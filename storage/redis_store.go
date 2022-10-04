@@ -44,7 +44,7 @@ const (
 
 type RedisStore struct {
     logger     *slf4go.Log
-    client     *redis.Client
+    client     redis.Cmdable
     Timeout    time.Duration
     MaxRetries int
 }
@@ -141,42 +141,36 @@ func (csm *RedisStore) GetTimeout() time.Duration {
 }
 
 func NewRedisStoreWithDefaults(address string) StoreManager {
-    return NewRedisStore(address, DefaultRedisDb, DefaultTimeout, DefaultMaxRetries)
+    return NewRedisStore(address, false, DefaultRedisDb, DefaultTimeout, DefaultMaxRetries)
 }
 
-func NewRedisStore(address string, db int, timeout time.Duration, maxRetries int) StoreManager {
-
+func NewRedisStore(address string, isCluster bool, db int, timeout time.Duration, maxRetries int) StoreManager {
     logger := slf4go.NewLog(fmt.Sprintf("redis://%s/%d", address, db))
+
     var tlsConfig *tls.Config
+    var client redis.Cmdable
+
     if os.Getenv("REDIS_TLS") != "" {
         logger.Info("Using TLS for Redis connection")
         tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
     }
-    return &RedisStore{
-        logger: logger,
-        client: redis.NewClient(&redis.Options{
+
+    if isCluster {
+        client = redis.NewClusterClient(&redis.ClusterOptions{
+            TLSConfig: tlsConfig,
+            Addrs:     strings.Split(address, ","),
+        })
+    } else {
+        client = redis.NewClient(&redis.Options{
             TLSConfig: tlsConfig,
             Addr:      address,
             DB:        db, // 0 means default DB
-        }),
-        Timeout:    timeout,
-        MaxRetries: maxRetries,
+        })
     }
-}
 
-// FIXME: the "constructor" functions are very similar, the creation pattern will need to be
-//  refactored to avoid code duplication.
-
-func NewRedisStoreWithCreds(address string, db int, timeout time.Duration, maxRetries int,
-    username string, password string) StoreManager {
     return &RedisStore{
-        logger: slf4go.NewLog(fmt.Sprintf("redis:%s", address)),
-        client: redis.NewClient(&redis.Options{
-            Addr:     address,
-            Username: username,
-            Password: password,
-            DB:       db,
-        }),
+        logger:     slf4go.NewLog(fmt.Sprintf("redis://%s/%d", address, db)),
+        client:     client,
         Timeout:    timeout,
         MaxRetries: maxRetries,
     }
