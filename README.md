@@ -453,6 +453,8 @@ Usage of build/bin/sm-server:
     	The name of the notification topic in SQS to publish events' outcomes to; if not specified, no outcomes will be published
   -redis string
     	URI for the Redis cluster (host:port)
+  -cluster
+        Enables connecting to a Redis deployment in cluster mode
   -timeout duration
     	Timeout for Redis (as a Duration string, e.g. 1s, 20ms, etc.) (default 200ms)
   -trace
