@@ -175,9 +175,7 @@ func NewRedisStore(address string, db int, timeout time.Duration, maxRetries int
             TLSConfig: tlsConfig,
             Addr:      address,
             DB:        db, // 0 means default DB
-        }),
-        Timeout:    timeout,
-        MaxRetries: maxRetries,
+        })
     }
 }
 
