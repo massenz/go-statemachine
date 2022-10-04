@@ -104,7 +104,7 @@ func (listener *EventsListener) ListenForMessages() {
                     request.GetEvent().GetTransition().GetEvent(), err)))
             continue
         }
-        listener.logger.Info("Event `%s` transitioned FSM [%s] to state `%s` from state `%s` - updating store",
+        listener.logger.Debug("Event `%s` transitioned FSM [%s] to state `%s` from state `%s` - updating store",
             request.Event.Transition.Event, smId, fsm.State, previousState)
         err := listener.store.PutStateMachine(smId, fsm)
         if err != nil {
