@@ -22,16 +22,19 @@ import (
     "github.com/massenz/go-statemachine/storage"
     log "github.com/massenz/slf4go/logging"
     "net/http"
+    "strings"
     "time"
 
     "github.com/gorilla/mux"
 )
 
 const (
-    Api                    = "/api/v1"
+    ApiPrefix              = "/api/v1"
     HealthEndpoint         = "/health"
-    ConfigurationsEndpoint = Api + "/configurations"
-    StatemachinesEndpoint  = Api + "/statemachines"
+    ConfigurationsEndpoint = "configurations"
+    StatemachinesEndpoint  = "statemachines"
+    EventsEndpoint         = "events"
+    EventsOutcome          = "outcome"
 )
 
 var (
@@ -69,20 +72,29 @@ func SetLogLevel(level log.LogLevel) {
 // NewRouter returns a gorilla/mux Router for the server routes; exposed so
 // that path params are testable.
 func NewRouter() *mux.Router {
-
-    // TODO: Move all the Handlers to a `handlers` package.
     r := mux.NewRouter()
     r.HandleFunc(HealthEndpoint, HealthHandler).Methods("GET")
-    r.HandleFunc(ConfigurationsEndpoint, CreateConfigurationHandler).Methods("POST")
-    r.HandleFunc(ConfigurationsEndpoint+"/{cfg_id}", GetConfigurationHandler).Methods("GET")
-    r.HandleFunc(StatemachinesEndpoint, CreateStatemachineHandler).Methods("POST")
-    r.HandleFunc(StatemachinesEndpoint+"/{statemachine_id}", GetStatemachineHandler).Methods("GET")
+
+    r.HandleFunc(strings.Join([]string{ApiPrefix, ConfigurationsEndpoint}, "/"),
+        CreateConfigurationHandler).Methods("POST")
+    r.HandleFunc(strings.Join([]string{ApiPrefix, ConfigurationsEndpoint, "{cfg_id}"}, "/"),
+        GetConfigurationHandler).Methods("GET")
+
+    r.HandleFunc(strings.Join([]string{ApiPrefix, StatemachinesEndpoint}, "/"),
+        CreateStatemachineHandler).Methods("POST")
+    r.HandleFunc(strings.Join([]string{ApiPrefix, StatemachinesEndpoint, "{cfg_name}", "{sm_id}"}, "/"),
+        GetStatemachineHandler).Methods("GET")
+
+    r.HandleFunc(strings.Join([]string{ApiPrefix, EventsEndpoint, "{cfg_name}", "{evt_id}"}, "/"),
+        GetEventHandler).Methods("GET")
+    r.HandleFunc(strings.Join([]string{ApiPrefix, EventsEndpoint, EventsOutcome, "{cfg_name}", "{evt_id}"}, "/"),
+        GetOutcomeHandler).Methods("GET")
+
     return r
 }
 
 func NewHTTPServer(addr string, logLevel log.LogLevel) *http.Server {
     logger.Level = logLevel
-
     return &http.Server{
         Addr:    addr,
         Handler: NewRouter(),

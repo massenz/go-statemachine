@@ -23,6 +23,7 @@ import (
     "github.com/google/uuid"
     "github.com/gorilla/mux"
     "net/http"
+    "strings"
 
     . "github.com/massenz/go-statemachine/api"
     "github.com/massenz/statemachine-proto/golang/api"
@@ -65,7 +66,8 @@ func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    w.Header().Add("Location", StatemachinesEndpoint+"/"+request.ID)
+    w.Header().Add("Location", strings.Join([]string{ApiPrefix, StatemachinesEndpoint, cfg.Name,
+        request.ID}, "/"))
     w.WriteHeader(http.StatusCreated)
     err = json.NewEncoder(w).Encode(&StateMachineResponse{
         ID:           request.ID,
@@ -88,10 +90,11 @@ func GetStatemachineHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    smId := vars["statemachine_id"]
-    logger.Debug("Looking up FSM %s", smId)
+    cfgName := vars["cfg_name"]
+    smId := vars["sm_id"]
+    logger.Debug("Looking up FSM %s#%s", cfgName, smId)
 
-    stateMachine, ok := storeManager.GetStateMachine(smId)
+    stateMachine, ok := storeManager.GetStateMachine(smId, cfgName)
     if !ok {
         http.Error(w, "State Machine not found", http.StatusNotFound)
         return

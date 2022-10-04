@@ -36,19 +36,11 @@ import (
 // TODO: should we need to generalize and abstract the implementation of a Subscriber?
 //  This would be necessary if we were to implement a different message broker (e.g., Kafka)
 
-type SqsSubscriber struct {
-    logger          *log.Log
-    client          *sqs.SQS
-    events          chan<- protos.EventRequest
-    Timeout         time.Duration
-    PollingInterval time.Duration
-}
-
-// getSqsClient connects to AWS and obtains an SQS client; passing `nil` as the `sqsUrl` will
+// getSqsClient connects to AWS and obtains an SQS client; passing `nil` as the `awsEndpointUrl` will
 // connect by default to AWS; use a different (possibly local) URL for a LocalStack test deployment.
-func getSqsClient(sqsUrl *string) *sqs.SQS {
+func getSqsClient(awsEndpointUrl *string) *sqs.SQS {
     var sess *session.Session
-    if sqsUrl == nil {
+    if awsEndpointUrl == nil {
         sess = session.Must(session.NewSessionWithOptions(session.Options{
             SharedConfigState: session.SharedConfigEnable,
         }))
@@ -56,13 +48,13 @@ func getSqsClient(sqsUrl *string) *sqs.SQS {
         region, found := os.LookupEnv("AWS_REGION")
         if !found {
             fmt.Printf("No AWS Region configured, cannot connect to SQS provider at %s\n",
-                *sqsUrl)
+                *awsEndpointUrl)
             return nil
         }
         sess = session.Must(session.NewSessionWithOptions(session.Options{
             SharedConfigState: session.SharedConfigEnable,
             Config: aws.Config{
-                Endpoint: sqsUrl,
+                Endpoint: awsEndpointUrl,
                 Region:   &region,
             },
         }))
@@ -94,6 +86,7 @@ func (s *SqsSubscriber) SetLogLevel(level log.LogLevel) {
 // Subscribe runs until signaled on the Done channel and listens for incoming Events
 func (s *SqsSubscriber) Subscribe(topic string, done <-chan interface{}) {
     queueUrl := GetQueueUrl(s.client, topic)
+    s.logger = log.NewLog(fmt.Sprintf("SQS-Sub{%s}", topic))
     s.logger.Info("SQS Subscriber started for queue: %s", queueUrl)
 
     timeout := int64(s.Timeout.Seconds())
@@ -172,6 +165,7 @@ func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
         ReceiptHandle: msg.ReceiptHandle,
     })
     if err != nil {
+        // FIXME: add retries
         errDetails := fmt.Sprintf("Failed to remove message %v from SQS", msg.MessageId)
         s.logger.Error("%s: %v", errDetails, err)
         // TODO: publish error to DLQ, should also retry removal here.

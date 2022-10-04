@@ -1,8 +1,7 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Run gRPC Client" type="GoApplicationRunConfiguration" factoryName="Go Application" editBeforeRun="true">
+  <configuration default="false" name="Run gRPC Client" type="GoApplicationRunConfiguration" factoryName="Go Application">
     <module name="statemachine" />
     <working_directory value="$PROJECT_DIR$" />
-    <parameters value="-addr :7398 -dest 674ab2cf-f8e3-40c2-95d7-1eaa0cec7bf4 -evt ship" />
     <kind value="FILE" />
     <package value="github.com/massenz/go-statemachine/clients" />
     <directory value="$PROJECT_DIR$" />

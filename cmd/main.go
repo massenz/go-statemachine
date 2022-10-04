@@ -44,8 +44,6 @@ func SetLogLevel(services []log.Loggable, level log.LogLevel) {
 }
 
 var (
-    Release string
-
     logger                      = log.NewLog("sm-server")
     serverLogLevel log.LogLevel = log.INFO
 
@@ -60,8 +58,8 @@ var (
     // TODO: for now blocking channels; we will need to confirm
     //  whether we can support a fully concurrent system with a
     //  buffered channel
-    errorsCh chan pubsub.EventErrorMessage = nil
-    eventsCh                               = make(chan protos.EventRequest)
+    notificationsCh chan protos.EventResponse = nil
+    eventsCh                                  = make(chan protos.EventRequest)
 
     wg sync.WaitGroup
 )
@@ -83,10 +81,10 @@ func main() {
         "HTTP URL for AWS SQS to connect to; usually best left undefined, "+
             "unless required for local testing purposes (LocalStack uses http://localhost:4566)")
     var eventsTopic = flag.String("events", "", "If defined, it will attempt to connect "+
-        "to the given SQS Queue (ignores any value that is passed via the -kafka flag)")
-    var dlqTopic = flag.String("errors", "",
-        "The name of the Dead-Letter Queue ("+"DLQ) in SQS to post errors to; if not "+
-            "specified, the DLQ will not be used")
+        "to the given SQS Queue to receive events from the Pub/Sub system")
+    var notificationsTopic = flag.String("notifications", "",
+        "The name of the notification topic in SQS to publish events' outcomes to; if not "+
+            "specified, no outcomes will be published")
     var grpcPort = flag.Int("grpc-port", 7398, "The port for the gRPC server")
     var maxRetries = flag.Int("max-retries", storage.DefaultMaxRetries,
         "Max number of attempts for a recoverable error to be retried against the Redis cluster")
@@ -94,9 +92,7 @@ func main() {
         "Timeout for Redis (as a Duration string, e.g. 1s, 20ms, etc.)")
     flag.Parse()
 
-    logger.Info("Starting State Machine Server - Release: %s", Release)
-    // FIXME: why injecting a build with "-X ldflag=server.Release" doesn't work, but main.Release does?
-    server.Release = Release
+    logger.Info("Starting State Machine Server - Rel. %s", server.Release)
 
     if *localOnly {
         logger.Info("Listening on local interface only")
@@ -116,6 +112,8 @@ func main() {
     }
     server.SetStore(store)
 
+    // TODO: we should allow to start the server using solely the gRPC interface,
+    //  without SQS to receive events.
     if *eventsTopic == "" {
         logger.Fatal(fmt.Errorf("no event topic configured, state machines will not " +
             "be able to receive events"))
@@ -126,19 +124,19 @@ func main() {
         panic("Cannot create a valid SQS Subscriber")
     }
 
-    if *dlqTopic != "" {
-        logger.Info("Configuring DLQ Topic: %s", *dlqTopic)
-        errorsCh = make(chan pubsub.EventErrorMessage)
-        defer close(errorsCh)
-        pub = pubsub.NewSqsPublisher(errorsCh, awsEndpoint)
+    if *notificationsTopic != "" {
+        logger.Info("Configuring DLQ Topic: %s", *notificationsTopic)
+        notificationsCh = make(chan protos.EventResponse)
+        defer close(notificationsCh)
+        pub = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint)
         if pub == nil {
             panic("Cannot create a valid SQS Publisher")
         }
-        go pub.Publish(*dlqTopic)
+        go pub.Publish(*notificationsTopic)
     }
     listener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
         EventsChannel:        eventsCh,
-        NotificationsChannel: errorsCh,
+        NotificationsChannel: notificationsCh,
         StatemachinesStore:   store,
         // TODO: workers pool not implemented yet.
         ListenersPoolSize: 0,
@@ -195,6 +193,7 @@ func startGrpcServer(port int, events chan<- protos.EventRequest) {
     grpcServer, err := grpc.NewGrpcServer(&grpc.Config{
         EventsChannel: events,
         Logger:        logger,
+        Store:         store,
     })
     err = grpcServer.Serve(l)
     if err != nil {

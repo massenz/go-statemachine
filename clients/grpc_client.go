@@ -22,45 +22,81 @@ import (
     "context"
     "flag"
     "fmt"
-    "github.com/google/uuid"
-    "github.com/massenz/statemachine-proto/golang/api"
+    "github.com/massenz/go-statemachine/api"
+    protos "github.com/massenz/statemachine-proto/golang/api"
     "google.golang.org/grpc"
-    "google.golang.org/protobuf/types/known/timestamppb"
+    "google.golang.org/protobuf/encoding/protojson"
+    "strings"
+    "time"
 )
 
 func main() {
-    serverAddr := flag.String("addr", ":4567", "The address (host:port) for the GRPC server")
-    fsmId := flag.String("dest", "", "The ID for the FSM to send an Event to")
-    event := flag.String("evt", "", "The Event for the FSM")
-    flag.Parse()
-
-    if *fsmId == "" || *event == "" {
-        panic(fmt.Errorf("must specify both of -id and -evt"))
-    }
-    fmt.Printf("Publishing Event `%s` for FSM `%s` to gRPC Server: [%s]\n",
-        *event, *fsmId, *serverAddr)
+    serverAddr := flag.String("addr", "localhost:7398",
+        "The address (host:port) for the GRPC server")
 
     clientOptions := []grpc.DialOption{grpc.WithInsecure()}
     cc, _ := grpc.Dial(*serverAddr, clientOptions...)
-    client := api.NewStatemachineServiceClient(cc)
+    client := protos.NewStatemachineServiceClient(cc)
+
+    start := time.Now()
+    // Create a new Order tracked as an FSM
+    putResponse, err := client.PutFiniteStateMachine(context.Background(),
+        &protos.FiniteStateMachine{ConfigId: "test.orders:v3"})
+    if err != nil {
+        fmt.Printf("could not create FSM: %s\n", err)
+        return
+    }
+    fmt.Println("Created FSM with ID:", putResponse.Id)
+    fsm, err := protojson.Marshal(putResponse.Fsm)
+    if err != nil {
+        return
+    }
+    fmt.Println(string(fsm))
 
     // Fake order
-    order := NewOrderDetails(uuid.New().String(), "cust-1234", 123.55)
-    response, err := client.ConsumeEvent(context.Background(),
-        &api.EventRequest{
-            Event: &api.Event{
-                EventId:   uuid.NewString(),
-                Timestamp: timestamppb.Now(),
-                Transition: &api.Transition{
-                    Event: *event,
-                },
-                Details:    order.String(),
-                Originator: "new gRPC Client with details",
-            },
-            Dest: *fsmId,
+    order := NewOrderDetails(putResponse.Id, "cust-1234", 123.55)
+
+    for _, event := range []string{"accept", "ship", "foo", "deliver", "sign"} {
+        if err := sendEvent(client, order, event); err != nil {
+            fmt.Println("ERROR:", err)
+            continue
+        }
+    }
+    fmt.Println("Total time:", time.Since(start))
+}
+
+func sendEvent(client protos.StatemachineServiceClient, order *OrderDetails, event string) (err error) {
+    // Once created, we want to `accept` the order
+    evt := api.NewEvent(event)
+    evt.Details = order.String()
+    response, err := client.ProcessEvent(context.Background(),
+        &protos.EventRequest{
+            Event: evt,
+            Dest:  strings.Join([]string{"test.orders", order.OrderId}, "#"),
         })
     if err != nil {
-        panic(err)
+        fmt.Printf("Error: %s\n", err)
+        return
     }
-    fmt.Printf("Response: %v\n", response)
+    evtId := response.GetEventId()
+    fmt.Println("Event ID:", evtId)
+
+    // Simulate a wait for the FSM to process the event
+    time.Sleep(5 * time.Millisecond)
+
+    outcome, err := client.GetEventOutcome(context.Background(), &protos.GetRequest{
+        Id: strings.Join([]string{"test.orders", evtId}, "#"),
+    })
+    if err != nil {
+        fmt.Println("Cannot get Outcome:", err)
+        return
+    }
+
+    value, err := protojson.Marshal(outcome)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+    fmt.Println("Outcome:", string(value))
+    return
 }

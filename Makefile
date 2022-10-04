@@ -1,41 +1,59 @@
 # Copyright (c) 2022 AlertAvert.com.  All rights reserved.
-# (Reluctantly) Created by M. Massenzio, 2022-03-14
+# Created by M. Massenzio, 2022-03-14
 
-pkgs := ./api ./grpc ./pubsub ./server ./storage
 bin := build/bin
 out := $(bin)/sm-server
 tag := $(shell ./get-tag)
 image := massenz/statemachine
+module := $(shell go list -m)
 
 compose := docker/docker-compose.yaml
 dockerfile := docker/Dockerfile
 
-build: cmd/main.go
-	go build -ldflags "-X main.Release=$(tag)" -o $(out) cmd/main.go
+# Source files & Test files definitions
+#
+# Edit only the packages list, when adding new functionality,
+# the rest is deduced automatically.
+#
+pkgs := ./api ./grpc ./pubsub ./server ./storage
+all_go := $(shell for d in $(pkgs); do find $$d -name "*.go"; done)
+test_srcs := $(shell for d in $(pkgs); do find $$d -name "*_test.go"; done)
+srcs := $(filter-out $(test_srcs),$(all_go))
+
+# Builds the server
+#
+$(out): cmd/main.go $(srcs)
+	go build -ldflags "-X $(module)/server.Release=$(tag)" -o $(out) cmd/main.go
 	@chmod +x $(out)
 
-$(out): build
+build: $(out)
 
+# Convenience targets to run locally containers and
+# setup the test environments.
+#
+# TODO: will be replaced once we adopt TestContainers
+# (see Issue # 26)
 services:
 	@docker-compose -f $(compose) up -d
 
 queues:
 	@for queue in events notifications; do \
-		aws --no-cli-pager --endpoint-url=http://localhost:4566 --region us-west-2 \
+		aws --no-cli-pager --endpoint-url=http://localhost:4566 \
+			--region us-west-2 \
  			sqs create-queue --queue-name $$queue; done >/dev/null
 
-test: $(out) services queues
-	ginkgo -p $(pkgs)
+test: $(srcs) $(test_srcs) services queues
+	ginkgo $(pkgs)
 
 container: $(out)
 	docker build -f $(dockerfile) -t $(image):$(tag) .
 
 # Runs test coverage and displays the results in browser
-cov: build services queues
+cov: $(srcs) $(test_srcs)
 	@go test -coverprofile=/tmp/cov.out $(pkgs)
 	@go tool cover -html=/tmp/cov.out
 
 clean:
-	@rm $(out)
+	@rm -f $(out)
 	@docker-compose -f $(compose) down
-	@docker rmi $(image):$(tag)
+	@docker rmi $(shell docker images -q --filter=reference=$(image))
