@@ -78,7 +78,7 @@ func main() {
     var port = flag.Int("http-port", 7399, "HTTP Server port for the REST API")
     var redisUrl = flag.String("redis", "", "For single node redis instances: URI "+
         "for the Redis instance (host:port). For redis clusters: a comma-separated list of redis nodes. "+
-        "If using an ElastiCache redis cluster with cluster mode enabled, you can supply the configuration endpoint.")
+        "If using an ElastiCache Redis cluster with cluster mode enabled, you can supply the configuration endpoint.")
     var cluster = flag.Bool("cluster", false,
         "Needs to be set if connecting to a Redis instance with cluster mode enabled")
     var awsEndpoint = flag.String("endpoint-url", "",

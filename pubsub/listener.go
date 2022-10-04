@@ -95,6 +95,8 @@ func (listener *EventsListener) ListenForMessages() {
             Config: cfg,
             FSM:    fsm,
         }
+        listener.logger.Debug("Preparing to send event `%s` for FSM [%s] (current state: %s)",
+            request.Event.Transition.Event, smId, previousState)
         if err := cfgFsm.SendEvent(request.Event); err != nil {
             listener.PostNotificationAndReportOutcome(makeResponse(&request,
                 protos.EventOutcome_TransitionNotAllowed,
