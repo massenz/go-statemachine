@@ -2,7 +2,7 @@
   <configuration default="false" name="Run SQS Client" type="GoApplicationRunConfiguration" factoryName="Go Application" editBeforeRun="true">
     <module name="statemachine" />
     <working_directory value="$PROJECT_DIR$" />
-    <parameters value="-endpoint http://localhost:4566 -q events -dest 8033049e-caae-4cb1-9fe4-bc02ff26bc26 -evt accept" />
+    <parameters value="-endpoint http://localhost:4566 -q events -dest test.orders#25 -evt ship" />
     <kind value="FILE" />
     <package value="github.com/massenz/go-statemachine/clients" />
     <directory value="$PROJECT_DIR$" />
