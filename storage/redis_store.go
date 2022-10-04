@@ -26,6 +26,7 @@ import (
     "github.com/golang/protobuf/proto"
     slf4go "github.com/massenz/slf4go/logging"
     "math/rand"
+    "os"
     "strings"
     "time"
 
@@ -140,27 +141,27 @@ func (csm *RedisStore) GetTimeout() time.Duration {
 }
 
 func NewRedisStoreWithDefaults(address string) StoreManager {
-    return NewRedisStore(address, false, false, DefaultRedisDb, DefaultTimeout, DefaultMaxRetries)
+    return NewRedisStore(address, false, DefaultRedisDb, DefaultTimeout, DefaultMaxRetries)
 }
 
-func NewRedisStore(address string, tlsEnabled bool, isCluster bool, db int, timeout time.Duration,
-    maxRetries int) StoreManager {
+func NewRedisStore(address string, isCluster bool, db int, timeout time.Duration, maxRetries int) StoreManager {
+    logger := slf4go.NewLog(fmt.Sprintf("redis://%s/%d", address, db))
+
+    var tlsConfig *tls.Config
+    if os.Getenv("REDIS_TLS") != "" {
+        logger.Info("Using TLS for Redis connection")
+        tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+    }
+
     return &RedisStore{
-        logger:     slf4go.NewLog("redis"),
-        client:     createRedisClient(address, tlsEnabled, isCluster, db),
+        logger:     slf4go.NewLog(fmt.Sprintf("redis://%s/%d", address, db)),
+        client:     createRedisClient(address, isCluster, db, tlsConfig),
         Timeout:    timeout,
         MaxRetries: maxRetries,
     }
 }
 
-func createRedisClient(address string, tlsEnabled bool, isCluster bool, db int) RedisClient {
-    tlsConfig := &tls.Config{}
-    if tlsEnabled {
-        tlsConfig = &tls.Config{
-            MinVersion: tls.VersionTLS12,
-        }
-    }
-
+func createRedisClient(address string, isCluster bool, db int, tlsConfig *tls.Config) RedisClient {
     if isCluster {
         return redis.NewClusterClient(&redis.ClusterOptions{
             TLSConfig: tlsConfig,

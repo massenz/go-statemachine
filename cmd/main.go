@@ -112,7 +112,7 @@ func main() {
     } else {
         logger.Info("Connecting to Redis server at %s", *redisUrl)
         logger.Info("with timeout: %s, max-retries: %d", *timeout, *maxRetries)
-        store = storage.NewRedisStore(*redisUrl, *tlsEnabled, *cluster, 1, *timeout, *maxRetries)
+        store = storage.NewRedisStore(*redisUrl, *cluster, 1, *timeout, *maxRetries)
     }
     server.SetStore(store)
 
