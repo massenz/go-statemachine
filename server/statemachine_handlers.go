@@ -66,7 +66,7 @@ func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    w.Header().Add("Location", strings.Join([]string{StatemachinesEndpoint, cfg.Name,
+    w.Header().Add("Location", strings.Join([]string{ApiPrefix, StatemachinesEndpoint, cfg.Name,
         request.ID}, "/"))
     w.WriteHeader(http.StatusCreated)
     err = json.NewEncoder(w).Encode(&StateMachineResponse{

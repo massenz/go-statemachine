@@ -65,7 +65,8 @@ var _ = Describe("Configuration Handlers", func() {
                 configJson, err := ioutil.ReadFile("../data/orders.json")
                 Expect(err).ToNot(HaveOccurred())
                 body := bytes.NewReader(configJson)
-                req = httptest.NewRequest(http.MethodPost, server.ConfigurationsEndpoint, body)
+                req = httptest.NewRequest(http.MethodPost,
+                    strings.Join([]string{server.ApiPrefix, server.ConfigurationsEndpoint}, "/"), body)
             })
 
             It("should succeed", func() {
@@ -98,7 +99,8 @@ var _ = Describe("Configuration Handlers", func() {
         Context("with an invalid JSON", func() {
             var body io.Reader
             BeforeEach(func() {
-                req = httptest.NewRequest(http.MethodPost, server.ConfigurationsEndpoint, body)
+                req = httptest.NewRequest(http.MethodPost,
+                    strings.Join([]string{server.ApiPrefix, server.ConfigurationsEndpoint}, "/"), body)
             })
             It("without name, states or transitions, will fail", func() {
                 body = strings.NewReader(`{
@@ -146,7 +148,8 @@ var _ = Describe("Configuration Handlers", func() {
             cfgId = GetVersionId(&spaceship)
         })
         It("with a valid ID should succeed", func() {
-            endpoint := strings.Join([]string{server.ConfigurationsEndpoint, cfgId}, "/")
+            endpoint := strings.Join([]string{server.ApiPrefix, server.ConfigurationsEndpoint,
+                cfgId}, "/")
             req = httptest.NewRequest(http.MethodGet, endpoint, nil)
             var result api.Configuration
             router.ServeHTTP(writer, req)
@@ -162,13 +165,14 @@ var _ = Describe("Configuration Handlers", func() {
             }
         })
         It("with an invalid ID, it will return Not Found", func() {
-            endpoint := server.ConfigurationsEndpoint + "/fake:v3"
+            endpoint := strings.Join([]string{server.ApiPrefix, server.ConfigurationsEndpoint,
+                "fake:v3"}, "/")
             req = httptest.NewRequest(http.MethodGet, endpoint, nil)
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusNotFound))
         })
         It("without ID, it will fail with a NOT ALLOWED error", func() {
-            endpoint := server.ConfigurationsEndpoint
+            endpoint := strings.Join([]string{server.ApiPrefix, server.ConfigurationsEndpoint}, "/")
             req = httptest.NewRequest(http.MethodGet, endpoint, nil)
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusMethodNotAllowed))

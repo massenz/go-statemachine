@@ -80,7 +80,7 @@ var _ = Describe("SQS Publisher", func() {
                 Fail("timed out waiting for Publisher to exit")
             }
         })
-        It("won't publish successful outcomes", func() {
+        It("will publish successful outcomes", func() {
             notification := protos.EventResponse{
                 EventId: "dead-beef",
                 Outcome: &protos.EventOutcome{
@@ -94,7 +94,9 @@ var _ = Describe("SQS Publisher", func() {
             }()
             notificationsCh <- notification
             m := getSqsMessage(getQueueName(notificationsQueue))
-            Expect(m).To(BeNil())
+            var response protos.EventResponse
+            Expect(proto.UnmarshalText(*m.Body, &response)).ShouldNot(HaveOccurred())
+            Expect(&response).To(Respect(&notification))
             close(notificationsCh)
 
             select {
@@ -141,7 +143,7 @@ var _ = Describe("SQS Publisher", func() {
             done := make(chan interface{})
             go func() {
                 // This is necessary as we make assertions in this goroutine,
-                //and we want to make sure we can see the errors if they fail.
+                // and we want to make sure we can see the errors if they fail.
                 defer GinkgoRecover()
                 defer close(done)
                 for i := range [10]int{} {

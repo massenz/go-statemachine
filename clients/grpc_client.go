@@ -56,7 +56,7 @@ func main() {
     // Fake order
     order := NewOrderDetails(putResponse.Id, "cust-1234", 123.55)
 
-    for _, event := range []string{"accept", "ship", "deliver", "sign"} {
+    for _, event := range []string{"accept", "ship", "foo", "deliver", "sign"} {
         if err := sendEvent(client, order, event); err != nil {
             fmt.Println("ERROR:", err)
             continue

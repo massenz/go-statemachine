@@ -27,10 +27,13 @@ import (
     protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
-// NewSqsPublisher will create a new `Publisher` to send error notifications to
-// an SQS `dead-letter queue`.
-func NewSqsPublisher(errorsChannel <-chan protos.EventResponse, sqsUrl *string) *SqsPublisher {
-    client := getSqsClient(sqsUrl)
+// NewSqsPublisher will create a new `Publisher` to send error notifications received on the
+// `errorsChannel` to an SQS `dead-letter queue`.
+//
+// The `awsUrl` is the URL of the AWS SQS service, which can be obtained from the AWS Console,
+// or by the local AWS CLI.
+func NewSqsPublisher(errorsChannel <-chan protos.EventResponse, awsUrl *string) *SqsPublisher {
+    client := getSqsClient(awsUrl)
     if client == nil {
         return nil
     }
@@ -65,16 +68,11 @@ func GetQueueUrl(client *sqs.SQS, topic string) string {
 // Publish sends an error message to the DLQ `topic`
 func (s *SqsPublisher) Publish(topic string) {
     queueUrl := GetQueueUrl(s.client, topic)
+    s.logger = log.NewLog(fmt.Sprintf("SQS-Pub{%s}", topic))
     s.logger.Info("SQS Publisher started for queue: %s", queueUrl)
-
     for eventResponse := range s.errors {
         delay := int64(0)
-        // Sanity check that this really is an error.
-        if eventResponse.GetOutcome().GetCode() == protos.EventOutcome_Ok {
-            s.logger.Error("Received non-error response: %v", eventResponse.String())
-            continue
-        }
-        s.logger.Debug("Publishing %s to %s", eventResponse.String(), queueUrl)
+        s.logger.Debug("[%s] %s", eventResponse.String(), queueUrl)
         msgResult, err := s.client.SendMessage(&sqs.SendMessageInput{
             DelaySeconds: &delay,
             // Encodes the Event as a string, using Protobuf implementation.
@@ -85,7 +83,7 @@ func (s *SqsPublisher) Publish(topic string) {
             s.logger.Error("Cannot publish eventResponse (%s): %v", eventResponse.String(), err)
             continue
         }
-        s.logger.Debug("Error sent to DLQ: %s", *msgResult.MessageId)
+        s.logger.Debug("Notification successfully posted to SQS: %s", *msgResult.MessageId)
     }
     s.logger.Info("SQS Publisher exiting")
 }
