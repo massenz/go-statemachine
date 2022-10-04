@@ -51,3 +51,23 @@ type StateMachineResponse struct {
     ID           string                     `json:"id"`
     StateMachine *protos.FiniteStateMachine `json:"statemachine"`
 }
+
+// EventResponse is returned as a response to a GET Event request
+type EventResponse struct {
+    ID    string        `json:"id"`
+    Event *protos.Event `json:"event"`
+}
+
+type OutcomeResponse struct {
+    StatusCode  string `json:"status_code"`
+    Message     string `json:"message"`
+    Destination string `json:"destination"`
+}
+
+func MakeOutcomeResponse(outcome *protos.EventOutcome) *OutcomeResponse {
+    return &OutcomeResponse{
+        StatusCode:  outcome.Code.String(),
+        Message:     outcome.Details,
+        Destination: outcome.Dest,
+    }
+}

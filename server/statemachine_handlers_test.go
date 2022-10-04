@@ -80,7 +80,8 @@ var _ = Describe("Handlers", func() {
                     StartingState: "start",
                 }
                 Expect(store.PutConfig(config)).ToNot(HaveOccurred())
-                req = httptest.NewRequest(http.MethodPost, server.StatemachinesEndpoint,
+                req = httptest.NewRequest(http.MethodPost,
+                    strings.Join([]string{server.ApiPrefix, server.StatemachinesEndpoint}, "/"),
                     ReaderFromRequest(request))
             })
 
@@ -88,7 +89,8 @@ var _ = Describe("Handlers", func() {
                 router.ServeHTTP(writer, req)
                 Expect(writer.Code).To(Equal(http.StatusCreated))
                 Expect(writer.Header().Get("Location")).To(Equal(
-                    server.StatemachinesEndpoint + "/test-config/test-machine"))
+                    strings.Join([]string{server.ApiPrefix, server.StatemachinesEndpoint,
+                        "test-config", "test-machine"}, "/")))
                 response := server.StateMachineResponse{}
                 Expect(json.Unmarshal(writer.Body.Bytes(), &response)).ToNot(HaveOccurred())
 
@@ -127,7 +129,8 @@ var _ = Describe("Handlers", func() {
                     StartingState: "start",
                 }
                 Expect(store.PutConfig(config)).ToNot(HaveOccurred())
-                req = httptest.NewRequest(http.MethodPost, server.StatemachinesEndpoint,
+                req = httptest.NewRequest(http.MethodPost,
+                    strings.Join([]string{server.ApiPrefix, server.StatemachinesEndpoint}, "/"),
                     ReaderFromRequest(request))
             })
 
@@ -153,7 +156,8 @@ var _ = Describe("Handlers", func() {
                     ConfigurationVersion: "test-config:v2",
                     ID:                   "1234",
                 }
-                req = httptest.NewRequest(http.MethodPost, server.StatemachinesEndpoint,
+                req = httptest.NewRequest(http.MethodPost,
+                    strings.Join([]string{server.ApiPrefix, server.StatemachinesEndpoint}, "/"),
                     ReaderFromRequest(request))
             })
 
@@ -193,7 +197,8 @@ var _ = Describe("Handlers", func() {
 
         It("can be retrieved with a valid ID", func() {
             store.SetLogLevel(log.NONE)
-            endpoint := strings.Join([]string{server.StatemachinesEndpoint, "order.card", id}, "/")
+            endpoint := strings.Join([]string{server.ApiPrefix,
+                server.StatemachinesEndpoint, "order.card", id}, "/")
             req = httptest.NewRequest(http.MethodGet, endpoint, nil)
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusOK))
@@ -210,21 +215,24 @@ var _ = Describe("Handlers", func() {
             }
         })
         It("with an invalid ID will return Not Found", func() {
-            endpoint := strings.Join([]string{server.StatemachinesEndpoint, "foo"}, "/")
+            endpoint := strings.Join([]string{server.ApiPrefix,
+                server.StatemachinesEndpoint, "foo"}, "/")
             req = httptest.NewRequest(http.MethodGet, endpoint, nil)
 
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusNotFound))
         })
         It("with a missing ID will return Not Allowed", func() {
-            req = httptest.NewRequest(http.MethodGet, server.StatemachinesEndpoint, nil)
+            req = httptest.NewRequest(http.MethodGet, strings.Join([]string{server.ApiPrefix,
+                server.StatemachinesEndpoint}, "/"), nil)
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusMethodNotAllowed))
         })
         It("with gibberish data will still fail gracefully", func() {
             cfg := api.Configuration{}
             Expect(store.PutConfig(&cfg)).ToNot(HaveOccurred())
-            endpoint := strings.Join([]string{server.StatemachinesEndpoint, "6789"}, "/")
+            endpoint := strings.Join([]string{server.ApiPrefix,
+                server.StatemachinesEndpoint, "6789"}, "/")
             req = httptest.NewRequest(http.MethodGet, endpoint, nil)
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusNotFound))
@@ -279,7 +287,8 @@ var _ = Describe("Handlers", func() {
             })).To(Succeed())
             Expect(store.PutStateMachine(fsmId, car.FSM)).To(Succeed())
 
-            endpoint := strings.Join([]string{server.StatemachinesEndpoint, config.Name, fsmId}, "/")
+            endpoint := strings.Join([]string{server.ApiPrefix, server.StatemachinesEndpoint,
+                config.Name, fsmId}, "/")
             req = httptest.NewRequest(http.MethodGet, endpoint, nil)
             router.ServeHTTP(writer, req)
             Expect(writer.Code).To(Equal(http.StatusOK))

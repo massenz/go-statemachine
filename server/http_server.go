@@ -29,10 +29,12 @@ import (
 )
 
 const (
-    Api                    = "/api/v1"
+    ApiPrefix              = "/api/v1"
     HealthEndpoint         = "/health"
-    ConfigurationsEndpoint = Api + "/configurations"
-    StatemachinesEndpoint  = Api + "/statemachines"
+    ConfigurationsEndpoint = "configurations"
+    StatemachinesEndpoint  = "statemachines"
+    EventsEndpoint         = "events"
+    EventsOutcome          = "outcome"
 )
 
 var (
@@ -72,12 +74,22 @@ func SetLogLevel(level log.LogLevel) {
 func NewRouter() *mux.Router {
     r := mux.NewRouter()
     r.HandleFunc(HealthEndpoint, HealthHandler).Methods("GET")
-    r.HandleFunc(ConfigurationsEndpoint, CreateConfigurationHandler).Methods("POST")
-    r.HandleFunc(strings.Join([]string{ConfigurationsEndpoint, "{cfg_id}"}, "/"),
+
+    r.HandleFunc(strings.Join([]string{ApiPrefix, ConfigurationsEndpoint}, "/"),
+        CreateConfigurationHandler).Methods("POST")
+    r.HandleFunc(strings.Join([]string{ApiPrefix, ConfigurationsEndpoint, "{cfg_id}"}, "/"),
         GetConfigurationHandler).Methods("GET")
-    r.HandleFunc(StatemachinesEndpoint, CreateStatemachineHandler).Methods("POST")
-    r.HandleFunc(strings.Join([]string{StatemachinesEndpoint, "{cfg_name}", "{sm_id}"}, "/"),
+
+    r.HandleFunc(strings.Join([]string{ApiPrefix, StatemachinesEndpoint}, "/"),
+        CreateStatemachineHandler).Methods("POST")
+    r.HandleFunc(strings.Join([]string{ApiPrefix, StatemachinesEndpoint, "{cfg_name}", "{sm_id}"}, "/"),
         GetStatemachineHandler).Methods("GET")
+
+    r.HandleFunc(strings.Join([]string{ApiPrefix, EventsEndpoint, "{cfg_name}", "{evt_id}"}, "/"),
+        GetEventHandler).Methods("GET")
+    r.HandleFunc(strings.Join([]string{ApiPrefix, EventsEndpoint, EventsOutcome, "{cfg_name}", "{evt_id}"}, "/"),
+        GetOutcomeHandler).Methods("GET")
+
     return r
 }
 
