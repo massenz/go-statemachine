@@ -150,6 +150,11 @@ func NewRedisStore(address string, isCluster bool, db int, timeout time.Duration
     var tlsConfig *tls.Config
     var client redis.Cmdable
 
+    if os.Getenv("REDIS_TLS") != "" {
+        logger.Info("Using TLS for Redis connection")
+        tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+    }
+
     if isCluster {
         client = redis.NewClusterClient(&redis.ClusterOptions{
             TLSConfig: tlsConfig,
@@ -161,11 +166,6 @@ func NewRedisStore(address string, isCluster bool, db int, timeout time.Duration
             Addr:      address,
             DB:        db, // 0 means default DB
         })
-    }
-
-    if os.Getenv("REDIS_TLS") != "" {
-        logger.Info("Using TLS for Redis connection")
-        tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
     }
 
     return &RedisStore{
