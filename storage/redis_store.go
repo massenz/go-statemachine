@@ -20,11 +20,13 @@ package storage
 
 import (
     "context"
+    "crypto/tls"
     "fmt"
     "github.com/go-redis/redis/v8"
     "github.com/golang/protobuf/proto"
     slf4go "github.com/massenz/slf4go/logging"
     "math/rand"
+    "os"
     "strings"
     "time"
 
@@ -143,12 +145,19 @@ func NewRedisStoreWithDefaults(address string) StoreManager {
 }
 
 func NewRedisStore(address string, db int, timeout time.Duration, maxRetries int) StoreManager {
+
     logger := slf4go.NewLog(fmt.Sprintf("redis://%s/%d", address, db))
+    var tlsConfig *tls.Config
+    if os.Getenv("REDIS_TLS") != "" {
+        logger.Info("Using TLS for Redis connection")
+        tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+    }
     return &RedisStore{
         logger: logger,
         client: redis.NewClient(&redis.Options{
-            Addr: address,
-            DB:   db, // 0 means default DB
+            TLSConfig: tlsConfig,
+            Addr:      address,
+            DB:        db, // 0 means default DB
         }),
         Timeout:    timeout,
         MaxRetries: maxRetries,
