@@ -82,9 +82,7 @@ func main() {
             "unless required for local testing purposes (LocalStack uses http://localhost:4566)")
     var eventsTopic = flag.String("events", "", "If defined, it will attempt to connect "+
         "to the given SQS Queue to receive events from the Pub/Sub system")
-    // FIXME: this is no longer ONLY for errors, but a more general `notifications` queue,
-    //  so should be renamed accordingly to `-notifications`
-    var notificationsTopic = flag.String("errors", "",
+    var notificationsTopic = flag.String("notifications", "",
         "The name of the notification topic in SQS to publish events' outcomes to; if not "+
             "specified, no outcomes will be published")
     var grpcPort = flag.Int("grpc-port", 7398, "The port for the gRPC server")
