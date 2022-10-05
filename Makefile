@@ -57,3 +57,7 @@ clean:
 	@rm -f $(out)
 	@docker-compose -f $(compose) down
 	@docker rmi $(shell docker images -q --filter=reference=$(image))
+
+.PHONY: build test container cov clean fmt
+fmt:
+	@go fmt $(pkgs) ./cmd ./clients
