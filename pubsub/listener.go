@@ -24,6 +24,7 @@ func NewEventsListener(options *ListenerOptions) *EventsListener {
 		events:        options.EventsChannel,
 		store:         options.StatemachinesStore,
 		notifications: options.NotificationsChannel,
+		outcomes:      options.OutcomesChannel,
 	}
 }
 
@@ -38,7 +39,17 @@ func (listener *EventsListener) PostNotificationAndReportOutcome(eventResponse *
 	}
 	if listener.notifications != nil {
 		listener.logger.Debug("Posting notification: %v", eventResponse.GetEventId())
-		listener.notifications <- *eventResponse
+		if listener.outcomes != nil {
+			// If outcomes channel provided: send OK events to outcomes & everything else to notifications
+			if eventResponse.Outcome.Code == protos.EventOutcome_Ok {
+				listener.outcomes <- *eventResponse
+			} else {
+				listener.notifications <- *eventResponse
+			}
+		} else {
+			// Else if listener.outcomes is not set, send all events to notifications
+			listener.notifications <- *eventResponse
+		}
 	}
 	listener.logger.Debug("Reporting outcome: %v", eventResponse.GetEventId())
 	listener.reportOutcome(eventResponse)

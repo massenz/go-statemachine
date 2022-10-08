@@ -35,6 +35,7 @@ type EventsListener struct {
 	logger        *log.Log
 	events        <-chan protos.EventRequest
 	notifications chan<- protos.EventResponse
+	outcomes      chan<- protos.EventResponse
 	store         storage.StoreManager
 }
 
@@ -43,6 +44,7 @@ type EventsListener struct {
 type ListenerOptions struct {
 	EventsChannel        <-chan protos.EventRequest
 	NotificationsChannel chan<- protos.EventResponse
+	OutcomesChannel      chan<- protos.EventResponse
 	StatemachinesStore   storage.StoreManager
 	ListenersPoolSize    int8
 }

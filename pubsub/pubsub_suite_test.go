@@ -32,6 +32,7 @@ const (
 	timeout            = 5 * time.Second
 	eventsQueue        = "test-events"
 	notificationsQueue = "test-notifications"
+	outcomesQueue      = "test-outcomes"
 )
 
 func TestPubSub(t *testing.T) {
@@ -56,7 +57,7 @@ var (
 var _ = BeforeSuite(func() {
 	testLog.Level = log.NONE
 	Expect(os.Setenv("AWS_REGION", region)).ToNot(HaveOccurred())
-	for _, topic := range []string{eventsQueue, notificationsQueue} {
+	for _, topic := range []string{eventsQueue, notificationsQueue, outcomesQueue} {
 		topic = fmt.Sprintf("%s-%d", topic, GinkgoParallelProcess())
 
 		_, err := testSqsClient.GetQueueUrl(&sqs.GetQueueUrlInput{
@@ -74,7 +75,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	for _, topic := range []string{eventsQueue, notificationsQueue} {
+	for _, topic := range []string{eventsQueue, notificationsQueue, outcomesQueue} {
 		topic = getQueueName(topic)
 
 		out, err := testSqsClient.GetQueueUrl(&sqs.GetQueueUrlInput{

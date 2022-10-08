@@ -16,9 +16,12 @@ then
   endpoint="--endpoint-url ${AWS_ENDPOINT}"
 fi
 
+# Support for optional outcomes queue
+OUTCOMES=$([ -n "$OUTCOMES_Q" ] && echo "-outcomes $OUTCOMES_Q" || echo "")
+
 cmd="./sm-server -http-port ${SERVER_PORT}  ${endpoint:-} ${CLUSTER} ${DEBUG} \
 -redis ${REDIS}:${REDIS_PORT} -timeout ${TIMEOUT:-25ms} -max-retries ${RETRIES:-3} \
--events ${EVENTS_Q} -notifications ${ERRORS_Q} \
+-events ${EVENTS_Q} -notifications ${ERRORS_Q} $OUTCOMES \
 $@"
 
 echo $cmd

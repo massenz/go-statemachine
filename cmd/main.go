@@ -50,6 +50,7 @@ var (
 	//  whether we can support a fully concurrent system with a
 	//  buffered channel
 	notificationsCh chan protos.EventResponse = nil
+	outcomesCh      chan protos.EventResponse = nil
 	eventsCh                                  = make(chan protos.EventRequest)
 
 	wg sync.WaitGroup
@@ -79,7 +80,11 @@ func main() {
 		"to the given SQS Queue to receive events from the Pub/Sub system")
 	var notificationsTopic = flag.String("notifications", "",
 		"The name of the notification topic in SQS to publish events' outcomes to; if not "+
-			"specified, no outcomes will be published")
+			"specified, no outcomes will be published. If an outcomes topic is provided via -outcomes, "+
+			"errors & bad transition events will be published to this topic and ok events to that topic.")
+	var outcomesTopic = flag.String("outcomes", "",
+		"(Requires -notifications) The name of the outcomes topic in SQS to publish ok events' outcomes "+
+			"to; if not specified, outcomes will only be published to notifications")
 	var grpcPort = flag.Int("grpc-port", 7398, "The port for the gRPC server")
 	var maxRetries = flag.Int("max-retries", storage.DefaultMaxRetries,
 		"Max number of attempts for a recoverable error to be retried against the Redis cluster")
@@ -120,18 +125,16 @@ func main() {
 	}
 
 	if *notificationsTopic != "" {
-		logger.Info("Configuring DLQ Topic: %s", *notificationsTopic)
-		notificationsCh = make(chan protos.EventResponse)
-		defer close(notificationsCh)
-		pub = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint)
-		if pub == nil {
-			panic("Cannot create a valid SQS Publisher")
+		if *outcomesTopic != "" {
+			createSqsPublisher(*outcomesTopic, outcomesCh, awsEndpoint)
 		}
-		go pub.Publish(*notificationsTopic)
+		createSqsPublisher(*notificationsTopic, notificationsCh, awsEndpoint)
+
 	}
 	listener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
 		EventsChannel:        eventsCh,
 		NotificationsChannel: notificationsCh,
+		OutcomesChannel:      outcomesCh,
 		StatemachinesStore:   store,
 		// TODO: workers pool not implemented yet.
 		ListenersPoolSize: 0,
@@ -152,6 +155,18 @@ func main() {
 	logger.Info("HTTP Server (REST API) running at %s://%s", scheme, addr)
 	srv := server.NewHTTPServer(addr, serverLogLevel)
 	logger.Fatal(srv.ListenAndServe())
+}
+
+// createSqsPublisher creates and publishes a SQS publisher using a provided channel and endpoint
+func createSqsPublisher(topic string, channel chan protos.EventResponse, awsEndpoint *string) {
+	logger.Info("Configuring Topic: %s", topic)
+	channel = make(chan protos.EventResponse)
+	defer close(channel)
+	pub = pubsub.NewSqsPublisher(channel, awsEndpoint)
+	if pub == nil {
+		panic("Cannot create a valid SQS Publisher")
+	}
+	go pub.Publish(topic)
 }
 
 // setLogLevel sets the logging level for all the services' loggers, depending on
