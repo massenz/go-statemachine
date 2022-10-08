@@ -232,12 +232,12 @@ var _ = Describe("A Listener", func() {
 				Ω(n.Outcome.Dest).To(BeEmpty())
 				Ω(n.Outcome.Details).To(Equal(detail))
 				Ω(n.Outcome.Code).To(Equal(protos.EventOutcome_MissingDestination))
-			case n := <-outcomesCh:
-				Ω(n.EventId).To(Equal(msg.GetEventId()))
-				Ω(n.Outcome).ToNot(BeNil())
-				Ω(n.Outcome.Dest).To(BeEmpty())
-				Ω(n.Outcome.Details).To(Equal(detail))
-				Ω(n.Outcome.Code).To(Equal(protos.EventOutcome_Ok))
+			case o := <-outcomesCh:
+				Ω(o.EventId).To(Equal(msg.GetEventId()))
+				Ω(o.Outcome).ToNot(BeNil())
+				Ω(o.Outcome.Dest).To(BeEmpty())
+				Ω(o.Outcome.Details).To(Equal(detail))
+				Ω(o.Outcome.Code).To(Equal(protos.EventOutcome_Ok))
 
 			case <-time.After(timeout):
 				Fail("timed out waiting for notification")

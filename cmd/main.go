@@ -126,9 +126,9 @@ func main() {
 
 	if *notificationsTopic != "" {
 		if *outcomesTopic != "" {
-			createSqsPublisher(*outcomesTopic, outcomesCh, awsEndpoint)
+			outcomesCh = createSqsPublisher(*outcomesTopic, outcomesCh, awsEndpoint)
 		}
-		createSqsPublisher(*notificationsTopic, notificationsCh, awsEndpoint)
+		notificationsCh = createSqsPublisher(*notificationsTopic, notificationsCh, awsEndpoint)
 
 	}
 	listener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
@@ -158,7 +158,7 @@ func main() {
 }
 
 // createSqsPublisher creates and publishes a SQS publisher using a provided channel and endpoint
-func createSqsPublisher(topic string, channel chan protos.EventResponse, awsEndpoint *string) {
+func createSqsPublisher(topic string, channel chan protos.EventResponse, awsEndpoint *string) chan protos.EventResponse {
 	logger.Info("Configuring Topic: %s", topic)
 	channel = make(chan protos.EventResponse)
 	defer close(channel)
@@ -167,6 +167,8 @@ func createSqsPublisher(topic string, channel chan protos.EventResponse, awsEndp
 		panic("Cannot create a valid SQS Publisher")
 	}
 	go pub.Publish(topic)
+
+	return channel
 }
 
 // setLogLevel sets the logging level for all the services' loggers, depending on
