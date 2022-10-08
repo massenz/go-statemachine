@@ -42,9 +42,10 @@ var (
 
 	store storage.StoreManager
 
-	sub      *pubsub.SqsSubscriber
-	pub      *pubsub.SqsPublisher = nil
-	listener *pubsub.EventsListener
+	sub              *pubsub.SqsSubscriber
+	pubNotifications *pubsub.SqsPublisher = nil
+	pubOutcomes      *pubsub.SqsPublisher = nil
+	listener         *pubsub.EventsListener
 
 	// TODO: for now blocking channels; we will need to confirm
 	//  whether we can support a fully concurrent system with a
@@ -126,10 +127,23 @@ func main() {
 
 	if *notificationsTopic != "" {
 		if *outcomesTopic != "" {
-			outcomesCh = createSqsPublisher(*outcomesTopic, outcomesCh, awsEndpoint)
+			logger.Info("Configuring Topic: %s", outcomesTopic)
+			outcomesCh = make(chan protos.EventResponse)
+			defer close(outcomesCh)
+			pubOutcomes = pubsub.NewSqsPublisher(outcomesCh, awsEndpoint)
+			if pubOutcomes == nil {
+				panic("Cannot create a valid SQS Publisher")
+			}
+			go pubOutcomes.Publish(*outcomesTopic)
 		}
-		notificationsCh = createSqsPublisher(*notificationsTopic, notificationsCh, awsEndpoint)
-
+		logger.Info("Configuring Topic: %s", notificationsTopic)
+		notificationsCh = make(chan protos.EventResponse)
+		defer close(notificationsCh)
+		pubNotifications = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint)
+		if pubNotifications == nil {
+			panic("Cannot create a valid SQS Publisher")
+		}
+		go pubNotifications.Publish(*notificationsTopic)
 	}
 	listener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
 		EventsChannel:        eventsCh,
@@ -157,20 +171,6 @@ func main() {
 	logger.Fatal(srv.ListenAndServe())
 }
 
-// createSqsPublisher creates and publishes a SQS publisher using a provided channel and endpoint
-func createSqsPublisher(topic string, channel chan protos.EventResponse, awsEndpoint *string) chan protos.EventResponse {
-	logger.Info("Configuring Topic: %s", topic)
-	channel = make(chan protos.EventResponse)
-	defer close(channel)
-	pub = pubsub.NewSqsPublisher(channel, awsEndpoint)
-	if pub == nil {
-		panic("Cannot create a valid SQS Publisher")
-	}
-	go pub.Publish(topic)
-
-	return channel
-}
-
 // setLogLevel sets the logging level for all the services' loggers, depending on
 // whether the -debug or -trace flag is enabled (if neither, we log at INFO level).
 // If both are set, then -trace takes priority.
@@ -178,7 +178,7 @@ func setLogLevel(debug bool, trace bool) {
 	if debug {
 		logger.Info("verbose logging enabled")
 		logger.Level = log.DEBUG
-		SetLogLevel([]log.Loggable{store, pub, sub, listener}, log.DEBUG)
+		SetLogLevel([]log.Loggable{store, pubNotifications, pubOutcomes, sub, listener}, log.DEBUG)
 		serverLogLevel = log.DEBUG
 	}
 
