@@ -76,7 +76,7 @@ services: ## Starts the Redis and LocalStack containers
 
 .PHONY: queues
 queues: ## Creates the SQS Queues in LocalStack
-	@for queue in events notifications; do \
+	@for queue in events notifications acks; do \
 		aws --no-cli-pager --endpoint-url=http://localhost:4566 \
 			--region us-west-2 \
  			sqs create-queue --queue-name $$queue; done >/dev/null

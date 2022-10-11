@@ -42,16 +42,14 @@ var (
 
 	store storage.StoreManager
 
-	sub              *pubsub.SqsSubscriber
-	pubNotifications *pubsub.SqsPublisher = nil
-	pubOutcomes      *pubsub.SqsPublisher = nil
-	listener         *pubsub.EventsListener
+	sub      *pubsub.SqsSubscriber
+	pub      *pubsub.SqsPublisher = nil
+	listener *pubsub.EventsListener
 
 	// TODO: for now blocking channels; we will need to confirm
 	//  whether we can support a fully concurrent system with a
 	//  buffered channel
 	notificationsCh chan protos.EventResponse = nil
-	outcomesCh      chan protos.EventResponse = nil
 	eventsCh                                  = make(chan protos.EventRequest)
 
 	wg sync.WaitGroup
@@ -81,11 +79,11 @@ func main() {
 		"to the given SQS Queue to receive events from the Pub/Sub system")
 	var notificationsTopic = flag.String("notifications", "",
 		"The name of the notification topic in SQS to publish events' outcomes to; if not "+
-			"specified, no outcomes will be published. If an outcomes topic is provided via -outcomes, "+
-			"errors & bad transition events will be published to this topic and ok events to that topic.")
-	var outcomesTopic = flag.String("outcomes", "",
-		"(Requires -notifications) The name of the outcomes topic in SQS to publish ok events' outcomes "+
-			"to; if not specified, outcomes will only be published to notifications")
+			"specified, no outcomes will be published.")
+	var acksTopic = flag.String("acks", "",
+		"If `acks` is specified, all positive outcomes (Ok) will be published here, and only "+
+			"errors will be published to the `notifications` queue. If not specified, all results "+
+			"will published to the `-notifications` queue regardless of their error status")
 	var grpcPort = flag.Int("grpc-port", 7398, "The port for the gRPC server")
 	var maxRetries = flag.Int("max-retries", storage.DefaultMaxRetries,
 		"Max number of attempts for a recoverable error to be retried against the Redis cluster")
@@ -126,29 +124,21 @@ func main() {
 	}
 
 	if *notificationsTopic != "" {
-		if *outcomesTopic != "" {
-			logger.Info("Configuring Topic: %s", outcomesTopic)
-			outcomesCh = make(chan protos.EventResponse)
-			defer close(outcomesCh)
-			pubOutcomes = pubsub.NewSqsPublisher(outcomesCh, awsEndpoint)
-			if pubOutcomes == nil {
-				panic("Cannot create a valid SQS Publisher")
-			}
-			go pubOutcomes.Publish(*outcomesTopic)
-		}
 		logger.Info("Configuring Topic: %s", notificationsTopic)
+		if acksTopic != ""{
+			logger.Info("Configuring Topic: %s", acksTopic)
+		}
 		notificationsCh = make(chan protos.EventResponse)
 		defer close(notificationsCh)
-		pubNotifications = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint)
-		if pubNotifications == nil {
+		pub = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint)
+		if pub == nil {
 			panic("Cannot create a valid SQS Publisher")
 		}
-		go pubNotifications.Publish(*notificationsTopic)
+		go pub.Publish(*notificationsTopic, *acksTopic)
 	}
 	listener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
 		EventsChannel:        eventsCh,
 		NotificationsChannel: notificationsCh,
-		OutcomesChannel:      outcomesCh,
 		StatemachinesStore:   store,
 		// TODO: workers pool not implemented yet.
 		ListenersPoolSize: 0,
@@ -178,7 +168,7 @@ func setLogLevel(debug bool, trace bool) {
 	if debug {
 		logger.Info("verbose logging enabled")
 		logger.Level = log.DEBUG
-		SetLogLevel([]log.Loggable{store, pubNotifications, pubOutcomes, sub, listener}, log.DEBUG)
+		SetLogLevel([]log.Loggable{store, pub, sub, listener}, log.DEBUG)
 		serverLogLevel = log.DEBUG
 	}
 
@@ -186,7 +176,7 @@ func setLogLevel(debug bool, trace bool) {
 		logger.Warn("trace logging Enabled")
 		logger.Level = log.TRACE
 		server.EnableTracing()
-		SetLogLevel([]log.Loggable{store, sub, listener}, log.TRACE)
+		SetLogLevel([]log.Loggable{store, pub, sub, listener}, log.TRACE)
 		serverLogLevel = log.TRACE
 	}
 }

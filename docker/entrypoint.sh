@@ -17,11 +17,14 @@ then
 fi
 
 # Support for optional outcomes queue
-OUTCOMES=$([ -n "$OUTCOMES_Q" ] && echo "-outcomes $OUTCOMES_Q" || echo "")
+ACKS=""
+if [[ -n ${ACKS_Q:-""} ]]; then
+    ACKS="-acks ${ACKS_Q}"
+fi
 
 cmd="./sm-server -http-port ${SERVER_PORT}  ${endpoint:-} ${CLUSTER} ${DEBUG} \
 -redis ${REDIS}:${REDIS_PORT} -timeout ${TIMEOUT:-25ms} -max-retries ${RETRIES:-3} \
--events ${EVENTS_Q} -notifications ${ERRORS_Q} $OUTCOMES \
+-events ${EVENTS_Q} -notifications ${ERRORS_Q} $ACKS \
 $@"
 
 echo $cmd

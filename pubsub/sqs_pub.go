@@ -23,15 +23,15 @@ import (
 //
 // The `awsUrl` is the URL of the AWS SQS service, which can be obtained from the AWS Console,
 // or by the local AWS CLI.
-func NewSqsPublisher(errorsChannel <-chan protos.EventResponse, awsUrl *string) *SqsPublisher {
+func NewSqsPublisher(channel <-chan protos.EventResponse, awsUrl *string) *SqsPublisher {
 	client := getSqsClient(awsUrl)
 	if client == nil {
 		return nil
 	}
 	return &SqsPublisher{
-		logger: log.NewLog("SQS-Pub"),
-		client: client,
-		errors: errorsChannel,
+		logger:        log.NewLog("SQS-Pub"),
+		client:        client,
+		notifications: channel,
 	}
 }
 
@@ -56,13 +56,17 @@ func GetQueueUrl(client *sqs.SQS, topic string) string {
 	return *out.QueueUrl
 }
 
-// Publish sends an error message to the DLQ `topic`
-func (s *SqsPublisher) Publish(topic string) {
-	queueUrl := GetQueueUrl(s.client, topic)
-	s.logger = log.NewLog(fmt.Sprintf("SQS-Pub{%s}", topic))
-	s.logger.Info("SQS Publisher started for queue: %s", queueUrl)
-	for eventResponse := range s.errors {
+// Publish sends an error message to provided topics
+func (s *SqsPublisher) Publish(errorsTopic string, acksTopic string) {
+	s.logger.Info("SQS Publisher started for topics: %s %s", errorsTopic, acksTopic)
+	for eventResponse := range s.notifications {
 		delay := int64(0)
+
+		queueUrl := GetQueueUrl(s.client, errorsTopic)
+		if acksTopic != "" && eventResponse.Outcome.Code == protos.EventOutcome_Ok {
+			queueUrl = GetQueueUrl(s.client, acksTopic)
+		}
+
 		s.logger.Debug("[%s] %s", eventResponse.String(), queueUrl)
 		msgResult, err := s.client.SendMessage(&sqs.SendMessageInput{
 			DelaySeconds: &delay,

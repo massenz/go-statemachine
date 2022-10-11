@@ -35,7 +35,6 @@ type EventsListener struct {
 	logger        *log.Log
 	events        <-chan protos.EventRequest
 	notifications chan<- protos.EventResponse
-	outcomes      chan<- protos.EventResponse
 	store         storage.StoreManager
 }
 
@@ -44,19 +43,16 @@ type EventsListener struct {
 type ListenerOptions struct {
 	EventsChannel        <-chan protos.EventRequest
 	NotificationsChannel chan<- protos.EventResponse
-	OutcomesChannel      chan<- protos.EventResponse
 	StatemachinesStore   storage.StoreManager
 	ListenersPoolSize    int8
 }
 
 // SqsPublisher is a wrapper around the AWS SQS client,
-// and is used to publish messages to a DLQ when an error is encountered.
-//
-// Error events are polled from the `errors` channel, and published to the SQS queue.
+// and is used to publish messages to provided queues when outcomes are encountered.
 type SqsPublisher struct {
-	logger *log.Log
-	client *sqs.SQS
-	errors <-chan protos.EventResponse
+	logger        *log.Log
+	client        *sqs.SQS
+	notifications <-chan protos.EventResponse
 }
 
 // SqsSubscriber is a wrapper around the AWS SQS client, and is used to subscribe to Events.

@@ -453,6 +453,8 @@ Usage of build/bin/sm-server:
     	Max number of attempts for a recoverable error to be retried against the Redis cluster (default 3)
   -notifications string
     	The name of the notification topic in SQS to publish events' outcomes to; if not specified, no outcomes will be published
+  -acks string
+    	(Requires `notifications`) The name of the acks topic in SQS to publish events' outcomes to; if specified, Ok outcomes will be published to the acks topic and other (error) outcomes to the notification topic
   -redis string
     	URI for the Redis cluster (host:port)
   -cluster

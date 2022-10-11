@@ -50,9 +50,10 @@ var _ = Describe("SQS Publisher", func() {
 			done := make(chan interface{})
 			go func() {
 				defer close(done)
-				go testPublisher.Publish(getQueueName(notificationsQueue))
+				go testPublisher.Publish(getQueueName(notificationsQueue), "")
 			}()
 			notificationsCh <- notification
+			time.Sleep(channelWait)
 			res := getSqsMessage(getQueueName(notificationsQueue))
 			Expect(res).ToNot(BeNil())
 			Expect(res.Body).ToNot(BeNil())
@@ -81,9 +82,10 @@ var _ = Describe("SQS Publisher", func() {
 			done := make(chan interface{})
 			go func() {
 				defer close(done)
-				go testPublisher.Publish(getQueueName(notificationsQueue))
+				go testPublisher.Publish(getQueueName(notificationsQueue), "")
 			}()
 			notificationsCh <- notification
+			time.Sleep(channelWait)
 			m := getSqsMessage(getQueueName(notificationsQueue))
 			var response protos.EventResponse
 			Expect(proto.UnmarshalText(*m.Body, &response)).ShouldNot(HaveOccurred())
@@ -97,11 +99,52 @@ var _ = Describe("SQS Publisher", func() {
 				Fail("timed out waiting for Publisher to exit")
 			}
 		})
+		It("will publish OK outcomes to acks queue if configured", func() {
+			notification := protos.EventResponse{
+				EventId: "dead-pork",
+				Outcome: &protos.EventOutcome{
+					Code: protos.EventOutcome_InternalError,
+				},
+			}
+			ack := protos.EventResponse{
+				EventId: "dead-beef",
+				Outcome: &protos.EventOutcome{
+					Code: protos.EventOutcome_Ok,
+				},
+			}
+			done := make(chan interface{})
+			go func() {
+				defer close(done)
+				go testPublisher.Publish(getQueueName(notificationsQueue), getQueueName(acksQueue))
+			}()
+			var response protos.EventResponse
+
+			notificationsCh <- notification
+			time.Sleep(channelWait)
+			m := getSqsMessage(getQueueName(notificationsQueue))
+			Expect(proto.UnmarshalText(*m.Body, &response)).ShouldNot(HaveOccurred())
+			Expect(&response).To(Respect(&notification))
+
+			notificationsCh <- ack
+			time.Sleep(channelWait)
+			n := getSqsMessage(getQueueName(acksQueue))
+			Expect(proto.UnmarshalText(*n.Body, &response)).ShouldNot(HaveOccurred())
+			Expect(&response).To(Respect(&ack))
+
+			close(notificationsCh)
+
+			select {
+			case <-done:
+				Succeed()
+			case <-time.After(100 * time.Millisecond):
+				Fail("timed out waiting for Publisher to exit")
+			}
+		})
 		It("will terminate gracefully when the notifications channel is closed", func() {
 			done := make(chan interface{})
 			go func() {
 				defer close(done)
-				testPublisher.Publish(getQueueName(notificationsQueue))
+				go testPublisher.Publish(getQueueName(notificationsQueue), "")
 			}()
 			close(notificationsCh)
 			select {
@@ -112,13 +155,13 @@ var _ = Describe("SQS Publisher", func() {
 			}
 		})
 		It("will survive an empty Message", func() {
-			go testPublisher.Publish(getQueueName(notificationsQueue))
+			go testPublisher.Publish(getQueueName(notificationsQueue), "")
 			notificationsCh <- protos.EventResponse{}
 			close(notificationsCh)
 			getSqsMessage(getQueueName(notificationsQueue))
 		})
 		It("will send several messages within a short timeframe", func() {
-			go testPublisher.Publish(getQueueName(notificationsQueue))
+			go testPublisher.Publish(getQueueName(notificationsQueue), getQueueName(acksQueue))
 			for i := range [10]int{} {
 				evt := api.NewEvent("do-something")
 				evt.EventId = fmt.Sprintf("event-%d", i)
@@ -131,10 +174,11 @@ var _ = Describe("SQS Publisher", func() {
 					},
 				}
 			}
+			time.Sleep(channelWait * 10)
 			done := make(chan interface{})
 			go func() {
 				// This is necessary as we make assertions in this goroutine,
-				// and we want to make sure we can see the errors if they fail.
+				// and we want to make sure we can see the notifications if they fail.
 				defer GinkgoRecover()
 				defer close(done)
 				for i := range [10]int{} {
