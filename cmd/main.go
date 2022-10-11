@@ -125,7 +125,7 @@ func main() {
 
 	if *notificationsTopic != "" {
 		logger.Info("Configuring Topic: %s", notificationsTopic)
-		if acksTopic != ""{
+		if *acksTopic != "" {
 			logger.Info("Configuring Topic: %s", acksTopic)
 		}
 		notificationsCh = make(chan protos.EventResponse)
