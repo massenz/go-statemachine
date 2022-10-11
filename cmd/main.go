@@ -81,8 +81,9 @@ func main() {
 		"The name of the notification topic in SQS to publish events' outcomes to; if not "+
 			"specified, no outcomes will be published.")
 	var acksTopic = flag.String("acks", "",
-		"If `acks` is specified, all positive outcomes (Ok) will be published here, and only "+
-			"errors will be published to the `notifications` queue. If not specified, all results "+
+		"If `acks` is specified and provided a value, all positive outcomes (Ok) will be published here, and only "+
+			"errors will be published to the `notifications` queue. If specified and not provided a value, "+
+			"Ok outcomes will not be published. If not specified, all results "+
 			"will published to the `-notifications` queue regardless of their error status")
 	var grpcPort = flag.Int("grpc-port", 7398, "The port for the gRPC server")
 	var maxRetries = flag.Int("max-retries", storage.DefaultMaxRetries,
@@ -90,6 +91,9 @@ func main() {
 	var timeout = flag.Duration("timeout", storage.DefaultTimeout,
 		"Timeout for Redis (as a Duration string, e.g. 1s, 20ms, etc.)")
 	flag.Parse()
+
+	// If acks is provided but has no value, do not publish Ok outcomes
+	ignoreOkOutcomes := checkForFlag("acks") && *acksTopic == ""
 
 	logger.Info("Starting State Machine Server - Rel. %s", server.Release)
 
@@ -130,7 +134,7 @@ func main() {
 		}
 		notificationsCh = make(chan protos.EventResponse)
 		defer close(notificationsCh)
-		pub = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint)
+		pub = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint, ignoreOkOutcomes)
 		if pub == nil {
 			panic("Cannot create a valid SQS Publisher")
 		}
@@ -159,6 +163,17 @@ func main() {
 	logger.Info("HTTP Server (REST API) running at %s://%s", scheme, addr)
 	srv := server.NewHTTPServer(addr, serverLogLevel)
 	logger.Fatal(srv.ListenAndServe())
+}
+
+// checkForFlag checks whether a flag was provided
+func checkForFlag(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
 }
 
 // setLogLevel sets the logging level for all the services' loggers, depending on

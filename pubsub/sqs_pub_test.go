@@ -33,7 +33,8 @@ var _ = Describe("SQS Publisher", func() {
 		)
 		BeforeEach(func() {
 			notificationsCh = make(chan protos.EventResponse)
-			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &sqsUrl)
+			ignoreOkOutcomes := false
+			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &sqsUrl, ignoreOkOutcomes)
 			Expect(testPublisher).ToNot(BeNil())
 			// Set to DEBUG when diagnosing test failures
 			testPublisher.SetLogLevel(logging.NONE)
@@ -161,7 +162,7 @@ var _ = Describe("SQS Publisher", func() {
 			getSqsMessage(getQueueName(notificationsQueue))
 		})
 		It("will send several messages within a short timeframe", func() {
-			go testPublisher.Publish(getQueueName(notificationsQueue), getQueueName(acksQueue))
+			go testPublisher.Publish(getQueueName(notificationsQueue), "")
 			for i := range [10]int{} {
 				evt := api.NewEvent("do-something")
 				evt.EventId = fmt.Sprintf("event-%d", i)
@@ -174,7 +175,7 @@ var _ = Describe("SQS Publisher", func() {
 					},
 				}
 			}
-			time.Sleep(channelWait * 10)
+			time.Sleep(channelWait * 20)
 			done := make(chan interface{})
 			go func() {
 				// This is necessary as we make assertions in this goroutine,
@@ -198,6 +199,34 @@ var _ = Describe("SQS Publisher", func() {
 			case <-done:
 				Succeed()
 			case <-time.After(timeout):
+				Fail("timed out waiting for Publisher to exit")
+			}
+		})
+		It("will ignore OK outcomes if configured to", func() {
+			ack := protos.EventResponse{
+				EventId: "dead-beef",
+				Outcome: &protos.EventOutcome{
+					Code: protos.EventOutcome_Ok,
+				},
+			}
+			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &sqsUrl, true)
+			done := make(chan interface{})
+			go func() {
+				defer close(done)
+				go testPublisher.Publish(getQueueName(notificationsQueue), getQueueName(acksQueue))
+			}()
+
+			notificationsCh <- ack
+			time.Sleep(channelWait)
+			res := getSqsMessage(getQueueName(acksQueue))
+			Expect(res).To(BeNil())
+
+			close(notificationsCh)
+
+			select {
+			case <-done:
+				Succeed()
+			case <-time.After(100 * time.Millisecond):
 				Fail("timed out waiting for Publisher to exit")
 			}
 		})

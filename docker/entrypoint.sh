@@ -16,11 +16,6 @@ then
   endpoint="--endpoint-url ${AWS_ENDPOINT}"
 fi
 
-# Support for optional outcomes queue
-ACKS=""
-if [[ -n ${ACKS_Q:-""} ]]; then
-    ACKS="-acks ${ACKS_Q}"
-fi
 
 cmd="./sm-server -http-port ${SERVER_PORT}  ${endpoint:-} ${CLUSTER} ${DEBUG} \
 -redis ${REDIS}:${REDIS_PORT} -timeout ${TIMEOUT:-25ms} -max-retries ${RETRIES:-3} \

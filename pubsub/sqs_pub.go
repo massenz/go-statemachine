@@ -23,15 +23,16 @@ import (
 //
 // The `awsUrl` is the URL of the AWS SQS service, which can be obtained from the AWS Console,
 // or by the local AWS CLI.
-func NewSqsPublisher(channel <-chan protos.EventResponse, awsUrl *string) *SqsPublisher {
+func NewSqsPublisher(channel <-chan protos.EventResponse, awsUrl *string, ignoreOkOutcomes bool) *SqsPublisher {
 	client := getSqsClient(awsUrl)
 	if client == nil {
 		return nil
 	}
 	return &SqsPublisher{
-		logger:        log.NewLog("SQS-Pub"),
-		client:        client,
-		notifications: channel,
+		logger:           log.NewLog("SQS-Pub"),
+		client:           client,
+		ignoreOkOutcomes: ignoreOkOutcomes,
+		notifications:    channel,
 	}
 }
 
@@ -63,7 +64,7 @@ func (s *SqsPublisher) Publish(errorsTopic string, acksTopic string) {
 		delay := int64(0)
 
 		queueUrl := GetQueueUrl(s.client, errorsTopic)
-		if acksTopic != "" && eventResponse.Outcome.Code == protos.EventOutcome_Ok {
+		if acksTopic != "" && !s.ignoreOkOutcomes && eventResponse.Outcome.Code == protos.EventOutcome_Ok {
 			queueUrl = GetQueueUrl(s.client, acksTopic)
 		}
 
