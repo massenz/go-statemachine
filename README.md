@@ -454,7 +454,7 @@ Usage of build/bin/sm-server:
   -notifications string
     	The name of the notification topic in SQS to publish events' outcomes to; if not specified, no outcomes will be published
   -acks string
-    	(Requires `notifications`) The name of the acks topic in SQS to publish events' outcomes to; if specified, Ok outcomes will be published to the acks topic and other (error) outcomes to the notification topic
+    	(Requires `notifications`) The name of the acks topic in SQS to publish events' outcomes to; if specified with a value, Ok outcomes will be published to the acks topic and other (error) outcomes to the notification topic. If specified without a value, Ok outcomes will not be published
   -redis string
     	URI for the Redis cluster (host:port)
   -cluster

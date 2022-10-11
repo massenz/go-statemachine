@@ -175,7 +175,7 @@ var _ = Describe("SQS Publisher", func() {
 					},
 				}
 			}
-			time.Sleep(channelWait * 20)
+			time.Sleep(channelWait * 25)
 			done := make(chan interface{})
 			go func() {
 				// This is necessary as we make assertions in this goroutine,
