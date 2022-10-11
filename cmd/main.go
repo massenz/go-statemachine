@@ -79,7 +79,7 @@ func main() {
 		"to the given SQS Queue to receive events from the Pub/Sub system")
 	var notificationsTopic = flag.String("notifications", "",
 		"The name of the notification topic in SQS to publish events' outcomes to; if not "+
-			"specified, no outcomes will be published.")
+			"specified, no outcomes will be published")
 	var acksTopic = flag.String("acks", "",
 		"If `acks` is specified and provided a value, all positive outcomes (Ok) will be published here, and only "+
 			"errors will be published to the `notifications` queue. If specified and not provided a value, "+
