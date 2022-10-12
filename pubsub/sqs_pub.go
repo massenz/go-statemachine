@@ -23,16 +23,15 @@ import (
 //
 // The `awsUrl` is the URL of the AWS SQS service, which can be obtained from the AWS Console,
 // or by the local AWS CLI.
-func NewSqsPublisher(channel <-chan protos.EventResponse, awsUrl *string, ignoreOkOutcomes bool) *SqsPublisher {
+func NewSqsPublisher(channel <-chan protos.EventResponse, awsUrl *string) *SqsPublisher {
 	client := getSqsClient(awsUrl)
 	if client == nil {
 		return nil
 	}
 	return &SqsPublisher{
-		logger:           log.NewLog("SQS-Pub"),
-		client:           client,
-		ignoreOkOutcomes: ignoreOkOutcomes,
-		notifications:    channel,
+		logger:        log.NewLog("SQS-Pub"),
+		client:        client,
+		notifications: channel,
 	}
 }
 
@@ -45,8 +44,13 @@ func (s *SqsPublisher) SetLogLevel(level log.LogLevel) {
 	s.logger.Level = level
 }
 
-// GetQueueUrl retrieves from AWS SQS the URL for the queue, given the topic name
+// GetQueueUrl retrieves from AWS SQS the URL for the queue, given the topic name;
+// if an empty topic name is provided, returns an empty string
 func GetQueueUrl(client *sqs.SQS, topic string) string {
+	if topic == "" {
+		return ""
+	}
+
 	out, err := client.GetQueueUrl(&sqs.GetQueueUrlInput{
 		QueueName: &topic,
 	})
@@ -57,15 +61,26 @@ func GetQueueUrl(client *sqs.SQS, topic string) string {
 	return *out.QueueUrl
 }
 
-// Publish sends an error message to provided topics
-func (s *SqsPublisher) Publish(errorsTopic string, acksTopic string) {
+// Publish sends an message to provided topics depending on SQS Publisher settings.
+// If an acksTopic is provided, it will send Ok outcomes to that topic and errors to errorsTopic;
+// else, all outcomes will be sent to the errorsTopic. If notifyErrorsOnly is true, only error outcomes
+// will be sent.
+func (s *SqsPublisher) Publish(errorsTopic string, acksTopic string, notifyErrorsOnly bool) {
 	s.logger.Info("SQS Publisher started for topics: %s %s", errorsTopic, acksTopic)
-	for eventResponse := range s.notifications {
-		delay := int64(0)
+	s.logger.Info("SQS Publisher notifyErrorsOnly: %s", notifyErrorsOnly)
 
-		queueUrl := GetQueueUrl(s.client, errorsTopic)
-		if acksTopic != "" && !s.ignoreOkOutcomes && eventResponse.Outcome.Code == protos.EventOutcome_Ok {
-			queueUrl = GetQueueUrl(s.client, acksTopic)
+	errorsQueueUrl := GetQueueUrl(s.client, errorsTopic)
+	acksQueueUrl := GetQueueUrl(s.client, acksTopic)
+	delay := int64(0)
+	for eventResponse := range s.notifications {
+		isOKOutcome := eventResponse.Outcome != nil && eventResponse.Outcome.Code == protos.EventOutcome_Ok
+		if isOKOutcome && notifyErrorsOnly {
+			s.logger.Debug("Skipping notification for Ok outcome [Event ID: %s]", eventResponse.EventId)
+			continue
+		}
+		queueUrl := errorsQueueUrl
+		if isOKOutcome && acksTopic != "" {
+			queueUrl = acksQueueUrl
 		}
 
 		s.logger.Debug("[%s] %s", eventResponse.String(), queueUrl)

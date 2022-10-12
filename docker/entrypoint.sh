@@ -17,9 +17,10 @@ then
 fi
 
 
-cmd="./sm-server -http-port ${SERVER_PORT}  ${endpoint:-} ${CLUSTER} ${DEBUG} \
+cmd="./sm-server -http-port ${SERVER_PORT} ${endpoint:-} \
+${CLUSTER:-} ${DEBUG:-} ${NOTIFY_ERRORS_ONLY:-} \
 -redis ${REDIS}:${REDIS_PORT} -timeout ${TIMEOUT:-25ms} -max-retries ${RETRIES:-3} \
--events ${EVENTS_Q} -notifications ${ERRORS_Q} $ACKS \
+-events ${EVENTS_Q} -notifications ${ERRORS_Q} ${ACKS:-} \
 $@"
 
 echo $cmd

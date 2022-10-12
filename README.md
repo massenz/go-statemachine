@@ -454,11 +454,13 @@ Usage of build/bin/sm-server:
   -notifications string
     	The name of the notification topic in SQS to publish events' outcomes to; if not specified, no outcomes will be published
   -acks string
-    	(Requires `notifications`) The name of the acks topic in SQS to publish events' outcomes to; if specified with a value, Ok outcomes will be published to the acks topic and other (error) outcomes to the notification topic. If specified without a value, Ok outcomes will not be published
+    	(Requires `notifications`) The name of the acks topic in SQS to publish events' outcomes to; if specified, Ok outcomes will be published to the acks topic and other (error) outcomes to the notification topic
   -redis string
     	URI for the Redis cluster (host:port)
   -cluster
-        Enables connecting to a Redis deployment in cluster mode
+        If set, allows connecting to a Redis instance with cluster-mode enabled
+  -notify-error-only
+        If set, only errors will be sent to notification topics
   -timeout duration
     	Timeout for Redis (as a Duration string, e.g. 1s, 20ms, etc.) (default 200ms)
   -trace
@@ -517,6 +519,11 @@ ENV ERRORS_Q=notifications
 ENV REDIS=redis
 ENV REDIS_PORT=6379
 ENV DEBUG=""
+
+# Optional settings for the server
+ENV ACKS="-acks acks"
+ENV CLUSTER="-cluster"
+ENV NOTIFY_ERRORS_ONLY="-notify-errors-only"
 ```
 
 Additionally, a valid `credentials` file will need to be mounted (using the `-v` flag) in the container if connecting to AWS (instead of LocalStack):

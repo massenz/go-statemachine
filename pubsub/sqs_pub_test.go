@@ -33,8 +33,7 @@ var _ = Describe("SQS Publisher", func() {
 		)
 		BeforeEach(func() {
 			notificationsCh = make(chan protos.EventResponse)
-			ignoreOkOutcomes := false
-			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &sqsUrl, ignoreOkOutcomes)
+			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &sqsUrl)
 			Expect(testPublisher).ToNot(BeNil())
 			// Set to DEBUG when diagnosing test failures
 			testPublisher.SetLogLevel(logging.NONE)
@@ -51,10 +50,9 @@ var _ = Describe("SQS Publisher", func() {
 			done := make(chan interface{})
 			go func() {
 				defer close(done)
-				go testPublisher.Publish(getQueueName(notificationsQueue), "")
+				go testPublisher.Publish(getQueueName(notificationsQueue), "", false)
 			}()
 			notificationsCh <- notification
-			time.Sleep(channelWait)
 			res := getSqsMessage(getQueueName(notificationsQueue))
 			Expect(res).ToNot(BeNil())
 			Expect(res.Body).ToNot(BeNil())
@@ -83,10 +81,9 @@ var _ = Describe("SQS Publisher", func() {
 			done := make(chan interface{})
 			go func() {
 				defer close(done)
-				go testPublisher.Publish(getQueueName(notificationsQueue), "")
+				go testPublisher.Publish(getQueueName(notificationsQueue), "", false)
 			}()
 			notificationsCh <- notification
-			time.Sleep(channelWait)
 			m := getSqsMessage(getQueueName(notificationsQueue))
 			var response protos.EventResponse
 			Expect(proto.UnmarshalText(*m.Body, &response)).ShouldNot(HaveOccurred())
@@ -116,21 +113,24 @@ var _ = Describe("SQS Publisher", func() {
 			done := make(chan interface{})
 			go func() {
 				defer close(done)
-				go testPublisher.Publish(getQueueName(notificationsQueue), getQueueName(acksQueue))
+				go testPublisher.Publish(getQueueName(notificationsQueue), getQueueName(acksQueue), false)
 			}()
 			var response protos.EventResponse
 
+			// Confirm notificationsQueue received the error
 			notificationsCh <- notification
-			time.Sleep(channelWait)
-			m := getSqsMessage(getQueueName(notificationsQueue))
-			Expect(proto.UnmarshalText(*m.Body, &response)).ShouldNot(HaveOccurred())
+			res := getSqsMessage(getQueueName(notificationsQueue))
+			Expect(proto.UnmarshalText(*res.Body, &response)).ShouldNot(HaveOccurred())
 			Expect(&response).To(Respect(&notification))
 
+			// Confirm acksQueue received the Ok
 			notificationsCh <- ack
-			time.Sleep(channelWait)
-			n := getSqsMessage(getQueueName(acksQueue))
-			Expect(proto.UnmarshalText(*n.Body, &response)).ShouldNot(HaveOccurred())
+			res = getSqsMessage(getQueueName(acksQueue))
+			Expect(proto.UnmarshalText(*res.Body, &response)).ShouldNot(HaveOccurred())
 			Expect(&response).To(Respect(&ack))
+			// Confirm notificationsQueue did not receive the Ok
+			res = getSqsMessage(getQueueName(notificationsQueue))
+			Expect(res).To(BeNil())
 
 			close(notificationsCh)
 
@@ -145,7 +145,7 @@ var _ = Describe("SQS Publisher", func() {
 			done := make(chan interface{})
 			go func() {
 				defer close(done)
-				go testPublisher.Publish(getQueueName(notificationsQueue), "")
+				go testPublisher.Publish(getQueueName(notificationsQueue), "", false)
 			}()
 			close(notificationsCh)
 			select {
@@ -156,13 +156,13 @@ var _ = Describe("SQS Publisher", func() {
 			}
 		})
 		It("will survive an empty Message", func() {
-			go testPublisher.Publish(getQueueName(notificationsQueue), "")
+			go testPublisher.Publish(getQueueName(notificationsQueue), "", false)
 			notificationsCh <- protos.EventResponse{}
 			close(notificationsCh)
 			getSqsMessage(getQueueName(notificationsQueue))
 		})
 		It("will send several messages within a short timeframe", func() {
-			go testPublisher.Publish(getQueueName(notificationsQueue), "")
+			go testPublisher.Publish(getQueueName(notificationsQueue), "", false)
 			for i := range [10]int{} {
 				evt := api.NewEvent("do-something")
 				evt.EventId = fmt.Sprintf("event-%d", i)
@@ -175,7 +175,6 @@ var _ = Describe("SQS Publisher", func() {
 					},
 				}
 			}
-			time.Sleep(channelWait * 25)
 			done := make(chan interface{})
 			go func() {
 				// This is necessary as we make assertions in this goroutine,
@@ -202,23 +201,25 @@ var _ = Describe("SQS Publisher", func() {
 				Fail("timed out waiting for Publisher to exit")
 			}
 		})
-		It("will ignore OK outcomes if configured to", func() {
+		It("will only notify error outcomes if configured to", func() {
 			ack := protos.EventResponse{
 				EventId: "dead-beef",
 				Outcome: &protos.EventOutcome{
 					Code: protos.EventOutcome_Ok,
 				},
 			}
-			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &sqsUrl, true)
+			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &sqsUrl)
 			done := make(chan interface{})
 			go func() {
 				defer close(done)
-				go testPublisher.Publish(getQueueName(notificationsQueue), getQueueName(acksQueue))
+				go testPublisher.Publish(getQueueName(notificationsQueue), getQueueName(acksQueue), true)
 			}()
 
 			notificationsCh <- ack
-			time.Sleep(channelWait)
-			res := getSqsMessage(getQueueName(acksQueue))
+			// Confirm both acksQueue and notificationsQueue do not get the Ok message
+			res := getSqsMessage(getQueueName(notificationsQueue))
+			Expect(res).To(BeNil())
+			res = getSqsMessage(getQueueName(acksQueue))
 			Expect(res).To(BeNil())
 
 			close(notificationsCh)

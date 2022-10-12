@@ -30,7 +30,6 @@ import (
 
 const (
 	timeout            = 5 * time.Second
-	channelWait        = 10 * time.Millisecond
 	eventsQueue        = "test-events"
 	notificationsQueue = "test-notifications"
 	acksQueue          = "test-acks"

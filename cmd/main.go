@@ -71,7 +71,7 @@ func main() {
 		"for the Redis instance (host:port). For redis clusters: a comma-separated list of redis nodes. "+
 		"If using an ElastiCache Redis cluster with cluster mode enabled, you can supply the configuration endpoint.")
 	var cluster = flag.Bool("cluster", false,
-		"Needs to be set if connecting to a Redis instance with cluster mode enabled")
+		"If set, allows connecting to a Redis instance with cluster-mode enabled")
 	var awsEndpoint = flag.String("endpoint-url", "",
 		"HTTP URL for AWS SQS to connect to; usually best left undefined, "+
 			"unless required for local testing purposes (LocalStack uses http://localhost:4566)")
@@ -81,19 +81,17 @@ func main() {
 		"The name of the notification topic in SQS to publish events' outcomes to; if not "+
 			"specified, no outcomes will be published")
 	var acksTopic = flag.String("acks", "",
-		"If `acks` is specified and provided a value, all positive outcomes (Ok) will be published here, and only "+
-			"errors will be published to the `notifications` queue. If specified and not provided a value, "+
-			"Ok outcomes will not be published. If not specified, all results "+
-			"will published to the `-notifications` queue regardless of their error status")
+		"(Requires `notifications`) The name of the acks topic in SQS to publish events' "+
+			"outcomes to; if specified, Ok outcomes will be published to the acks topic and other "+
+			"(error) outcomes to the notification topic")
+	var notifyErrorsOnly = flag.Bool("notify-errors-only", false,
+		"If set, only errors will be sent to notification topics")
 	var grpcPort = flag.Int("grpc-port", 7398, "The port for the gRPC server")
 	var maxRetries = flag.Int("max-retries", storage.DefaultMaxRetries,
 		"Max number of attempts for a recoverable error to be retried against the Redis cluster")
 	var timeout = flag.Duration("timeout", storage.DefaultTimeout,
 		"Timeout for Redis (as a Duration string, e.g. 1s, 20ms, etc.)")
 	flag.Parse()
-
-	// If acks is provided but has no value, do not publish Ok outcomes
-	ignoreOkOutcomes := checkForFlag("acks") && *acksTopic == ""
 
 	logger.Info("Starting State Machine Server - Rel. %s", server.Release)
 
@@ -121,6 +119,9 @@ func main() {
 		logger.Fatal(fmt.Errorf("no event topic configured, state machines will not " +
 			"be able to receive events"))
 	}
+	if *acksTopic != "" && *notifyErrorsOnly {
+		logger.Fatal(fmt.Errorf("cannot set an acks topic while disabling errors notifications"))
+	}
 	logger.Info("Connecting to SQS Topic: %s", *eventsTopic)
 	sub = pubsub.NewSqsSubscriber(eventsCh, awsEndpoint)
 	if sub == nil {
@@ -134,11 +135,11 @@ func main() {
 		}
 		notificationsCh = make(chan protos.EventResponse)
 		defer close(notificationsCh)
-		pub = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint, ignoreOkOutcomes)
+		pub = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint)
 		if pub == nil {
 			panic("Cannot create a valid SQS Publisher")
 		}
-		go pub.Publish(*notificationsTopic, *acksTopic)
+		go pub.Publish(*notificationsTopic, *acksTopic, *notifyErrorsOnly)
 	}
 	listener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
 		EventsChannel:        eventsCh,
@@ -163,17 +164,6 @@ func main() {
 	logger.Info("HTTP Server (REST API) running at %s://%s", scheme, addr)
 	srv := server.NewHTTPServer(addr, serverLogLevel)
 	logger.Fatal(srv.ListenAndServe())
-}
-
-// checkForFlag checks whether a flag was provided
-func checkForFlag(name string) bool {
-	found := false
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == name {
-			found = true
-		}
-	})
-	return found
 }
 
 // setLogLevel sets the logging level for all the services' loggers, depending on

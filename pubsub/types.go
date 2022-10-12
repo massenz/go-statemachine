@@ -50,10 +50,9 @@ type ListenerOptions struct {
 // SqsPublisher is a wrapper around the AWS SQS client,
 // and is used to publish messages to provided queues when outcomes are encountered.
 type SqsPublisher struct {
-	logger           *log.Log
-	client           *sqs.SQS
-	ignoreOkOutcomes bool
-	notifications    <-chan protos.EventResponse
+	logger        *log.Log
+	client        *sqs.SQS
+	notifications <-chan protos.EventResponse
 }
 
 // SqsSubscriber is a wrapper around the AWS SQS client, and is used to subscribe to Events.
