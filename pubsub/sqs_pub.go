@@ -44,13 +44,8 @@ func (s *SqsPublisher) SetLogLevel(level log.LogLevel) {
 	s.logger.Level = level
 }
 
-// GetQueueUrl retrieves from AWS SQS the URL for the queue, given the topic name;
-// if an empty topic name is provided, returns an empty string
+// GetQueueUrl retrieves from AWS SQS the URL for the queue, given the topic name
 func GetQueueUrl(client *sqs.SQS, topic string) string {
-	if topic == "" {
-		return ""
-	}
-
 	out, err := client.GetQueueUrl(&sqs.GetQueueUrlInput{
 		QueueName: &topic,
 	})
@@ -70,7 +65,10 @@ func (s *SqsPublisher) Publish(errorsTopic string, acksTopic string, notifyError
 	s.logger.Info("SQS Publisher notifyErrorsOnly: %s", notifyErrorsOnly)
 
 	errorsQueueUrl := GetQueueUrl(s.client, errorsTopic)
-	acksQueueUrl := GetQueueUrl(s.client, acksTopic)
+	var acksQueueUrl string
+	if acksTopic != "" {
+		acksQueueUrl = GetQueueUrl(s.client, acksTopic)
+	}
 	delay := int64(0)
 	for eventResponse := range s.notifications {
 		isOKOutcome := eventResponse.Outcome != nil && eventResponse.Outcome.Code == protos.EventOutcome_Ok
