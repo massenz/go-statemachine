@@ -3,7 +3,7 @@
 # Copyright (c) 2022 AlertAvert.com.  All rights reserved.
 # Author: Marco Massenzio (marco@alertavert.com)
 #
-name: Test
+name: Build & Test
 
 on:
   push:
@@ -13,6 +13,7 @@ on:
 
 jobs:
   Test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
