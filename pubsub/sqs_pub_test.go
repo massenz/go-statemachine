@@ -37,6 +37,8 @@ var _ = Describe("SQS Publisher", func() {
 			Expect(testPublisher).ToNot(BeNil())
 			// Set to DEBUG when diagnosing test failures
 			testPublisher.SetLogLevel(logging.NONE)
+			SetDefaultEventuallyPollingInterval(pollingInterval)
+			SetDefaultEventuallyTimeout(timeout)
 		})
 		It("can publish error notifications", func() {
 			notification := protos.EventResponse{
@@ -54,8 +56,8 @@ var _ = Describe("SQS Publisher", func() {
 			}()
 			notificationsCh <- notification
 			res := getSqsMessage(getQueueName(notificationsQueue))
-			Expect(res).ToNot(BeNil())
-			Expect(res.Body).ToNot(BeNil())
+			Eventually(res).ShouldNot(BeNil())
+			Eventually(res.Body).ShouldNot(BeNil())
 
 			// Emulate SQS Client behavior
 			body := *res.Body
@@ -86,14 +88,16 @@ var _ = Describe("SQS Publisher", func() {
 			notificationsCh <- notification
 			m := getSqsMessage(getQueueName(notificationsQueue))
 			var response protos.EventResponse
-			Expect(proto.UnmarshalText(*m.Body, &response)).ShouldNot(HaveOccurred())
-			Expect(&response).To(Respect(&notification))
+			Eventually(func(g Gomega) {
+				g.Expect(proto.UnmarshalText(*m.Body, &response)).ShouldNot(HaveOccurred())
+				g.Expect(&response).To(Respect(&notification))
+			}).Should(Succeed())
 			close(notificationsCh)
 
 			select {
 			case <-done:
 				Succeed()
-			case <-time.After(100 * time.Millisecond):
+			case <-time.After(timeout):
 				Fail("timed out waiting for Publisher to exit")
 			}
 		})
@@ -120,24 +124,28 @@ var _ = Describe("SQS Publisher", func() {
 			// Confirm notificationsQueue received the error
 			notificationsCh <- notification
 			res := getSqsMessage(getQueueName(notificationsQueue))
-			Expect(proto.UnmarshalText(*res.Body, &response)).ShouldNot(HaveOccurred())
-			Expect(&response).To(Respect(&notification))
+			Eventually(func(g Gomega) {
+				g.Expect(proto.UnmarshalText(*res.Body, &response)).ShouldNot(HaveOccurred())
+				g.Expect(&response).To(Respect(&notification))
+			}).Should(Succeed())
 
 			// Confirm acksQueue received the Ok
 			notificationsCh <- ack
 			res = getSqsMessage(getQueueName(acksQueue))
-			Expect(proto.UnmarshalText(*res.Body, &response)).ShouldNot(HaveOccurred())
-			Expect(&response).To(Respect(&ack))
+			Eventually(func(g Gomega) {
+				g.Expect(proto.UnmarshalText(*res.Body, &response)).ShouldNot(HaveOccurred())
+				g.Expect(&response).To(Respect(&ack))
+			}).Should(Succeed())
 			// Confirm notificationsQueue did not receive the Ok
 			res = getSqsMessage(getQueueName(notificationsQueue))
-			Expect(res).To(BeNil())
+			Eventually(res).Should(BeNil())
 
 			close(notificationsCh)
 
 			select {
 			case <-done:
 				Succeed()
-			case <-time.After(100 * time.Millisecond):
+			case <-time.After(timeout):
 				Fail("timed out waiting for Publisher to exit")
 			}
 		})
@@ -183,14 +191,16 @@ var _ = Describe("SQS Publisher", func() {
 				defer close(done)
 				for i := range [10]int{} {
 					res := getSqsMessage(getQueueName(notificationsQueue))
-					Expect(res).ToNot(BeNil())
-					Expect(res.Body).ToNot(BeNil())
+					Eventually(res).ShouldNot(BeNil())
+					Eventually(res.Body).ShouldNot(BeNil())
 					var receivedEvt protos.EventResponse
-					Expect(proto.UnmarshalText(*res.Body, &receivedEvt)).Should(Succeed())
-					Expect(receivedEvt.EventId).To(Equal(fmt.Sprintf("event-%d", i)))
-					Expect(receivedEvt.Outcome.Code).To(Equal(protos.EventOutcome_InternalError))
-					Expect(receivedEvt.Outcome.Details).To(Equal("more details about the error"))
-					Expect(receivedEvt.Outcome.Dest).To(ContainSubstring("test-"))
+					Eventually(func(g Gomega) {
+						g.Expect(proto.UnmarshalText(*res.Body, &receivedEvt)).Should(Succeed())
+						g.Expect(receivedEvt.EventId).To(Equal(fmt.Sprintf("event-%d", i)))
+						g.Expect(receivedEvt.Outcome.Code).To(Equal(protos.EventOutcome_InternalError))
+						g.Expect(receivedEvt.Outcome.Details).To(Equal("more details about the error"))
+						g.Expect(receivedEvt.Outcome.Dest).To(ContainSubstring("test-"))
+					}).Should(Succeed())
 				}
 			}()
 			close(notificationsCh)
@@ -227,7 +237,7 @@ var _ = Describe("SQS Publisher", func() {
 			select {
 			case <-done:
 				Succeed()
-			case <-time.After(100 * time.Millisecond):
+			case <-time.After(timeout):
 				Fail("timed out waiting for Publisher to exit")
 			}
 		})

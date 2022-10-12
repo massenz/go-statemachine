@@ -29,10 +29,12 @@ import (
 )
 
 const (
-	timeout            = 5 * time.Second
 	eventsQueue        = "test-events"
 	notificationsQueue = "test-notifications"
 	acksQueue          = "test-acks"
+	// Including these for clarity and configurability; they are set to default values
+	timeout         = 1 * time.Second       // Default timeout for Eventually is 1s
+	pollingInterval = 10 * time.Millisecond // Default polling interval for Eventually is 10ms
 )
 
 func TestPubSub(t *testing.T) {
