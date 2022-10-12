@@ -71,7 +71,7 @@ func main() {
 		"for the Redis instance (host:port). For redis clusters: a comma-separated list of redis nodes. "+
 		"If using an ElastiCache Redis cluster with cluster mode enabled, you can supply the configuration endpoint.")
 	var cluster = flag.Bool("cluster", false,
-		"Needs to be set if connecting to a Redis instance with cluster mode enabled")
+		"If set, allows connecting to a Redis instance with cluster-mode enabled")
 	var awsEndpoint = flag.String("endpoint-url", "",
 		"HTTP URL for AWS SQS to connect to; usually best left undefined, "+
 			"unless required for local testing purposes (LocalStack uses http://localhost:4566)")
@@ -80,6 +80,12 @@ func main() {
 	var notificationsTopic = flag.String("notifications", "",
 		"The name of the notification topic in SQS to publish events' outcomes to; if not "+
 			"specified, no outcomes will be published")
+	var acksTopic = flag.String("acks", "",
+		"(Requires `notifications`) The name of the acks topic in SQS to publish events' "+
+			"outcomes to; if specified, Ok outcomes will be published to the acks topic and other "+
+			"(error) outcomes to the notification topic")
+	var notifyErrorsOnly = flag.Bool("notify-errors-only", false,
+		"If set, only errors will be sent to notification topics")
 	var grpcPort = flag.Int("grpc-port", 7398, "The port for the gRPC server")
 	var maxRetries = flag.Int("max-retries", storage.DefaultMaxRetries,
 		"Max number of attempts for a recoverable error to be retried against the Redis cluster")
@@ -113,6 +119,9 @@ func main() {
 		logger.Fatal(fmt.Errorf("no event topic configured, state machines will not " +
 			"be able to receive events"))
 	}
+	if *acksTopic != "" && *notifyErrorsOnly {
+		logger.Fatal(fmt.Errorf("cannot set an acks topic while disabling errors notifications"))
+	}
 	logger.Info("Connecting to SQS Topic: %s", *eventsTopic)
 	sub = pubsub.NewSqsSubscriber(eventsCh, awsEndpoint)
 	if sub == nil {
@@ -120,14 +129,17 @@ func main() {
 	}
 
 	if *notificationsTopic != "" {
-		logger.Info("Configuring DLQ Topic: %s", *notificationsTopic)
+		logger.Info("Configuring Topic: %s", notificationsTopic)
+		if *acksTopic != "" {
+			logger.Info("Configuring Topic: %s", acksTopic)
+		}
 		notificationsCh = make(chan protos.EventResponse)
 		defer close(notificationsCh)
 		pub = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint)
 		if pub == nil {
 			panic("Cannot create a valid SQS Publisher")
 		}
-		go pub.Publish(*notificationsTopic)
+		go pub.Publish(*notificationsTopic, *acksTopic, *notifyErrorsOnly)
 	}
 	listener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
 		EventsChannel:        eventsCh,
@@ -169,7 +181,7 @@ func setLogLevel(debug bool, trace bool) {
 		logger.Warn("trace logging Enabled")
 		logger.Level = log.TRACE
 		server.EnableTracing()
-		SetLogLevel([]log.Loggable{store, sub, listener}, log.TRACE)
+		SetLogLevel([]log.Loggable{store, pub, sub, listener}, log.TRACE)
 		serverLogLevel = log.TRACE
 	}
 }

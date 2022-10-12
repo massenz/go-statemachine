@@ -23,15 +23,15 @@ import (
 //
 // The `awsUrl` is the URL of the AWS SQS service, which can be obtained from the AWS Console,
 // or by the local AWS CLI.
-func NewSqsPublisher(errorsChannel <-chan protos.EventResponse, awsUrl *string) *SqsPublisher {
+func NewSqsPublisher(channel <-chan protos.EventResponse, awsUrl *string) *SqsPublisher {
 	client := getSqsClient(awsUrl)
 	if client == nil {
 		return nil
 	}
 	return &SqsPublisher{
-		logger: log.NewLog("SQS-Pub"),
-		client: client,
-		errors: errorsChannel,
+		logger:        log.NewLog("SQS-Pub"),
+		client:        client,
+		notifications: channel,
 	}
 }
 
@@ -56,13 +56,31 @@ func GetQueueUrl(client *sqs.SQS, topic string) string {
 	return *out.QueueUrl
 }
 
-// Publish sends an error message to the DLQ `topic`
-func (s *SqsPublisher) Publish(topic string) {
-	queueUrl := GetQueueUrl(s.client, topic)
-	s.logger = log.NewLog(fmt.Sprintf("SQS-Pub{%s}", topic))
-	s.logger.Info("SQS Publisher started for queue: %s", queueUrl)
-	for eventResponse := range s.errors {
-		delay := int64(0)
+// Publish sends an message to provided topics depending on SQS Publisher settings.
+// If an acksTopic is provided, it will send Ok outcomes to that topic and errors to errorsTopic;
+// else, all outcomes will be sent to the errorsTopic. If notifyErrorsOnly is true, only error outcomes
+// will be sent.
+func (s *SqsPublisher) Publish(errorsTopic string, acksTopic string, notifyErrorsOnly bool) {
+	s.logger.Info("SQS Publisher started for topics: %s %s", errorsTopic, acksTopic)
+	s.logger.Info("SQS Publisher notifyErrorsOnly: %s", notifyErrorsOnly)
+
+	errorsQueueUrl := GetQueueUrl(s.client, errorsTopic)
+	var acksQueueUrl string
+	if acksTopic != "" {
+		acksQueueUrl = GetQueueUrl(s.client, acksTopic)
+	}
+	delay := int64(0)
+	for eventResponse := range s.notifications {
+		isOKOutcome := eventResponse.Outcome != nil && eventResponse.Outcome.Code == protos.EventOutcome_Ok
+		if isOKOutcome && notifyErrorsOnly {
+			s.logger.Debug("Skipping notification for Ok outcome [Event ID: %s]", eventResponse.EventId)
+			continue
+		}
+		queueUrl := errorsQueueUrl
+		if isOKOutcome && acksTopic != "" {
+			queueUrl = acksQueueUrl
+		}
+
 		s.logger.Debug("[%s] %s", eventResponse.String(), queueUrl)
 		msgResult, err := s.client.SendMessage(&sqs.SendMessageInput{
 			DelaySeconds: &delay,

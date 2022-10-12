@@ -29,9 +29,12 @@ import (
 )
 
 const (
-	timeout            = 5 * time.Second
 	eventsQueue        = "test-events"
 	notificationsQueue = "test-notifications"
+	acksQueue          = "test-acks"
+	// Including these for clarity and configurability; they are set to default values
+	timeout         = 1 * time.Second       // Default timeout for Eventually is 1s
+	pollingInterval = 10 * time.Millisecond // Default polling interval for Eventually is 10ms
 )
 
 func TestPubSub(t *testing.T) {
@@ -56,7 +59,7 @@ var (
 var _ = BeforeSuite(func() {
 	testLog.Level = log.NONE
 	Expect(os.Setenv("AWS_REGION", region)).ToNot(HaveOccurred())
-	for _, topic := range []string{eventsQueue, notificationsQueue} {
+	for _, topic := range []string{eventsQueue, notificationsQueue, acksQueue} {
 		topic = fmt.Sprintf("%s-%d", topic, GinkgoParallelProcess())
 
 		_, err := testSqsClient.GetQueueUrl(&sqs.GetQueueUrlInput{
@@ -74,7 +77,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
-	for _, topic := range []string{eventsQueue, notificationsQueue} {
+	for _, topic := range []string{eventsQueue, notificationsQueue, acksQueue} {
 		topic = getQueueName(topic)
 
 		out, err := testSqsClient.GetQueueUrl(&sqs.GetQueueUrlInput{
