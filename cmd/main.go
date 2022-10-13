@@ -129,9 +129,9 @@ func main() {
 	}
 
 	if *notificationsTopic != "" {
-		logger.Info("Configuring Topic: %s", notificationsTopic)
+		logger.Info("Configuring Topic: %s", *notificationsTopic)
 		if *acksTopic != "" {
-			logger.Info("Configuring Topic: %s", acksTopic)
+			logger.Info("Configuring Topic: %s", *acksTopic)
 		}
 		notificationsCh = make(chan protos.EventResponse)
 		defer close(notificationsCh)
