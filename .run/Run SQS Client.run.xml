@@ -1,17 +1,8 @@
-<!--
-  ~ Copyright (c) 2022 AlertAvert.com.  All rights reserved.
-  ~
-  ~ Licensed under the Apache License, Version 2.0
-  ~ http://www.apache.org/licenses/LICENSE-2.0
-  ~
-  ~ Author: Marco Massenzio (marco@alertavert.com)
-  -->
-
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run SQS Client" type="GoApplicationRunConfiguration" factoryName="Go Application" editBeforeRun="true">
     <module name="statemachine" />
     <working_directory value="$PROJECT_DIR$" />
-    <parameters value="-endpoint http://localhost:4566 -q events -dest test.orders#25 -evt ship" />
+    <parameters value="-endpoint http://localhost:4566 -q events -dest test.orders#2 -evt accept" />
     <kind value="FILE" />
     <package value="github.com/massenz/go-statemachine/clients" />
     <directory value="$PROJECT_DIR$" />
