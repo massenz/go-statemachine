@@ -12,11 +12,14 @@ RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
 # Fake AWS configuration to connect to LocalStack docker.
 ENV AWS_REGION=us-west-2 AWS_PROFILE=sm-bot
 
-# Sensible defaults for the server
-# See entrypoint.sh
-ENV SERVER_PORT=7399 DEBUG="" \
-    EVENTS_Q="events" ERRORS_Q="notifications" \
-    REDIS=redis REDIS_PORT=6379
+# Sensible defaults for the server, for reference
+# we list all the environment variables used by the
+# entrypoint script.
+#
+ENV GRPC_PORT=7398 SERVER_PORT=7399 DEBUG=""  \
+    EVENTS_Q="events" NOTIFICATIONS_Q="notifications" \
+    ACKS_Q="" ERRORS_ONLY=1 \
+    CLUSTER="" REDIS=redis REDIS_PORT=6379
 
 WORKDIR /app
 RUN chown sm-bot:sm-bot /app

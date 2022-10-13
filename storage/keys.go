@@ -10,16 +10,16 @@
 package storage
 
 import (
-    "strings"
+	"strings"
 )
 
 const (
-    ConfigsPrefix = "configs"
-    EventsPrefix  = "events"
-    FsmPrefix     = "fsm"
+	ConfigsPrefix = "configs"
+	EventsPrefix  = "events"
+	FsmPrefix     = "fsm"
 
-    KeyPrefixComponentsSeparator = ":"
-    KeyPrefixIDSeparator         = "#"
+	KeyPrefixComponentsSeparator = ":"
+	KeyPrefixIDSeparator         = "#"
 )
 
 // Here we keep all the key definition for the various Redis collections.
@@ -29,29 +29,29 @@ const (
 // By convention, the config ID is the `name:version` of the configuration; however,
 // this is not enforced here, but rather in the implementation of the stores.
 func NewKeyForConfig(id string) string {
-    return strings.Join([]string{ConfigsPrefix, id}, KeyPrefixIDSeparator)
+	return strings.Join([]string{ConfigsPrefix, id}, KeyPrefixIDSeparator)
 }
 
 // NewKeyForMachine fsm:<cfg:name>#<machine:id>
 func NewKeyForMachine(id string, cfgName string) string {
-    prefix := strings.Join([]string{FsmPrefix, cfgName}, KeyPrefixComponentsSeparator)
-    return strings.Join([]string{prefix, id}, KeyPrefixIDSeparator)
+	prefix := strings.Join([]string{FsmPrefix, cfgName}, KeyPrefixComponentsSeparator)
+	return strings.Join([]string{prefix, id}, KeyPrefixIDSeparator)
 }
 
 // NewKeyForMachinesByState fsm:<cfg:name>:state#<state>
 func NewKeyForMachinesByState(cfgName, state string) string {
-    prefix := strings.Join([]string{FsmPrefix, cfgName, "state"}, KeyPrefixComponentsSeparator)
-    return strings.Join([]string{prefix, state}, KeyPrefixIDSeparator)
+	prefix := strings.Join([]string{FsmPrefix, cfgName, "state"}, KeyPrefixComponentsSeparator)
+	return strings.Join([]string{prefix, state}, KeyPrefixIDSeparator)
 }
 
 // NewKeyForEvent events:<cfg:name>#<event:id>
 func NewKeyForEvent(id string, cfgName string) string {
-    prefix := strings.Join([]string{EventsPrefix, cfgName}, KeyPrefixComponentsSeparator)
-    return strings.Join([]string{prefix, id}, KeyPrefixIDSeparator)
+	prefix := strings.Join([]string{EventsPrefix, cfgName}, KeyPrefixComponentsSeparator)
+	return strings.Join([]string{prefix, id}, KeyPrefixIDSeparator)
 }
 
 // NewKeyForOutcome events:<cfg:name>:outcome#<event:id>
 func NewKeyForOutcome(id string, cfgName string) string {
-    prefix := strings.Join([]string{EventsPrefix, cfgName, "outcome"}, KeyPrefixComponentsSeparator)
-    return strings.Join([]string{prefix, id}, KeyPrefixIDSeparator)
+	prefix := strings.Join([]string{EventsPrefix, cfgName, "outcome"}, KeyPrefixComponentsSeparator)
+	return strings.Join([]string{prefix, id}, KeyPrefixIDSeparator)
 }

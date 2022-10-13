@@ -12,6 +12,8 @@ A basic implementation of a Finite State Machine in Go
 **The code is copyright (c) 2022 AlertAvert.com. All rights reserved**<br>
 The code is released under the Apache 2.0 License, see `LICENSE` for details.
 
+Fixes and additions are always welcome and warmly appreciated, please see the [Contributing](#contributing) section for some guidance.
+
 # Overview
 
 ## Design
@@ -451,10 +453,14 @@ Usage of build/bin/sm-server:
     	Max number of attempts for a recoverable error to be retried against the Redis cluster (default 3)
   -notifications string
     	The name of the notification topic in SQS to publish events' outcomes to; if not specified, no outcomes will be published
+  -acks string
+    	(Requires `notifications`) The name of the acks topic in SQS to publish events' outcomes to; if specified, Ok outcomes will be published to the acks topic and other (error) outcomes to the notification topic
   -redis string
     	URI for the Redis cluster (host:port)
   -cluster
-        Enables connecting to a Redis deployment in cluster mode
+        If set, allows connecting to a Redis instance with cluster-mode enabled
+  -notify-error-only
+        If set, only errors will be sent to notification topics
   -timeout duration
     	Timeout for Redis (as a Duration string, e.g. 1s, 20ms, etc.) (default 200ms)
   -trace
@@ -513,6 +519,11 @@ ENV ERRORS_Q=notifications
 ENV REDIS=redis
 ENV REDIS_PORT=6379
 ENV DEBUG=""
+
+# Optional settings for the server
+ENV ACKS="-acks acks"
+ENV CLUSTER="-cluster"
+ENV NOTIFY_ERRORS_ONLY="-notify-errors-only"
 ```
 
 Additionally, a valid `credentials` file will need to be mounted (using the `-v` flag) in the container if connecting to AWS (instead of LocalStack):
@@ -524,6 +535,39 @@ where the `[profile]` matches the value in `AWS_PROFILE`.
 
 # Contributing
 
-Please follow the Go Style enshrined in `go fmt` before submitting PRs, refer to actual [Issues](#), and provide sufficient testing (ideally, ensuring your code coverage is better than 80%).
+Please follow the Go Style enshrined in `go fmt` before submitting PRs, refer to actual [Issues](https://github.com/massenz/go-statemachine/issues), and provide sufficient testing (ideally, ensuring code coverage is better than 70%).
 
 We prefer you submit a PR directly from cloning this repository and creating a feature branch, rather than from a fork.
+
+If you are relatively new to this topic, there are a few issues labeled as [`Good First Issue`](https://github.com/massenz/go-statemachine/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22), those are a good starting point.
+
+Please, always **squash and rebase** on `main`, we try to keep a relatively clean and linear commit history, and each PR should just be **one** commit with a descriptive title (see below).
+
+## Detailed Requirements to submit a PR
+
+1. make sure the Issue you are trying to address is referenced appropriately in the PR Title:
+
+```
+[#34] Implements gRPC API to update/retrieve Event outcomes
+```
+
+2. prior to submitting the PR, make sure that the code is properly formatted and tested:
+
+```
+make fmt && make test
+```
+
+3. if this is a breaking change, or a significant change to the API or behavior, please update the [README](README.md) accordingly.
+
+## Guidelines to be A Good Contributor
+
+Provide enough detail of your changes in the PR comments and make it easy for reviewers:
+
+* if your code contains several lines of "commented out dead code" make sure that you clearly explain why this is so with a `TODO` and an explanation of why are you leaving dead code around (remember, we are using `git` here, there is no such thing "in case we forget" - `git` **never** forgets)
+* try and be consistent with the rest of the code base and, specifically, the code around the changes you are implementing
+* be consistent with the `import` format and sequence: if in doubt, again, look at the existing code and be **consistent**
+* make sure the new code is **covered by unit tests**, use `make cov` to check coverage % and view lines covered in the browser
+* try and adopt "The Boyscout Rule": leave the campsite cleaner than you found it -- in other words, adding tests, fixing typos, fixing **minor** issues is always **greatly** appreciated
+* conversely, try and keep the PR focused on one topic/issue/change, and one only: we'd rather review 2 PRs, than try and disentangle the two unrelated issues you're trying to address
+
+If in doubt, look at the existing code, or feel free to ask in the PR's comments - we don't bite :-)
