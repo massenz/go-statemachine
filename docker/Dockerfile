@@ -14,7 +14,7 @@ ENV AWS_REGION=us-west-2 AWS_PROFILE=sm-bot
 
 # Sensible defaults for the server
 # See entrypoint.sh
-ENV SERVER_PORT=7399 DEBUG="" \
+ENV SERVER_PORT=7399 DEBUG="" CLUSTER="" \
     EVENTS_Q="events" ERRORS_Q="notifications" \
     REDIS=redis REDIS_PORT=6379
 
