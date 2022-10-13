@@ -16,6 +16,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	log "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
+	"strconv"
 )
 
 // NewSqsPublisher will create a new `Publisher` to send error notifications received on the
@@ -61,15 +62,14 @@ func GetQueueUrl(client *sqs.SQS, topic string) string {
 // else, all outcomes will be sent to the errorsTopic. If notifyErrorsOnly is true, only error outcomes
 // will be sent.
 func (s *SqsPublisher) Publish(errorsTopic string, acksTopic string, notifyErrorsOnly bool) {
-	s.logger.Info("SQS Publisher started for topics: %s %s", errorsTopic, acksTopic)
-	s.logger.Info("SQS Publisher notifyErrorsOnly: %s", notifyErrorsOnly)
-
 	errorsQueueUrl := GetQueueUrl(s.client, errorsTopic)
 	var acksQueueUrl string
 	if acksTopic != "" {
 		acksQueueUrl = GetQueueUrl(s.client, acksTopic)
 	}
 	delay := int64(0)
+	s.logger.Info("SQS Publisher started for topics: %s %s", errorsQueueUrl, acksQueueUrl)
+	s.logger.Info("SQS Publisher notifyErrorsOnly: %s", strconv.FormatBool(notifyErrorsOnly))
 	for eventResponse := range s.notifications {
 		isOKOutcome := eventResponse.Outcome != nil && eventResponse.Outcome.Code == protos.EventOutcome_Ok
 		if isOKOutcome && notifyErrorsOnly {
