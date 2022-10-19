@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/golang/protobuf/proto"
-	log "github.com/massenz/slf4go/logging"
+	slf4go "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	"strconv"
 )
@@ -30,16 +30,16 @@ func NewSqsPublisher(channel <-chan protos.EventResponse, awsUrl *string) *SqsPu
 		return nil
 	}
 	return &SqsPublisher{
-		logger:        log.NewLog("SQS-Pub"),
+		logger:        slf4go.NewLog("SQS-Pub"),
 		client:        client,
 		notifications: channel,
 	}
 }
 
 // SetLogLevel allows the SqsSubscriber to implement the log.Loggable interface
-func (s *SqsPublisher) SetLogLevel(level log.LogLevel) {
+func (s *SqsPublisher) SetLogLevel(level slf4go.LogLevel) {
 	if s == nil {
-		fmt.Println("WARN: attempting to set log level on nil Publisher")
+		slf4go.RootLog.Warn("attempting to set log level on nil Publisher, ignoring")
 		return
 	}
 	s.logger.Level = level
@@ -52,7 +52,7 @@ func GetQueueUrl(client *sqs.SQS, topic string) string {
 	})
 	if err != nil || out.QueueUrl == nil {
 		// From the Google School: fail fast and noisily from an unrecoverable error
-		log.RootLog.Fatal(fmt.Errorf("cannot get SQS Queue URL for topic %s: %v", topic, err))
+		slf4go.RootLog.Fatal(fmt.Errorf("cannot get SQS Queue URL for topic %s: %v", topic, err))
 	}
 	return *out.QueueUrl
 }
