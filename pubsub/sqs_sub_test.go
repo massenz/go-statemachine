@@ -56,7 +56,6 @@ var _ = Describe("SQS Subscriber", func() {
 
 			select {
 			case req := <-eventsCh:
-				testLog.Debug("Received Event -- Timestamp: %v", req.Event.Timestamp)
 				// We null the timestamp as we don't want to compare that with Respect
 				msg.Event.Timestamp = nil
 				req.Event.Timestamp = nil

@@ -9,7 +9,7 @@ require (
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
-	github.com/massenz/slf4go v0.3.1-gb35df61
+	github.com/massenz/slf4go v0.3.2-g4eb5504
 	github.com/massenz/statemachine-proto/golang v0.6.0-ga901a76
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.1
