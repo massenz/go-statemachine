@@ -18,7 +18,7 @@ services:
 
   localstack:
     container_name: "awslocal"
-    image: "localstack/localstack:latest"
+    image: "localstack/localstack:1.2"
     hostname: awslocal
     environment:
       - AWS_REGION=us-west-2
