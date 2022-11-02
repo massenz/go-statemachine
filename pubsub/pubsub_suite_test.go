@@ -24,8 +24,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-
-	log "github.com/massenz/slf4go/logging"
 )
 
 const (
@@ -53,11 +51,9 @@ var (
 			Region:   &region,
 		},
 	})))
-	testLog = log.NewLog("PUBSUB")
 )
 
 var _ = BeforeSuite(func() {
-	testLog.Level = log.NONE
 	Expect(os.Setenv("AWS_REGION", region)).ToNot(HaveOccurred())
 	for _, topic := range []string{eventsQueue, notificationsQueue, acksQueue} {
 		topic = fmt.Sprintf("%s-%d", topic, GinkgoParallelProcess())
@@ -67,7 +63,6 @@ var _ = BeforeSuite(func() {
 		})
 		if err != nil {
 			// the queue does not exist and ought to be created
-			testLog.Info("Creating SQS Queue %s", topic)
 			_, err = testSqsClient.CreateQueue(&sqs.CreateQueueInput{
 				QueueName: &topic,
 			})
@@ -85,7 +80,6 @@ var _ = AfterSuite(func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 		if out != nil {
-			testLog.Info("Deleting SQS Queue %s", topic)
 			_, err = testSqsClient.DeleteQueue(&sqs.DeleteQueueInput{QueueUrl: out.QueueUrl})
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -121,7 +115,6 @@ func getSqsMessage(queue string) *sqs.Message {
 // send it over the `queue`, so that we can test the Publisher can correctly receive it.
 func postSqsMessage(queue string, msg *api.EventRequest) error {
 	q := pubsub.GetQueueUrl(testSqsClient, queue)
-	testLog.Debug("Post Message -- Timestamp: %v", msg.Event.Timestamp)
 	_, err := testSqsClient.SendMessage(&sqs.SendMessageInput{
 		MessageBody: aws.String(proto.MarshalTextString(msg)),
 		QueueUrl:    &q,

@@ -192,6 +192,7 @@ func (csm *RedisStore) get(key string, value proto.Message) error {
         if err == redis.Nil {
             // The key isn't there, no point in retrying
             csm.logger.Debug("Key `%s` not found", key)
+            cancel()
             return err
         } else if err != nil {
             if ctx.Err() == context.DeadlineExceeded {
@@ -199,6 +200,7 @@ func (csm *RedisStore) get(key string, value proto.Message) error {
                 csm.logger.Error(err.Error())
                 if attemptsLeft == 0 {
                     csm.logger.Error("max retries reached, giving up")
+                    cancel()
                     return err
                 }
                 csm.logger.Trace("retrying after timeout, attempts left: %d", attemptsLeft)
@@ -206,9 +208,11 @@ func (csm *RedisStore) get(key string, value proto.Message) error {
             } else {
                 // This is a different error, we'll just return it
                 csm.logger.Error(err.Error())
+                cancel()
                 return err
             }
         } else {
+            cancel()
             return proto.Unmarshal(data, value)
         }
     }
@@ -226,10 +230,12 @@ func (csm *RedisStore) put(key string, value proto.Message, ttl time.Duration) e
     for {
         var ctx context.Context
         ctx, cancel = context.WithTimeout(context.Background(), csm.Timeout)
+
         attemptsLeft--
         data, err := proto.Marshal(value)
         if err != nil {
             csm.logger.Error("cannot convert proto to bytes: %q", err)
+            cancel()
             return err
         }
         cmd := csm.client.Set(ctx, key, data, ttl)
@@ -240,15 +246,20 @@ func (csm *RedisStore) put(key string, value proto.Message, ttl time.Duration) e
                 csm.logger.Error(err.Error())
                 if attemptsLeft == 0 {
                     csm.logger.Error("max retries reached, giving up")
+                    cancel()
                     return err
                 }
-                csm.logger.Trace("retrying after timeout, attempts left: %d", attemptsLeft)
+                csm.logger.Debug("retrying after timeout, attempts left: %d", attemptsLeft)
                 csm.wait()
             } else {
+                cancel()
                 return err
             }
+        } else {
+            csm.logger.Debug("Stored key `%s`", key)
+            cancel()
+            return nil
         }
-        return nil
     }
 }
 
@@ -259,7 +270,7 @@ func (csm *RedisStore) Health() error {
     _, err := csm.client.Ping(ctx).Result()
     if err != nil {
         csm.logger.Error("Error pinging redis: %s", err.Error())
-        return fmt.Errorf("Redis health check failed: %w", err)
+        return fmt.Errorf("redis health check failed: %w", err)
     }
     return nil
 }
@@ -272,5 +283,4 @@ func (csm *RedisStore) Health() error {
 func (csm *RedisStore) wait() {
     waitForMsec := rand.Intn(500)
     time.Sleep(time.Duration(waitForMsec) * time.Millisecond)
-
 }

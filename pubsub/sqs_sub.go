@@ -77,7 +77,7 @@ func (s *SqsSubscriber) SetLogLevel(level log.LogLevel) {
 // Subscribe runs until signaled on the Done channel and listens for incoming Events
 func (s *SqsSubscriber) Subscribe(topic string, done <-chan interface{}) {
 	queueUrl := GetQueueUrl(s.client, topic)
-	s.logger = log.NewLog(fmt.Sprintf("SQS-Sub{%s}", topic))
+	s.logger.Name = fmt.Sprintf("%s{%s}", s.logger.Name, topic)
 	s.logger.Info("SQS Subscriber started for queue: %s", queueUrl)
 
 	timeout := int64(s.Timeout.Seconds())
