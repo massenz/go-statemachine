@@ -44,7 +44,7 @@ type grpcSubscriber struct {
 }
 
 func (s *grpcSubscriber) ProcessEvent(ctx context.Context, request *protos.EventRequest) (*protos.
-EventResponse, error) {
+	EventResponse, error) {
 	if request.Dest == "" {
 		return nil, status.Error(codes.FailedPrecondition, api.MissingDestinationError.Error())
 	}
