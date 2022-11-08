@@ -158,12 +158,14 @@ var _ = Describe("GrpcServer", func() {
 			cfg      *api.Configuration
 			fsm      *api.FiniteStateMachine
 			done     func()
-			store    = storage.NewInMemoryStore()
+			store    storage.StoreManager
 		)
-		store.SetLogLevel(logging.NONE)
 
 		// Server setup
 		BeforeEach(func() {
+			store = storage.NewInMemoryStore()
+			store.SetLogLevel(logging.NONE)
+
 			listener, _ = net.Listen("tcp", ":0")
 			cc, _ := g.Dial(listener.Addr().String(), g.WithInsecure())
 			client = api.NewStatemachineServiceClient(cc)
@@ -186,7 +188,7 @@ var _ = Describe("GrpcServer", func() {
 		AfterEach(func() {
 			done()
 		})
-		// Store setup
+		// Test data setup
 		BeforeEach(func() {
 			cfg = &api.Configuration{
 				Name:    "test-conf",

@@ -91,6 +91,10 @@ var _ = Describe("RedisStore", func() {
 			Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
 			Expect(&found).To(Respect(cfg))
 		})
+		It("will not save a duplicate configurations", func() {
+			Expect(store.PutConfig(cfg)).ToNot(HaveOccurred())
+			Expect(store.PutConfig(cfg)).To(HaveOccurred())
+		})
 		It("should not fail for a non-existent FSM", func() {
 			data, ok := store.GetStateMachine("fake", "bad-config")
 			Expect(ok).To(BeFalse())

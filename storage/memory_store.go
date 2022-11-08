@@ -12,24 +12,25 @@ package storage
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/massenz/go-statemachine/api"
-	log "github.com/massenz/slf4go/logging"
-	protos "github.com/massenz/statemachine-proto/golang/api"
+	slf4go "github.com/massenz/slf4go/logging"
 	"strings"
 	"sync"
 	"time"
+
+	protos "github.com/massenz/statemachine-proto/golang/api"
 )
+
+type InMemoryStore struct {
+	logger       *slf4go.Log
+	mux          sync.RWMutex
+	backingStore map[string][]byte
+}
 
 func NewInMemoryStore() StoreManager {
 	return &InMemoryStore{
 		backingStore: make(map[string][]byte),
-		logger:       log.NewLog("memory_store"),
+		logger:       slf4go.NewLog("InMemoryStore"),
 	}
-}
-
-type InMemoryStore struct {
-	logger       *log.Log
-	mux          sync.RWMutex
-	backingStore map[string][]byte
 }
 
 func (csm *InMemoryStore) get(key string, value proto.Message) bool {
@@ -97,6 +98,9 @@ func (csm *InMemoryStore) GetConfig(id string) (cfg *protos.Configuration, ok bo
 
 func (csm *InMemoryStore) PutConfig(cfg *protos.Configuration) error {
 	key := NewKeyForConfig(api.GetVersionId(cfg))
+	if _, found := csm.backingStore[key]; found {
+		return AlreadyExistsError(key)
+	}
 	csm.logger.Debug("Storing Configuration [%s] with key: %s", api.GetVersionId(cfg), key)
 	return csm.put(key, cfg)
 }
@@ -114,14 +118,14 @@ func (csm *InMemoryStore) GetStateMachine(id string, cfg string) (*protos.Finite
 
 func (csm *InMemoryStore) PutStateMachine(id string, machine *protos.FiniteStateMachine) error {
 	if machine == nil {
-		return IllegalStoreError
+		return IllegalStoreError(id)
 	}
 	key := NewKeyForMachine(id, strings.Split(machine.ConfigId, api.ConfigurationVersionSeparator)[0])
 	csm.logger.Debug("Storing StateMachine [%s] with key: %s", id, key)
 	return csm.put(key, machine)
 }
 
-func (csm *InMemoryStore) SetLogLevel(level log.LogLevel) {
+func (csm *InMemoryStore) SetLogLevel(level slf4go.LogLevel) {
 	csm.logger.Level = level
 }
 
