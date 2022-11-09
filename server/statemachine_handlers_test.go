@@ -29,13 +29,15 @@ import (
 	"github.com/massenz/statemachine-proto/golang/api"
 )
 
-func ReaderFromRequest(request *server.StateMachineRequest) io.Reader {
+// ReaderFromRequest takes a request object and creates a Reader to be used
+// as the body of the request.
+func ReaderFromRequest(request interface{}) io.Reader {
 	jsonBytes, err := json.Marshal(request)
 	Expect(err).ToNot(HaveOccurred())
 	return bytes.NewBuffer(jsonBytes)
 }
 
-var _ = Describe("Handlers", func() {
+var _ = Describe("Statemachine Handlers", func() {
 	var (
 		req    *http.Request
 		writer *httptest.ResponseRecorder
@@ -49,7 +51,7 @@ var _ = Describe("Handlers", func() {
 	// Disabling verbose logging, as it pollutes test output;
 	// set it back to DEBUG when tests fail, and you need to
 	// diagnose the failure.
-	server.SetLogLevel(log.WARN)
+	server.SetLogLevel(log.NONE)
 
 	Context("when creating state machines", func() {
 		BeforeEach(func() {
@@ -61,8 +63,8 @@ var _ = Describe("Handlers", func() {
 			var request *server.StateMachineRequest
 			BeforeEach(func() {
 				request = &server.StateMachineRequest{
-					ID:                   "test-machine",
-					ConfigurationVersion: "test-config:v1",
+					ID:            "test-machine",
+					Configuration: "test-config:v1",
 				}
 				config := &api.Configuration{
 					Name:          "test-config",
@@ -105,22 +107,18 @@ var _ = Describe("Handlers", func() {
 				Expect(fsm.State).To(Equal("start"))
 			})
 			It("should return a Conflict error if the ID already exists", func() {
-				store.SetLogLevel(log.DEBUG)
-				server.SetLogLevel(log.DEBUG)
 				Expect(store.PutStateMachine(request.ID, &api.FiniteStateMachine{
-					ConfigId: request.ConfigurationVersion,
+					ConfigId: request.Configuration,
 					State:    "start",
 				})).ToNot(HaveOccurred())
 				router.ServeHTTP(writer, req)
-				store.SetLogLevel(log.NONE)
-				server.SetLogLevel(log.NONE)
 				Expect(writer.Code).To(Equal(http.StatusConflict))
 			})
 		})
 		Context("without specifying an ID", func() {
 			BeforeEach(func() {
 				request := &server.StateMachineRequest{
-					ConfigurationVersion: "test-config:v1",
+					Configuration: "test-config:v1",
 				}
 				config := &api.Configuration{
 					Name:          "test-config",
@@ -151,12 +149,11 @@ var _ = Describe("Handlers", func() {
 			})
 
 		})
-
 		Context("with a non-existent configuration", func() {
 			BeforeEach(func() {
 				request := &server.StateMachineRequest{
-					ConfigurationVersion: "test-config:v2",
-					ID:                   "1234",
+					Configuration: "test-config:v2",
+					ID:            "1234",
 				}
 				req = httptest.NewRequest(http.MethodPost,
 					strings.Join([]string{server.ApiPrefix, server.StatemachinesEndpoint}, "/"),
@@ -171,6 +168,103 @@ var _ = Describe("Handlers", func() {
 				Expect(json.Unmarshal(writer.Body.Bytes(), &response)).To(HaveOccurred())
 				_, found := store.GetConfig("1234")
 				Expect(found).To(BeFalse())
+			})
+		})
+	})
+
+	Context("when modifying state machines", func() {
+		var configName string
+		var fsmId string
+
+		BeforeEach(func() {
+			writer = httptest.NewRecorder()
+			store = storage.NewInMemoryStore()
+			server.SetStore(store)
+		})
+		Context("with a valid request", func() {
+			var request *server.StateMachineChangeRequest
+			BeforeEach(func() {
+				configName = "test.config"
+				fsmId = "12345-abcdef"
+				request = &server.StateMachineChangeRequest{
+					ConfigurationVersion: "v2",
+					CurrentState:         "new-state",
+				}
+				config := &api.Configuration{
+					Name:          configName,
+					Version:       "v1",
+					States:        nil,
+					Transitions:   nil,
+					StartingState: "old-state",
+				}
+				Expect(store.PutConfig(config)).ToNot(HaveOccurred())
+				fsm := &api.FiniteStateMachine{
+					ConfigId: GetVersionId(config),
+					State:    config.StartingState,
+					History: []*api.Event{
+						{Transition: &api.Transition{Event: "order_placed"}, Originator: ""},
+						{Transition: &api.Transition{Event: "checked_out"}, Originator: ""},
+					},
+				}
+				Expect(store.PutStateMachine(fsmId, fsm)).ToNot(HaveOccurred())
+				config.Version = request.ConfigurationVersion
+				Expect(store.PutConfig(config)).ToNot(HaveOccurred())
+				req = httptest.NewRequest(http.MethodPut,
+					strings.Join([]string{
+						server.ApiPrefix, server.StatemachinesEndpoint, configName, fsmId,
+					}, "/"),
+					ReaderFromRequest(request))
+			})
+			It("should succeed", func() {
+				router.ServeHTTP(writer, req)
+				Expect(writer.Code).To(Equal(http.StatusOK))
+				response := server.StateMachineResponse{}
+				Expect(json.Unmarshal(writer.Body.Bytes(), &response)).ToNot(HaveOccurred())
+
+				Expect(response.ID).To(Equal(fsmId))
+				Expect(response.StateMachine.ConfigId).To(Equal(configName + ":" + request.ConfigurationVersion))
+				Expect(response.StateMachine.State).To(Equal(request.CurrentState))
+			})
+			It("should save it in the backing store", func() {
+				router.ServeHTTP(writer, req)
+				Expect(writer.Code).To(Equal(http.StatusOK))
+				fsm, found := store.GetStateMachine(fsmId, configName)
+				Expect(found).To(BeTrue())
+				Expect(fsm.State).To(Equal(request.CurrentState))
+				Expect(fsm.ConfigId).To(Equal(configName + ":" + request.ConfigurationVersion))
+				Expect(len(fsm.History)).To(Equal(2))
+			})
+			It("should return a NotFound if the FSM does not exist", func() {
+				req = httptest.NewRequest(http.MethodPut,
+					strings.Join([]string{
+						server.ApiPrefix, server.StatemachinesEndpoint, configName, "fake-fsm",
+					}, "/"),
+					ReaderFromRequest(request))
+				router.ServeHTTP(writer, req)
+				Expect(writer.Code).To(Equal(http.StatusNotFound))
+
+			})
+			It("should return a NotFound error if the Config does not exist", func() {
+				request = &server.StateMachineChangeRequest{
+					ConfigurationVersion: "v8",
+					CurrentState:         "fake-state",
+				}
+				req = httptest.NewRequest(http.MethodPut,
+					strings.Join([]string{
+						server.ApiPrefix, server.StatemachinesEndpoint, configName, fsmId,
+					}, "/"),
+					ReaderFromRequest(request))
+				router.ServeHTTP(writer, req)
+				Expect(writer.Code).To(Equal(http.StatusNotFound))
+			})
+			It("should fail gracefully with a malformed request", func() {
+				req = httptest.NewRequest(http.MethodPut,
+					strings.Join([]string{
+						server.ApiPrefix, server.StatemachinesEndpoint, configName, fsmId,
+					}, "/"),
+					bytes.NewReader([]byte(`{"not": "my", "best": json}`)))
+				router.ServeHTTP(writer, req)
+				Expect(writer.Code).To(Equal(http.StatusBadRequest))
 			})
 		})
 	})

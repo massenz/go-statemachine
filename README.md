@@ -220,13 +220,13 @@ Trying to create an FSM with an existing ID will cause a `409 Conflict` error to
 
 While it is recommended that changing the `state` or the `configuration` of an FSM is **not** done via API calls as a matter of course, there may be situations in which this may be unavoidable, especially when a new `Configuration` `version` needs to be released and existing FSMs need to use the new one (for example, because the business flow has changed, or a better way to model it has been identified).
 
-In order to allow for those scenarios, there is a `PUT` endpoint that allows for a `statemachine` to be modified: either a new `config_id` or `state` (or both) can be specified:
+In order to allow for those scenarios, there is a `PUT` endpoint that allows for a `statemachine` to be modified: either a new `configuration_version` or `current_state` (or both) can be specified:
 
 ```
 PUT /api/v1/statemachines/{config}/{id}
 
 {
-  "configuration_version": "test.orders:v4",
+  "configuration_version": "v4",
   "current_state": "accepted"
 }
 ```
@@ -248,7 +248,7 @@ HTTP/1.1 200 OK
 
 
 └─( http --json PUT :7399/api/v1/statemachines/test.orders/2 \
-        configuration_version=test.orders:v4 \
+        configuration_version=v4 \
         current_state=accepted
 
 HTTP/1.1 200 OK
@@ -278,7 +278,7 @@ If a non-existent configuration is used, a `404` error code is returned:
 
 ```
 └─( http --json PUT :7399/api/v1/statemachines/test.orders/2 \
-        configuration_version=test.orders:v5 \
+        configuration_version=v5 \
         current_state=accepted
 
 HTTP/1.1 404 Not Found
@@ -303,6 +303,16 @@ HTTP/1.1 200 OK
     }
 }
 ```
+
+> **Important**
+>
+> Given that the `configuration.name` defines the "type" of the FSM, this **cannot** be changed with a PUT request: the `cfg_name` is taken from the API URI path and is joined with the new request `configuration_version` to arrive at a full `Configuration` ID.
+>
+> This will **not** work:
+>
+> `PUT /api/v1/statemachines/orders/123456  configuration_version=devices:v1`
+>
+> even if a `devices:v1` configuration does exist: a 404 error would be returned as we would be looking up a configuration with an ID of `orders:devices:v1`.
 
 
 ### Event Outcomes

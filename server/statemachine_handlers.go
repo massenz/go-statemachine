@@ -32,7 +32,7 @@ func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if request.ConfigurationVersion == "" {
+	if request.Configuration == "" {
 		http.Error(w, "must always specify a fully qualified configuration version",
 			http.StatusBadRequest)
 		return
@@ -41,11 +41,11 @@ func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
 		request.ID = uuid.New().String()
 	} else {
 		logger.Debug("checking whether FSM [%s] already exists", request.ID)
-		configNameParts := strings.Split(request.ConfigurationVersion,
+		configNameParts := strings.Split(request.Configuration,
 			storage.KeyPrefixComponentsSeparator)
 		if len(configNameParts) != 2 {
 			http.Error(w, fmt.Sprintf("config name is not properly formatted (name:version): %s",
-				request.ConfigurationVersion), http.StatusBadRequest)
+				request.Configuration), http.StatusBadRequest)
 			return
 		}
 		if _, found := storeManager.GetStateMachine(request.ID, configNameParts[0]); found {
@@ -55,8 +55,8 @@ func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	logger.Debug("looking up Config [%s]", request.ConfigurationVersion)
-	cfg, ok := storeManager.GetConfig(request.ConfigurationVersion)
+	logger.Debug("looking up Config [%s]", request.Configuration)
+	cfg, ok := storeManager.GetConfig(request.Configuration)
 	if !ok {
 		http.Error(w, "configuration not found", http.StatusNotFound)
 		return
@@ -104,7 +104,7 @@ func ModifyStatemachineHandler(w http.ResponseWriter, r *http.Request) {
 	cfgName := vars["cfg_name"]
 	fsmId := vars["sm_id"]
 
-	var request StateMachineRequest
+	var request StateMachineChangeRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -118,10 +118,11 @@ func ModifyStatemachineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if request.ConfigurationVersion != "" {
-		// If the ConfigurationVersion is specified in the request, we assume
+		// If the Configuration is specified in the request, we assume
 		// that the caller wanted to update it.
-		logger.Debug("looking up Config [%s]", request.ConfigurationVersion)
-		cfg, ok := storeManager.GetConfig(request.ConfigurationVersion)
+		configId := strings.Join([]string{cfgName, request.ConfigurationVersion}, storage.KeyPrefixComponentsSeparator)
+		logger.Debug("looking up Config [%s]", configId)
+		cfg, ok := storeManager.GetConfig(configId)
 		if !ok {
 			http.Error(w, "configuration not found", http.StatusNotFound)
 			return
