@@ -147,7 +147,7 @@ func (s *grpcSubscriber) GetEventOutcome(ctx context.Context, request *protos.Ge
 	*protos.EventResponse, error) {
 
 	s.Logger.Debug("looking up EventOutcome %s", request.GetId())
-	dest := strings.Split(request.GetId(), "#")
+	dest := strings.Split(request.GetId(), storage.KeyPrefixIDSeparator)
 	if len(dest) != 2 {
 		return nil, status.Error(codes.InvalidArgument,
 			fmt.Sprintf("invalid destination [%s] expected: <type>#<id>", request.GetId()))

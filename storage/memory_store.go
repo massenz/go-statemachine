@@ -106,13 +106,14 @@ func (csm *InMemoryStore) PutConfig(cfg *protos.Configuration) error {
 }
 
 func (csm *InMemoryStore) GetStateMachine(id string, cfg string) (*protos.FiniteStateMachine, bool) {
-	csm.logger.Debug("Fetching StateMachine [%s#%s]", cfg, id)
 	key := NewKeyForMachine(id, cfg)
-	machine := protos.FiniteStateMachine{}
+	csm.logger.Debug("Getting StateMachine [%s]", key)
+	var machine protos.FiniteStateMachine
 	if csm.get(key, &machine) {
-		csm.logger.Debug("Found StateMachine [%s#%s]: %s", cfg, id, machine.State)
+		csm.logger.Debug("Found StateMachine [%s] in state: %s", key, machine.State)
 		return &machine, true
 	}
+	csm.logger.Debug("Not found for key %s", key)
 	return nil, false
 }
 

@@ -174,8 +174,8 @@ Location: /api/v1/statemachines/devices/6b5af0e8-9033-47e2-97db-337476f1402a
 ```
 
 > **Note**
-> The "type" of FSM (in other words, its configuration - but **not** the version)
-> is included in the FSM's URI.
+>
+> The "type" of FSM (in other words, its configuration's **name** - but **not** the version) is included in the FSM's URI.
 
 To obtain the current state of the FSM, simply use a `GET`:
 
@@ -213,6 +213,97 @@ which shows that an event `backorder` was sent at `Sun Aug 28 2022 17:35:24 PDT`
 Again, the "type" of FSM **must** be specified in the URL (`/devices`).
 
 See [`grpc_client`](clients/grpc_client.go) for a fully worked out example as to how to send events to an FSM.
+
+Trying to create an FSM with an existing ID will cause a `409 Conflict` error to be returned.
+
+#### Updating a State Machine
+
+While it is recommended that changing the `state` or the `configuration` of an FSM is **not** done via API calls as a matter of course, there may be situations in which this may be unavoidable, especially when a new `Configuration` `version` needs to be released and existing FSMs need to use the new one (for example, because the business flow has changed, or a better way to model it has been identified).
+
+In order to allow for those scenarios, there is a `PUT` endpoint that allows for a `statemachine` to be modified: either a new `config_id` or `state` (or both) can be specified:
+
+```
+PUT /api/v1/statemachines/{config}/{id}
+
+{
+  "configuration_version": "test.orders:v4",
+  "current_state": "accepted"
+}
+```
+
+if a matching FSM is found, it will be updated and returned in the response:
+
+```
+└─( http --json :7399/api/v1/statemachines/test.orders/2
+
+HTTP/1.1 200 OK
+
+{
+    "id": "2",
+    "statemachine": {
+        "config_id": "test.orders:v3",
+        "state": "started"
+    }
+}
+
+
+└─( http --json PUT :7399/api/v1/statemachines/test.orders/2 \
+        configuration_version=test.orders:v4 \
+        current_state=accepted
+
+HTTP/1.1 200 OK
+
+{
+    "id": "2",
+    "statemachine": {
+        "config_id": "test.orders:v4",
+        "state": "accepted"
+    }
+}
+
+└─( http --json :7399/api/v1/statemachines/test.orders/2
+
+HTTP/1.1 200 OK
+
+{
+    "id": "2",
+    "statemachine": {
+        "config_id": "test.orders:v4",
+        "state": "accepted"
+    }
+}
+```
+
+If a non-existent configuration is used, a `404` error code is returned:
+
+```
+└─( http --json PUT :7399/api/v1/statemachines/test.orders/2 \
+        configuration_version=test.orders:v5 \
+        current_state=accepted
+
+HTTP/1.1 404 Not Found
+
+configuration not found
+```
+
+However, **no check is made against the requested new state**, if this is not one allowed in the configuration's `states` the FSM will not be able to process any future events.
+
+If all that is needed is a transition to a new `state` (which cannot be achieved by sending a sequence of `Events`, the recommended method), it is not necessary to specify a new `configuration_version`:
+
+```
+└─( http --json PUT :7399/api/v1/statemachines/test.orders/2  current_state=shipped
+
+HTTP/1.1 200 OK
+
+{
+    "id": "2",
+    "statemachine": {
+        "config_id": "test.orders:v4",
+        "state": "shipped"
+    }
+}
+```
+
 
 ### Event Outcomes
 

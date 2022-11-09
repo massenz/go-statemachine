@@ -58,8 +58,9 @@ var _ = Describe("Handlers", func() {
 			server.SetStore(store)
 		})
 		Context("with a valid request", func() {
+			var request *server.StateMachineRequest
 			BeforeEach(func() {
-				request := &server.StateMachineRequest{
+				request = &server.StateMachineRequest{
 					ID:                   "test-machine",
 					ConfigurationVersion: "test-config:v1",
 				}
@@ -75,7 +76,6 @@ var _ = Describe("Handlers", func() {
 					strings.Join([]string{server.ApiPrefix, server.StatemachinesEndpoint}, "/"),
 					ReaderFromRequest(request))
 			})
-
 			It("should succeed", func() {
 				router.ServeHTTP(writer, req)
 				Expect(writer.Code).To(Equal(http.StatusCreated))
@@ -89,14 +89,12 @@ var _ = Describe("Handlers", func() {
 				Expect(response.StateMachine.ConfigId).To(Equal("test-config:v1"))
 				Expect(response.StateMachine.State).To(Equal("start"))
 			})
-
-			It("should fill the cache", func() {
+			It("should save it in the backing store", func() {
 				router.ServeHTTP(writer, req)
 				Expect(writer.Code).To(Equal(http.StatusCreated))
 				_, found := store.GetStateMachine("test-machine", "test-config")
 				Expect(found).To(BeTrue())
 			})
-
 			It("should store the correct data", func() {
 				router.ServeHTTP(writer, req)
 				Expect(writer.Code).To(Equal(http.StatusCreated))
@@ -105,6 +103,18 @@ var _ = Describe("Handlers", func() {
 				Expect(fsm).ToNot(BeNil())
 				Expect(fsm.ConfigId).To(Equal("test-config:v1"))
 				Expect(fsm.State).To(Equal("start"))
+			})
+			It("should return a Conflict error if the ID already exists", func() {
+				store.SetLogLevel(log.DEBUG)
+				server.SetLogLevel(log.DEBUG)
+				Expect(store.PutStateMachine(request.ID, &api.FiniteStateMachine{
+					ConfigId: request.ConfigurationVersion,
+					State:    "start",
+				})).ToNot(HaveOccurred())
+				router.ServeHTTP(writer, req)
+				store.SetLogLevel(log.NONE)
+				server.SetLogLevel(log.NONE)
+				Expect(writer.Code).To(Equal(http.StatusConflict))
 			})
 		})
 		Context("without specifying an ID", func() {
@@ -141,6 +151,7 @@ var _ = Describe("Handlers", func() {
 			})
 
 		})
+
 		Context("with a non-existent configuration", func() {
 			BeforeEach(func() {
 				request := &server.StateMachineRequest{
@@ -151,7 +162,6 @@ var _ = Describe("Handlers", func() {
 					strings.Join([]string{server.ApiPrefix, server.StatemachinesEndpoint}, "/"),
 					ReaderFromRequest(request))
 			})
-
 			It("should fail", func() {
 				router.ServeHTTP(writer, req)
 				Expect(writer.Code).To(Equal(http.StatusNotFound))
@@ -185,7 +195,6 @@ var _ = Describe("Handlers", func() {
 			id = "12345"
 			Expect(store.PutStateMachine(id, &fsm)).ToNot(HaveOccurred())
 		})
-
 		It("can be retrieved with a valid ID", func() {
 			store.SetLogLevel(log.NONE)
 			endpoint := strings.Join([]string{server.ApiPrefix,
@@ -255,7 +264,6 @@ var _ = Describe("Handlers", func() {
 			Expect(store.PutConfig(config)).To(Succeed())
 			Expect(store.PutStateMachine(fsmId, car.FSM)).To(Succeed())
 		})
-
 		It("it should show them", func() {
 			found, _ := store.GetStateMachine(fsmId, "car")
 			car := ConfiguredStateMachine{

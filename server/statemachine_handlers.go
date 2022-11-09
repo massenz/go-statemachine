@@ -11,8 +11,10 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/massenz/go-statemachine/storage"
 	"net/http"
 	"strings"
 
@@ -31,21 +33,37 @@ func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if request.ConfigurationVersion == "" {
-		http.Error(w, "Must always specify a fully qualified configuration version", http.StatusBadRequest)
+		http.Error(w, "must always specify a fully qualified configuration version",
+			http.StatusBadRequest)
 		return
 	}
+	if request.ID == "" {
+		request.ID = uuid.New().String()
+	} else {
+		logger.Debug("checking whether FSM [%s] already exists", request.ID)
+		configNameParts := strings.Split(request.ConfigurationVersion,
+			storage.KeyPrefixComponentsSeparator)
+		if len(configNameParts) != 2 {
+			http.Error(w, fmt.Sprintf("config name is not properly formatted (name:version): %s",
+				request.ConfigurationVersion), http.StatusBadRequest)
+			return
+		}
+		if _, found := storeManager.GetStateMachine(request.ID, configNameParts[0]); found {
+			logger.Debug("FSM already exists, returning a Conflict error")
+			http.Error(w, storage.AlreadyExistsError(request.ID).Error(), http.StatusConflict)
+			return
+		}
+	}
+
+	logger.Debug("looking up Config [%s]", request.ConfigurationVersion)
 	cfg, ok := storeManager.GetConfig(request.ConfigurationVersion)
 	if !ok {
 		http.Error(w, "configuration not found", http.StatusNotFound)
 		return
 	}
-	logger.Debug("Found configuration %s", cfg)
-	if request.ID == "" {
-		request.ID = uuid.New().String()
-	}
-	logger.Info("Creating a new statemachine: %s (configuration: %s)",
-		request.ID, request.ConfigurationVersion)
-
+	logger.Debug("found configuration [%s]", cfg)
+	logger.Info("Creating a new statemachine [%s] (configuration [%s])",
+		request.ID, GetVersionId(cfg))
 	fsm := &api.FiniteStateMachine{
 		ConfigId: GetVersionId(cfg),
 		State:    cfg.StartingState,
@@ -69,28 +87,87 @@ func CreateStatemachineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ModifyStatemachineHandler handles PUT request and can be used to change an
+// existing FSM to use a different configuration and, optionally, to change its state.
+// Events history CANNOT be altered.
+func ModifyStatemachineHandler(w http.ResponseWriter, r *http.Request) {
+	defer trace(r.RequestURI)()
+	defaultContent(w)
+
+	vars := mux.Vars(r)
+	if vars == nil {
+		logger.Error("unexpected missing path parameters in Request URI: %s",
+			r.RequestURI)
+		http.Error(w, UnexpectedError.Error(), http.StatusMethodNotAllowed)
+		return
+	}
+	cfgName := vars["cfg_name"]
+	fsmId := vars["sm_id"]
+
+	var request StateMachineRequest
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	fsm, found := storeManager.GetStateMachine(fsmId, cfgName)
+	if !found {
+		http.Error(w, storage.NotFoundError(fsmId).Error(), http.StatusNotFound)
+		return
+	}
+
+	if request.ConfigurationVersion != "" {
+		// If the ConfigurationVersion is specified in the request, we assume
+		// that the caller wanted to update it.
+		logger.Debug("looking up Config [%s]", request.ConfigurationVersion)
+		cfg, ok := storeManager.GetConfig(request.ConfigurationVersion)
+		if !ok {
+			http.Error(w, "configuration not found", http.StatusNotFound)
+			return
+		}
+		logger.Debug("found configuration [%s]", cfg)
+		fsm.ConfigId = GetVersionId(cfg)
+	}
+	if request.CurrentState != "" && request.CurrentState != fsm.State {
+		logger.Debug("changing FSM state from [%s] to [%s]", fsm.State, request.CurrentState)
+		fsm.State = request.CurrentState
+	}
+	err = storeManager.PutStateMachine(fsmId, fsm)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = json.NewEncoder(w).Encode(&StateMachineResponse{
+		ID:           fsmId,
+		StateMachine: fsm,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 func GetStatemachineHandler(w http.ResponseWriter, r *http.Request) {
 	defer trace(r.RequestURI)()
 	defaultContent(w)
 
 	vars := mux.Vars(r)
 	if vars == nil {
-		logger.Error("Unexpected missing path parameter smId in Request URI: %s",
+		logger.Error("unexpected missing path parameters in Request URI: %s",
 			r.RequestURI)
 		http.Error(w, UnexpectedError.Error(), http.StatusMethodNotAllowed)
 		return
 	}
-
 	cfgName := vars["cfg_name"]
 	smId := vars["sm_id"]
-	logger.Debug("Looking up FSM %s#%s", cfgName, smId)
 
+	logger.Debug("looking up FSM [%s]", storage.NewKeyForMachine(smId, cfgName))
 	stateMachine, ok := storeManager.GetStateMachine(smId, cfgName)
 	if !ok {
-		http.Error(w, "State Machine not found", http.StatusNotFound)
+		http.Error(w, "FSM not found", http.StatusNotFound)
 		return
 	}
-	logger.Debug("Found FSM: %s", stateMachine.String())
+	logger.Debug("found FSM in state '%s'", stateMachine.GetState())
 
 	err := json.NewEncoder(w).Encode(&StateMachineResponse{
 		ID:           smId,

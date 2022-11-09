@@ -75,6 +75,8 @@ func NewRouter() *mux.Router {
 		CreateStatemachineHandler).Methods("POST")
 	r.HandleFunc(strings.Join([]string{ApiPrefix, StatemachinesEndpoint, "{cfg_name}", "{sm_id}"}, "/"),
 		GetStatemachineHandler).Methods("GET")
+	r.HandleFunc(strings.Join([]string{ApiPrefix, StatemachinesEndpoint, "{cfg_name}", "{sm_id}"}, "/"),
+		ModifyStatemachineHandler).Methods("PUT")
 
 	r.HandleFunc(strings.Join([]string{ApiPrefix, EventsEndpoint, "{cfg_name}", "{evt_id}"}, "/"),
 		GetEventHandler).Methods("GET")

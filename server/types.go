@@ -32,9 +32,12 @@ type MessageResponse struct {
 // and a reference to a fully qualified Configuration version.
 //
 // If the ID is not specified, a new UUID will be generated and returned.
+// The ConfigurationVersion is required and the CurrentState is only used when
+// requesting a change to an existing FSM (PUT), and will otherwise be ignored.
 type StateMachineRequest struct {
-	ID                   string `json:"id"`
+	ID                   string `json:"id,omitempty"`
 	ConfigurationVersion string `json:"configuration_version"`
+	CurrentState         string `json:"current_state,omitempty"`
 }
 
 // StateMachineResponse is returned when a new FSM is created, or as a response to a GET request

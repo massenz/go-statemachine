@@ -104,9 +104,6 @@ func (csm *RedisStore) PutStateMachine(id string, stateMachine *protos.FiniteSta
 	}
 	configName := strings.Split(stateMachine.ConfigId, api.ConfigurationVersionSeparator)[0]
 	key := NewKeyForMachine(id, configName)
-	if csm.client.Exists(context.Background(), key).Val() == 1 {
-		return AlreadyExistsError(key)
-	}
 	return csm.put(key, stateMachine, NeverExpire)
 }
 

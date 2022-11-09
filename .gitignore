@@ -18,3 +18,5 @@ bin/
 
 # Protobuf Generated code
 *.pb.go
+certs/
+scratch.go
