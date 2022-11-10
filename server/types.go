@@ -32,9 +32,21 @@ type MessageResponse struct {
 // and a reference to a fully qualified Configuration version.
 //
 // If the ID is not specified, a new UUID will be generated and returned.
+// The Configuration is required and **must** match an existing Configuration full `name` and
+// `version` (e.g., `orders:v2`)
 type StateMachineRequest struct {
-	ID                   string `json:"id"`
-	ConfigurationVersion string `json:"configuration_version"`
+	ID            string `json:"id,omitempty"`
+	Configuration string `json:"configuration_version"`
+}
+
+// StateMachineChangeRequest represents a request to modify (PUT)( an existing FSM.
+//
+// The ConfigurationVersion represents **only** the new `version` of the Configuration to be
+// used (the `name` is passed in the API URI path).
+// Both ConfigurationVersion and CurrentState are optional.
+type StateMachineChangeRequest struct {
+	ConfigurationVersion string `json:"configuration_version,omitempty"`
+	CurrentState         string `json:"current_state,omitempty"`
 }
 
 // StateMachineResponse is returned when a new FSM is created, or as a response to a GET request

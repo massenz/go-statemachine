@@ -42,7 +42,7 @@ type RedisStore struct {
 
 func (csm *RedisStore) GetAllInState(cfg string, state string) []*protos.FiniteStateMachine {
 	// TODO [#33] Ability to query for all machines in a given state
-	csm.logger.Error("Not implemented")
+	csm.logger.Error(NotImplementedError("GetAllInState").Error())
 	return nil
 }
 
@@ -81,15 +81,18 @@ func (csm *RedisStore) GetStateMachine(id string, cfg string) (*protos.FiniteSta
 
 func (csm *RedisStore) PutConfig(cfg *protos.Configuration) error {
 	if cfg == nil {
-		return IllegalStoreError
+		return IllegalStoreError("nil config")
 	}
 	key := NewKeyForConfig(api.GetVersionId(cfg))
+	if csm.client.Exists(context.Background(), key).Val() == 1 {
+		return AlreadyExistsError(key)
+	}
 	return csm.put(key, cfg, NeverExpire)
 }
 
 func (csm *RedisStore) PutEvent(event *protos.Event, cfg string, ttl time.Duration) error {
 	if event == nil {
-		return IllegalStoreError
+		return IllegalStoreError("nil event")
 	}
 	key := NewKeyForEvent(event.EventId, cfg)
 	return csm.put(key, event, ttl)
@@ -97,7 +100,7 @@ func (csm *RedisStore) PutEvent(event *protos.Event, cfg string, ttl time.Durati
 
 func (csm *RedisStore) PutStateMachine(id string, stateMachine *protos.FiniteStateMachine) error {
 	if stateMachine == nil {
-		return IllegalStoreError
+		return IllegalStoreError("nil statemachine")
 	}
 	configName := strings.Split(stateMachine.ConfigId, api.ConfigurationVersionSeparator)[0]
 	key := NewKeyForMachine(id, configName)
@@ -106,7 +109,7 @@ func (csm *RedisStore) PutStateMachine(id string, stateMachine *protos.FiniteSta
 
 func (csm *RedisStore) AddEventOutcome(id string, cfg string, response *protos.EventOutcome, ttl time.Duration) error {
 	if response == nil {
-		return IllegalStoreError
+		return IllegalStoreError("nil response")
 	}
 	key := NewKeyForOutcome(id, cfg)
 	return csm.put(key, response, ttl)

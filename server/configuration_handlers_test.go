@@ -15,7 +15,7 @@ import (
 
 	"bytes"
 	"encoding/json"
-	log "github.com/massenz/slf4go/logging"
+	slf4go "github.com/massenz/slf4go/logging"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -25,7 +25,11 @@ import (
 	. "github.com/massenz/go-statemachine/api"
 	"github.com/massenz/go-statemachine/server"
 	"github.com/massenz/go-statemachine/storage"
-	"github.com/massenz/statemachine-proto/golang/api"
+	protos "github.com/massenz/statemachine-proto/golang/api"
+)
+
+const (
+	OrdersConfig = "../data/orders.json"
 )
 
 var _ = Describe("Configuration Handlers", func() {
@@ -42,20 +46,19 @@ var _ = Describe("Configuration Handlers", func() {
 	// Disabling verbose logging, as it pollutes test output;
 	// set it back to DEBUG when tests fail, and you need to
 	// diagnose the failure.
-	server.SetLogLevel(log.NONE)
+	server.SetLogLevel(slf4go.NONE)
 
 	Context("when creating configurations", func() {
 		BeforeEach(func() {
 			writer = httptest.NewRecorder()
+			// TODO: use a RedisStore instead, once we have TestContainers enabled.
 			store = storage.NewInMemoryStore()
-			store.SetLogLevel(log.NONE)
+			store.SetLogLevel(slf4go.NONE)
 			server.SetStore(store)
 		})
 		Context("with a valid JSON", func() {
 			BeforeEach(func() {
-				configJson, err := ioutil.ReadFile("../data/orders.json")
-				Expect(err).ToNot(HaveOccurred())
-				body := bytes.NewReader(configJson)
+				body := ReadTestdata()
 				req = httptest.NewRequest(http.MethodPost,
 					strings.Join([]string{server.ApiPrefix, server.ConfigurationsEndpoint}, "/"), body)
 			})
@@ -66,7 +69,7 @@ var _ = Describe("Configuration Handlers", func() {
 				location := writer.Header().Get("Location")
 				Expect(strings.HasSuffix(location, "/test.orders:v1")).To(BeTrue())
 
-				response := api.Configuration{}
+				var response protos.Configuration
 				Expect(json.Unmarshal(writer.Body.Bytes(), &response)).ToNot(HaveOccurred())
 				Expect(response.Name).To(Equal("test.orders"))
 				Expect(response.States).To(Equal([]string{
@@ -84,6 +87,18 @@ var _ = Describe("Configuration Handlers", func() {
 				Expect(writer.Code).To(Equal(http.StatusCreated))
 				_, found := store.GetConfig("test.orders:v1")
 				Expect(found).To(BeTrue())
+			})
+			It("should fail for an existing version", func() {
+				router.ServeHTTP(writer, req)
+				Expect(writer.Code).To(Equal(http.StatusCreated))
+				body := ReadTestdata()
+
+				// POST the config again
+				writer2 := httptest.NewRecorder()
+				req2 := httptest.NewRequest(http.MethodPost,
+					strings.Join([]string{server.ApiPrefix, server.ConfigurationsEndpoint}, "/"), body)
+				router.ServeHTTP(writer2, req2)
+				Expect(writer2.Code).To(Equal(http.StatusConflict))
 			})
 		})
 
@@ -117,12 +132,12 @@ var _ = Describe("Configuration Handlers", func() {
 		})
 	})
 	Context("when retrieving configurations", func() {
-		var spaceship = api.Configuration{
+		var spaceship = protos.Configuration{
 			Name:          "spaceship",
 			Version:       "v1",
 			StartingState: "earth",
 			States:        []string{"earth", "orbit", "mars"},
-			Transitions: []*api.Transition{
+			Transitions: []*protos.Transition{
 				{From: "earth", To: "orbit", Event: "launch"},
 				{From: "orbit", To: "mars", Event: "land"},
 			},
@@ -132,7 +147,7 @@ var _ = Describe("Configuration Handlers", func() {
 			writer = httptest.NewRecorder()
 			// We need an empty, clean store for each test to avoid cross-polluting it.
 			store = storage.NewInMemoryStore()
-			store.SetLogLevel(log.NONE)
+			store.SetLogLevel(slf4go.NONE)
 			server.SetStore(store)
 
 			Expect(store.PutConfig(&spaceship)).ToNot(HaveOccurred())
@@ -142,7 +157,7 @@ var _ = Describe("Configuration Handlers", func() {
 			endpoint := strings.Join([]string{server.ApiPrefix, server.ConfigurationsEndpoint,
 				cfgId}, "/")
 			req = httptest.NewRequest(http.MethodGet, endpoint, nil)
-			var result api.Configuration
+			var result protos.Configuration
 			router.ServeHTTP(writer, req)
 			Expect(writer.Code).To(Equal(http.StatusOK))
 			Expect(json.NewDecoder(writer.Body).Decode(&result)).ToNot(HaveOccurred())
@@ -170,3 +185,9 @@ var _ = Describe("Configuration Handlers", func() {
 		})
 	})
 })
+
+func ReadTestdata() *bytes.Reader {
+	configJson, err := ioutil.ReadFile(OrdersConfig)
+	Expect(err).ToNot(HaveOccurred())
+	return bytes.NewReader(configJson)
+}

@@ -57,7 +57,7 @@ func (listener *EventsListener) ListenForMessages() {
 		// TODO: this is an API change and needs to be documented
 		// Destination comprises both the type (configuration name) and ID of the statemachine,
 		// separated by the # character: <type>#<id> (e.g., `order#1234`)
-		dest := strings.Split(request.Dest, "#")
+		dest := strings.Split(request.Dest, storage.KeyPrefixIDSeparator)
 		if len(dest) != 2 {
 			listener.PostNotificationAndReportOutcome(makeResponse(&request,
 				protos.EventOutcome_MissingDestination,
@@ -114,7 +114,7 @@ func (listener *EventsListener) ListenForMessages() {
 }
 
 func (listener *EventsListener) reportOutcome(response *protos.EventResponse) {
-	smType := strings.Split(response.Outcome.Dest, "#")[0]
+	smType := strings.Split(response.Outcome.Dest, storage.KeyPrefixIDSeparator)[0]
 	if err := listener.store.AddEventOutcome(response.EventId, smType, response.Outcome,
 		storage.NeverExpire); err != nil {
 		listener.logger.Error("could not add outcome to store: %v", err)

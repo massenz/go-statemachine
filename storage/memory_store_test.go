@@ -23,32 +23,51 @@ import (
 
 var _ = Describe("InMemory Store", func() {
 	Context("for local testing", func() {
-		It("can be created", func() {
-			var store = storage.NewInMemoryStore()
-			Expect(store).ToNot(BeNil())
-		})
 	})
 	Context("can be used to save and retrieve a Configuration", func() {
-		var store = storage.NewInMemoryStore()
-		var cfg = &protos.Configuration{}
+		var store storage.StoreManager
+		var cfg *protos.Configuration
+
 		BeforeEach(func() {
-			cfg.Name = "my_conf"
-			cfg.Version = "v3"
-			cfg.StartingState = "start"
+			store = storage.NewInMemoryStore()
+			cfg = &protos.Configuration{
+				Name:          "my_conf",
+				Version:       "v3",
+				StartingState: "start",
+			}
 			Expect(store.PutConfig(cfg)).ToNot(HaveOccurred())
+		})
+		It("can be created", func() {
+			Expect(store).ToNot(BeNil())
 		})
 		It("will give back the saved Configuration", func() {
 			found, ok := store.GetConfig(api.GetVersionId(cfg))
 			Expect(ok).To(BeTrue())
 			Expect(found).To(Respect(cfg))
 		})
+		It("will not allow to overwrite an existing config", func() {
+			Expect(store.PutConfig(&protos.Configuration{
+				Name:          "my_conf",
+				Version:       "v3",
+				StartingState: "fake",
+			})).To(HaveOccurred())
+		})
+		It("will allow a different version", func() {
+			Expect(store.PutConfig(&protos.Configuration{
+				Name:          "my_conf",
+				Version:       "v4",
+				StartingState: "fake",
+			})).ToNot(HaveOccurred())
+		})
 	})
 	Context("can be used to save and retrieve a StateMachine", func() {
-		var store = storage.NewInMemoryStore()
-		var id = "1234"
+		var store storage.StoreManager
+		var id string
 		var machine *protos.FiniteStateMachine
 
 		BeforeEach(func() {
+			store = storage.NewInMemoryStore()
+			id = "1234"
 			machine = &protos.FiniteStateMachine{
 				ConfigId: "test:v1",
 				State:    "start",
