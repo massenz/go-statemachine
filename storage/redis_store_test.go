@@ -11,27 +11,19 @@ package storage_test
 
 import (
 	"context"
-	"fmt"
 	. "github.com/JiaYongfei/respect/gomega"
 	"github.com/go-redis/redis/v8"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
-	slf4go "github.com/massenz/slf4go/logging"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"os"
-
 	"github.com/massenz/go-statemachine/api"
 	"github.com/massenz/go-statemachine/storage"
+	slf4go "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("RedisStore", func() {
-	var redisPort = os.Getenv("REDIS_PORT")
-	if redisPort == "" {
-		redisPort = storage.DefaultRedisPort
-	}
-	localAddress := fmt.Sprintf("localhost:%s", redisPort)
 
 	Context("when configured locally", func() {
 		var store storage.StoreManager
@@ -44,7 +36,8 @@ var _ = Describe("RedisStore", func() {
 				Version:       "v3",
 				StartingState: "start",
 			}
-			store = storage.NewRedisStoreWithDefaults(localAddress)
+			Expect(container).ToNot(BeNil())
+			store = storage.NewRedisStoreWithDefaults(container.Address)
 			Expect(store).ToNot(BeNil())
 			// Mute unnecessary logging during tests; re-enable (
 			// and set to DEBUG) when diagnosing failures.
@@ -53,7 +46,7 @@ var _ = Describe("RedisStore", func() {
 			// This is used to go "behind the back" of our StoreManager and mess with it for testing
 			// purposes. Do NOT do this in your code.
 			rdb = redis.NewClient(&redis.Options{
-				Addr: localAddress,
+				Addr: container.Address,
 				DB:   storage.DefaultRedisDb,
 			})
 			// Cleaning up the DB to prevent "dirty" store to impact test results
