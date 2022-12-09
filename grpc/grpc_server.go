@@ -44,7 +44,7 @@ type grpcSubscriber struct {
 }
 
 func (s *grpcSubscriber) ProcessEvent(ctx context.Context, request *protos.EventRequest) (*protos.
-EventResponse, error) {
+	EventResponse, error) {
 	if request.Dest == "" {
 		return nil, status.Error(codes.FailedPrecondition, api.MissingDestinationError.Error())
 	}
@@ -80,6 +80,9 @@ func (s *grpcSubscriber) PutConfiguration(ctx context.Context, cfg *protos.Confi
 	}
 	if err := s.Store.PutConfig(cfg); err != nil {
 		s.Logger.Error("could not store configuration: %v", err)
+		if strings.Contains(err.Error(), "already exists") {
+			return nil, status.Errorf(codes.AlreadyExists, "cannot store configuration: %v", err)
+		}
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	s.Logger.Trace("configuration stored: %s", api.GetVersionId(cfg))
@@ -104,7 +107,8 @@ func (s *grpcSubscriber) PutFiniteStateMachine(ctx context.Context,
 	// First check that the configuration for the FSM is valid
 	cfg, ok := s.Store.GetConfig(fsm.ConfigId)
 	if !ok {
-		return nil, status.Error(codes.FailedPrecondition, storage.ConfigNotFoundError.Error())
+		return nil, status.Error(codes.FailedPrecondition, storage.NotFoundError(
+			fsm.ConfigId).Error())
 	}
 	// FIXME: we need to allow clients to specify the ID of the FSM to create
 	id := uuid.NewString()
@@ -134,7 +138,7 @@ func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context, request *pro
 	}
 	fsm, ok := s.Store.GetStateMachine(splitId[1], splitId[0])
 	if !ok {
-		return nil, status.Error(codes.NotFound, storage.FSMNotFoundError.Error())
+		return nil, status.Error(codes.NotFound, storage.NotFoundError(request.GetId()).Error())
 	}
 	return fsm, nil
 }
@@ -143,7 +147,7 @@ func (s *grpcSubscriber) GetEventOutcome(ctx context.Context, request *protos.Ge
 	*protos.EventResponse, error) {
 
 	s.Logger.Debug("looking up EventOutcome %s", request.GetId())
-	dest := strings.Split(request.GetId(), "#")
+	dest := strings.Split(request.GetId(), storage.KeyPrefixIDSeparator)
 	if len(dest) != 2 {
 		return nil, status.Error(codes.InvalidArgument,
 			fmt.Sprintf("invalid destination [%s] expected: <type>#<id>", request.GetId()))

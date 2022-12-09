@@ -16,11 +16,17 @@ import (
 	"time"
 )
 
+func Error(msg string) func(string) error {
+	return func(key string) error {
+		return fmt.Errorf(msg, key)
+	}
+}
+
 var (
-	IllegalStoreError   = fmt.Errorf("error storing invalid data")
-	ConfigNotFoundError = fmt.Errorf("configuration not found")
-	FSMNotFoundError    = fmt.Errorf("statemachine not found")
-	NotImplementedError = fmt.Errorf("this functionality has not been implemented yet")
+	IllegalStoreError   = Error("error storing invalid data: %v")
+	AlreadyExistsError  = Error("key %s already exists")
+	NotFoundError       = Error("key %s not found")
+	NotImplementedError = Error("functionality %s has not been implemented yet")
 )
 
 type ConfigurationStorageManager interface {

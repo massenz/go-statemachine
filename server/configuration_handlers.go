@@ -17,6 +17,7 @@ import (
 	"github.com/massenz/statemachine-proto/golang/api"
 	pj "google.golang.org/protobuf/encoding/protojson"
 	"net/http"
+	"strings"
 )
 
 func CreateConfigurationHandler(w http.ResponseWriter, r *http.Request) {
@@ -45,6 +46,12 @@ func CreateConfigurationHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = storeManager.PutConfig(&config)
 	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			logger.Debug("attempts to POST an existing configuration id: %v", err)
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		logger.Error("cannot store Configuration to store: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
