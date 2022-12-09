@@ -7,7 +7,7 @@ tag := $(shell ./get-tag)
 image := massenz/statemachine
 module := $(shell go list -m)
 
-compose := docker/docker-compose.yaml
+compose := docker/compose.yaml
 dockerfile := docker/Dockerfile
 
 # Source files & Test files definitions
@@ -54,7 +54,7 @@ $(out): cmd/main.go $(srcs)
 
 build: $(out) ## Builds the server
 
-test: $(srcs) $(test_srcs) services queues ## Runs all tests, starting services first, if required
+test: $(srcs) $(test_srcs)  ## Runs all tests
 	ginkgo $(pkgs)
 
 cov: $(srcs) $(test_srcs)  ## Runs the Test Coverage target and opens a browser window with the coverage report
@@ -69,10 +69,13 @@ cov: $(srcs) $(test_srcs)  ## Runs the Test Coverage target and opens a browser 
 container: $(out) ## Builds the container image
 	docker build -f $(dockerfile) -t $(image):$(tag) .
 
-# TODO: will be replaced once we adopt TestContainers (#26)
 .PHONY: services
 services: ## Starts the Redis and LocalStack containers
-	@docker-compose -f $(compose) up -d
+	@docker compose -f $(compose) --project-name sm up -d
+
+.PHONY: stop
+stop: ## Stops the Redis and LocalStack containers
+	@docker compose -f $(compose) --project-name sm down
 
 .PHONY: queues
 queues: ## Creates the SQS Queues in LocalStack

@@ -10,10 +10,13 @@
 package pubsub_test
 
 import (
+	"context"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/massenz/go-statemachine/pubsub"
 	"github.com/massenz/statemachine-proto/golang/api"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"os"
 	"testing"
 	"time"
@@ -27,12 +30,13 @@ import (
 )
 
 const (
+	localstackImage    = "localstack/localstack:1.3"
+	localstackEdgePort = "4566"
 	eventsQueue        = "test-events"
 	notificationsQueue = "test-notifications"
 	acksQueue          = "test-acks"
-	// Including these for clarity and configurability; they are set to default values
-	timeout         = 1 * time.Second       // Default timeout for Eventually is 1s
-	pollingInterval = 10 * time.Millisecond // Default polling interval for Eventually is 10ms
+	timeout            = 1 * time.Second       // Default timeout for Eventually is 1s
+	pollingInterval    = 10 * time.Millisecond // Default polling interval for Eventually is 10ms
 )
 
 func TestPubSub(t *testing.T) {
@@ -40,21 +44,67 @@ func TestPubSub(t *testing.T) {
 	RunSpecs(t, "Pub/Sub Suite")
 }
 
+type LocalstackContainer struct {
+	testcontainers.Container
+	EndpointUri string
+}
+
+func SetupAwsLocal(ctx context.Context) (*LocalstackContainer, error) {
+	req := testcontainers.ContainerRequest{
+		Image:        localstackImage,
+		ExposedPorts: []string{localstackEdgePort},
+		WaitingFor:   wait.ForLog("Ready."),
+		Env: map[string]string{
+			"AWS_REGION": "us-west-2",
+			"EDGE_PORT":  "4566",
+			"SERVICES":   "sqs",
+		},
+	}
+	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: req,
+		Started:          true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ip, err := container.Host(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	mappedPort, err := container.MappedPort(ctx, localstackEdgePort)
+	if err != nil {
+		return nil, err
+	}
+
+	uri := fmt.Sprintf("http://%s:%s", ip, mappedPort.Port())
+
+	return &LocalstackContainer{Container: container, EndpointUri: uri}, nil
+}
+
 // Although these are constants, we cannot take the pointers unless we declare them vars.
 var (
-	sqsUrl        = "http://localhost:4566"
 	region        = "us-west-2"
-	testSqsClient = sqs.New(session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-		Config: aws.Config{
-			Endpoint: &sqsUrl,
-			Region:   &region,
-		},
-	})))
+	awsLocal      *LocalstackContainer
+	testSqsClient *sqs.SQS
 )
 
 var _ = BeforeSuite(func() {
 	Expect(os.Setenv("AWS_REGION", region)).ToNot(HaveOccurred())
+
+	var err error
+	awsLocal, err = SetupAwsLocal(context.Background())
+	Expect(err).ToNot(HaveOccurred())
+
+	testSqsClient = sqs.New(session.Must(session.NewSessionWithOptions(session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+		Config: aws.Config{
+			Endpoint: &awsLocal.EndpointUri,
+			Region:   &region,
+		},
+	})))
+
 	for _, topic := range []string{eventsQueue, notificationsQueue, acksQueue} {
 		topic = fmt.Sprintf("%s-%d", topic, GinkgoParallelProcess())
 
@@ -69,7 +119,7 @@ var _ = BeforeSuite(func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
-})
+}, 2.0)
 
 var _ = AfterSuite(func() {
 	for _, topic := range []string{eventsQueue, notificationsQueue, acksQueue} {
@@ -84,7 +134,8 @@ var _ = AfterSuite(func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
-})
+	awsLocal.Terminate(context.Background())
+}, 2.0)
 
 // getQueueName provides a way to obtain a process-independent name for the SQS queue,
 // when Ginkgo tests are run in parallel (-p)

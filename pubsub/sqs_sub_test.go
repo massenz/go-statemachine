@@ -30,8 +30,9 @@ var _ = Describe("SQS Subscriber", func() {
 			eventsCh       chan protos.EventRequest
 		)
 		BeforeEach(func() {
+			Expect(awsLocal).ToNot(BeNil())
 			eventsCh = make(chan protos.EventRequest)
-			testSubscriber = pubsub.NewSqsSubscriber(eventsCh, &sqsUrl)
+			testSubscriber = pubsub.NewSqsSubscriber(eventsCh, &awsLocal.EndpointUri)
 			Expect(testSubscriber).ToNot(BeNil())
 			// Set to DEBUG when diagnosing failing tests
 			testSubscriber.SetLogLevel(log.NONE)
