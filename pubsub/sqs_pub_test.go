@@ -183,7 +183,7 @@ var _ = Describe("SQS Publisher", func() {
 				}
 			}()
 			close(notificationsCh)
-			Eventually(done).Should(BeClosed())
+			Eventually(done, "5s").Should(BeClosed())
 		})
 		It("will only notify error outcomes if configured to", func() {
 			responseOk := protos.EventResponse{
