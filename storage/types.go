@@ -32,12 +32,26 @@ var (
 type ConfigurationStorageManager interface {
 	GetConfig(versionId string) (*protos.Configuration, bool)
 	PutConfig(cfg *protos.Configuration) error
+
+	// GetAllConfigs returns all the `Configurations` that exist in the server, regardless of
+	// the version, and whether are used or not by an FSM.
+	GetAllConfigs() []string
+
+	// GetAllVersions returns the full `name:version` ID of all the Configurations whose
+	// name matches `name`.
+	GetAllVersions(name string) []string
 }
 
 type FiniteStateMachineStorageManager interface {
 	GetStateMachine(id string, cfg string) (*protos.FiniteStateMachine, bool)
 	PutStateMachine(id string, fsm *protos.FiniteStateMachine) error
-	GetAllInState(cfg string, state string) []*protos.FiniteStateMachine
+
+	// GetAllInState looks up all the FSMs that are currently in the given `state` and
+	// are configured with a `Configuration` whose name matches `cfg` (regardless of the
+	// configuration's version).
+	//
+	// It returns the IDs for the FSMs.
+	GetAllInState(cfg string, state string) []string
 }
 
 type EventStorageManager interface {

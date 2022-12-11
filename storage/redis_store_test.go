@@ -23,9 +23,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+
 var _ = Describe("RedisStore", func() {
 
-	Context("when configured locally", func() {
+	Context("for simple operations", func() {
 		var store storage.StoreManager
 		var rdb *redis.Client
 		var cfg *protos.Configuration
@@ -49,9 +50,11 @@ var _ = Describe("RedisStore", func() {
 				Addr: container.Address,
 				DB:   storage.DefaultRedisDb,
 			})
+		}, 0.5)
+		AfterEach(func() {
 			// Cleaning up the DB to prevent "dirty" store to impact test results
 			rdb.FlushDB(context.Background())
-		})
+		}, 0.2)
 		It("is healthy", func() {
 			Expect(store.Health()).To(Succeed())
 		})
@@ -211,6 +214,28 @@ var _ = Describe("RedisStore", func() {
 		It("should gracefully handle a nil Outcome", func() {
 			Expect(store.AddEventOutcome("fake", "test", nil,
 				storage.NeverExpire)).To(HaveOccurred())
+		})
+		It("can get all configuration names", func() {
+			for _, name := range []string{"orders", "devices", "users"} {
+				Expect(store.PutConfig(&protos.Configuration{Name: name, Version: "v3", StartingState: "start"})).
+					ToNot(HaveOccurred())
+			}
+			configs := store.GetAllConfigs()
+			Expect(len(configs)).To(Equal(3))
+			Expect(configs).To(ContainElements("orders", "devices", "users"))
+		})
+		It("can get all versions of a configuration", func() {
+			for _, version := range []string{"v1alpha1", "v1beta", "v1"} {
+				Expect(store.PutConfig(&protos.Configuration{Name: "orders", Version: version, StartingState: "start"})).
+					ToNot(HaveOccurred())
+			}
+			configs := store.GetAllVersions("orders")
+			Expect(len(configs)).To(Equal(3))
+			Expect(configs).To(ContainElements("orders:v1alpha1", "orders:v1beta", "orders:v1"))
+		})
+		It("returns an empty slice for a non-existent config", func() {
+			configs := store.GetAllVersions("fake")
+			Expect(len(configs)).To(Equal(0))
 		})
 	})
 })
