@@ -156,3 +156,8 @@ func (csm *InMemoryStore) GetAllVersions(name string) []string {
 	csm.logger.Error(NotImplementedError("GetAllVersions").Error())
 	return nil
 }
+func (csm *InMemoryStore) UpdateState(cfgName string, id string, oldState string, newState string) error {
+	// TODO [#33] Ability to query for all machines in a given state
+	csm.logger.Error(NotImplementedError("GetAllVersions").Error())
+	return nil
+}

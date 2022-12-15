@@ -14,23 +14,27 @@ import (
 )
 
 func (csm *RedisStore) UpdateState(cfgName string, id string, oldState string, newState string) error {
-	key := NewKeyForMachinesByState(cfgName, oldState)
-	err := csm.client.SRem(context.Background(), key, id).Err()
-	if err != nil {
-		csm.logger.Error("Cannot update FSM [%s#%s] from old state `%s`", cfgName, id, oldState)
-		return err
+	var key string
+	var err error
+	if newState == "" {
+		return IllegalStoreError("when updating state, new state cannot be empty")
+	}
+	if oldState != "" {
+		key = NewKeyForMachinesByState(cfgName, oldState)
+		err = csm.client.SRem(context.Background(), key, id).Err()
+		if err != nil {
+			csm.logger.Error("Cannot update FSM [%s#%s] from old state `%s`", cfgName, id, oldState)
+			return err
+		}
 	}
 	key = NewKeyForMachinesByState(cfgName, newState)
-	csm.client.SAdd(context.Background(), key, id)
+	err = csm.client.SAdd(context.Background(), key, id).Err()
 	if err != nil {
 		csm.logger.Error("Cannot update FSM [%s#%s] to new state `%s`", cfgName, id, newState)
 	}
 	return err
 }
 
-// GetAllInState looks up all the FSMs that are currently in the given `state` and
-// are configured with a `Configuration` whose name matches `cfg` (regardless of the
-// configuration's version).
 func (csm *RedisStore) GetAllInState(cfg string, state string) []string {
 	// TODO: enable splitting results with a (cursor, count)
 	csm.logger.Debug("Looking up all FSMs [%s] in DB with state `%s`", cfg, state)
@@ -44,8 +48,6 @@ func (csm *RedisStore) GetAllInState(cfg string, state string) []string {
 	return fsms
 }
 
-// GetAllConfigs returns all the `Configurations` that exist in the server, regardless of
-// the version, and whether are used or not by an FSM.
 func (csm *RedisStore) GetAllConfigs() []string {
 	// TODO: enable splitting results with a (cursor, count)
 	csm.logger.Debug("Looking up all configs in DB")
@@ -58,8 +60,6 @@ func (csm *RedisStore) GetAllConfigs() []string {
 	return configs
 }
 
-// GetAllVersions returns the full `name:version` ID of all the Configurations whose
-// name matches `name`.
 func (csm *RedisStore) GetAllVersions(name string) []string {
 	csm.logger.Debug("Looking up all versions for Configurations `%s` in DB", name)
 	configs, err := csm.client.SMembers(context.Background(), NewKeyForConfig(name)).Result()
