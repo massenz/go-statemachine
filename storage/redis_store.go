@@ -40,12 +40,6 @@ type RedisStore struct {
 	MaxRetries int
 }
 
-func (csm *RedisStore) GetAllInState(cfg string, state string) []*protos.FiniteStateMachine {
-	// TODO [#33] Ability to query for all machines in a given state
-	csm.logger.Error(NotImplementedError("GetAllInState").Error())
-	return nil
-}
-
 func (csm *RedisStore) GetConfig(id string) (*protos.Configuration, bool) {
 	key := NewKeyForConfig(id)
 	var cfg protos.Configuration
@@ -87,6 +81,9 @@ func (csm *RedisStore) PutConfig(cfg *protos.Configuration) error {
 	if csm.client.Exists(context.Background(), key).Val() == 1 {
 		return AlreadyExistsError(key)
 	}
+	// TODO: Find out whether the client allows to batch requests, instead of sending multiple server requests
+	csm.client.SAdd(context.Background(), ConfigsPrefix, cfg.Name)
+	csm.client.SAdd(context.Background(), NewKeyForConfig(cfg.Name), api.GetVersionId(cfg))
 	return csm.put(key, cfg, NeverExpire)
 }
 

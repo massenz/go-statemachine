@@ -61,12 +61,6 @@ func (csm *InMemoryStore) put(key string, value proto.Message) error {
 	return err
 }
 
-func (csm *InMemoryStore) GetAllInState(cfg string, state string) []*protos.FiniteStateMachine {
-	// TODO [#33] Ability to query for all machines in a given state
-	csm.logger.Error("Not implemented")
-	return nil
-}
-
 func (csm *InMemoryStore) GetEvent(id string, cfg string) (*protos.Event, bool) {
 	key := NewKeyForEvent(id, cfg)
 	event := &protos.Event{}
@@ -142,5 +136,28 @@ func (csm *InMemoryStore) GetTimeout() time.Duration {
 }
 
 func (csm *InMemoryStore) Health() error {
+	return nil
+}
+
+func (csm *InMemoryStore) GetAllInState(cfg string, state string) []string {
+	// TODO [#33] Ability to query for all machines in a given state
+	csm.logger.Error(NotImplementedError("GetAllInState").Error())
+	return nil
+}
+
+func (csm *InMemoryStore) GetAllConfigs() []string {
+	// TODO [#33] Ability to query for all machines in a given state
+	csm.logger.Error(NotImplementedError("GetAllConfigs").Error())
+	return nil
+}
+
+func (csm *InMemoryStore) GetAllVersions(name string) []string {
+	// TODO [#33] Ability to query for all machines in a given state
+	csm.logger.Error(NotImplementedError("GetAllVersions").Error())
+	return nil
+}
+func (csm *InMemoryStore) UpdateState(cfgName string, id string, oldState string, newState string) error {
+	// TODO [#33] Ability to query for all machines in a given state
+	csm.logger.Error(NotImplementedError("GetAllVersions").Error())
 	return nil
 }
