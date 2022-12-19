@@ -10,19 +10,22 @@
 package grpc_test
 
 import (
+	"context"
+	"fmt"
+	"net"
+	"strings"
+	"time"
+
+	"github.com/go-redis/redis/v8"
+	"github.com/massenz/slf4go/logging"
+	g "google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/wrapperspb"
+
 	. "github.com/JiaYongfei/respect/gomega"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"google.golang.org/grpc/codes"
-	"strings"
-
-	"context"
-	"fmt"
-	"github.com/massenz/slf4go/logging"
-	g "google.golang.org/grpc"
-	"google.golang.org/grpc/status"
-	"net"
-	"time"
 
 	. "github.com/massenz/go-statemachine/api"
 	"github.com/massenz/go-statemachine/grpc"
@@ -30,9 +33,9 @@ import (
 	"github.com/massenz/statemachine-proto/golang/api"
 )
 
-var _ = Describe("GrpcServer", func() {
+var _ = Describe("the gRPC Server", func() {
 
-	Context("when processing events", func() {
+	When("processing events", func() {
 		var testCh chan api.EventRequest
 		var listener net.Listener
 		var client api.StatemachineServiceClient
@@ -44,12 +47,17 @@ var _ = Describe("GrpcServer", func() {
 			listener, err = net.Listen("tcp", ":0")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			cc, err := g.Dial(listener.Addr().String(), g.WithInsecure())
+			cc, err := g.Dial(listener.Addr().String(),
+				g.WithTransportCredentials(insecure.NewCredentials()))
 			Ω(err).ShouldNot(HaveOccurred())
 
 			client = api.NewStatemachineServiceClient(cc)
+			// TODO: use GinkgoWriter for logs
 			l := logging.NewLog("grpc-server-test")
 			l.Level = logging.NONE
+			// Note the `Config` here has no store configured, because we are
+			// only testing events in this Context, and those are never stored
+			// in Redis by the gRPC server (other parts of the system do).
 			server, err := grpc.NewGrpcServer(&grpc.Config{
 				EventsChannel: testCh,
 				Logger:        l,
@@ -121,7 +129,7 @@ var _ = Describe("GrpcServer", func() {
 					Originator: "test",
 				},
 			})
-			assertStatusCode(codes.FailedPrecondition, err)
+			AssertStatusCode(codes.FailedPrecondition, err)
 			done()
 			select {
 			case evt := <-testCh:
@@ -140,7 +148,7 @@ var _ = Describe("GrpcServer", func() {
 				},
 				Dest: "9876",
 			})
-			assertStatusCode(codes.FailedPrecondition, err)
+			AssertStatusCode(codes.FailedPrecondition, err)
 			done()
 			select {
 			case evt := <-testCh:
@@ -151,7 +159,7 @@ var _ = Describe("GrpcServer", func() {
 		})
 	})
 
-	Context("when retrieving data from the store", func() {
+	When("using Redis as the backing store", func() {
 		var (
 			listener net.Listener
 			client   api.StatemachineServiceClient
@@ -163,11 +171,11 @@ var _ = Describe("GrpcServer", func() {
 
 		// Server setup
 		BeforeEach(func() {
-			store = storage.NewInMemoryStore()
+			store = storage.NewRedisStoreWithDefaults(container.Address)
 			store.SetLogLevel(logging.NONE)
-
 			listener, _ = net.Listen("tcp", ":0")
-			cc, _ := g.Dial(listener.Addr().String(), g.WithInsecure())
+			cc, _ := g.Dial(listener.Addr().String(),
+				g.WithTransportCredentials(insecure.NewCredentials()))
 			client = api.NewStatemachineServiceClient(cc)
 			// Use this to log errors when diagnosing test failures; then set to NONE once done.
 			l := logging.NewLog("grpc-server-test")
@@ -184,94 +192,132 @@ var _ = Describe("GrpcServer", func() {
 				server.Stop()
 			}
 		})
-		// Server shutdown
+		// Server shutdown & Clean up the DB
 		AfterEach(func() {
 			done()
+			rdb := redis.NewClient(&redis.Options{
+				Addr: container.Address,
+				DB:   storage.DefaultRedisDb,
+			})
+			rdb.FlushDB(context.Background())
+
 		})
-		// Test data setup
-		BeforeEach(func() {
-			cfg = &api.Configuration{
-				Name:    "test-conf",
-				Version: "v1",
-				States:  []string{"start", "stop"},
-				Transitions: []*api.Transition{
-					{From: "start", To: "stop", Event: "shutdown"},
-				},
-				StartingState: "start",
-			}
-			fsm = &api.FiniteStateMachine{ConfigId: GetVersionId(cfg)}
+		Context("handling Configuration API requests", func() {
+			// Test data setup
+			BeforeEach(func() {
+				cfg = &api.Configuration{
+					Name:    "test-conf",
+					Version: "v1",
+					States:  []string{"start", "stop"},
+					Transitions: []*api.Transition{
+						{From: "start", To: "stop", Event: "shutdown"},
+					},
+					StartingState: "start",
+				}
+			})
+			It("should store valid configurations", func() {
+				_, ok := store.GetConfig(GetVersionId(cfg))
+				Ω(ok).To(BeFalse())
+				response, err := client.PutConfiguration(context.Background(), cfg)
+				Ω(err).ToNot(HaveOccurred())
+				Ω(response).ToNot(BeNil())
+				Ω(response.Id).To(Equal(GetVersionId(cfg)))
+				found, ok := store.GetConfig(response.Id)
+				Ω(ok).Should(BeTrue())
+				Ω(found).Should(Respect(cfg))
+			})
+			It("should fail for invalid configuration", func() {
+				invalid := &api.Configuration{
+					Name:          "invalid",
+					Version:       "v1",
+					States:        []string{},
+					Transitions:   nil,
+					StartingState: "",
+				}
+				_, err := client.PutConfiguration(context.Background(), invalid)
+				AssertStatusCode(codes.InvalidArgument, err)
+			})
+			It("should retrieve a valid configuration", func() {
+				Ω(store.PutConfig(cfg)).To(Succeed())
+				response, err := client.GetConfiguration(context.Background(),
+					&wrapperspb.StringValue{Value: GetVersionId(cfg)})
+				Ω(err).ToNot(HaveOccurred())
+				Ω(response).ToNot(BeNil())
+				Ω(response).Should(Respect(cfg))
+			})
+			It("should return an empty configuration for an invalid ID", func() {
+				_, err := client.GetConfiguration(context.Background(), &wrapperspb.StringValue{Value: "fake"})
+				AssertStatusCode(codes.NotFound, err)
+			})
 		})
-		It("should store valid configurations", func() {
-			_, ok := store.GetConfig(GetVersionId(cfg))
-			Ω(ok).To(BeFalse())
-			response, err := client.PutConfiguration(context.Background(), cfg)
-			Ω(err).ToNot(HaveOccurred())
-			Ω(response).ToNot(BeNil())
-			Ω(response.Id).To(Equal(GetVersionId(cfg)))
-			found, ok := store.GetConfig(response.Id)
-			Ω(ok).Should(BeTrue())
-			Ω(found).Should(Respect(cfg))
-		})
-		It("should fail for invalid configuration", func() {
-			invalid := &api.Configuration{
-				Name:          "invalid",
-				Version:       "v1",
-				States:        []string{},
-				Transitions:   nil,
-				StartingState: "",
-			}
-			_, err := client.PutConfiguration(context.Background(), invalid)
-			assertStatusCode(codes.InvalidArgument, err)
-		})
-		It("should retrieve a valid configuration", func() {
-			Ω(store.PutConfig(cfg)).To(Succeed())
-			response, err := client.GetConfiguration(context.Background(),
-				&api.GetRequest{Id: GetVersionId(cfg)})
-			Ω(err).ToNot(HaveOccurred())
-			Ω(response).ToNot(BeNil())
-			Ω(response).Should(Respect(cfg))
-		})
-		It("should return an empty configuration for an invalid ID", func() {
-			_, err := client.GetConfiguration(context.Background(), &api.GetRequest{Id: "fake"})
-			assertStatusCode(codes.NotFound, err)
-		})
-		It("should store a valid FSM", func() {
-			Ω(store.PutConfig(cfg)).To(Succeed())
-			resp, err := client.PutFiniteStateMachine(context.Background(), fsm)
-			Ω(err).ToNot(HaveOccurred())
-			Ω(resp).ToNot(BeNil())
-			Ω(resp.Id).ToNot(BeNil())
-			Ω(resp.Fsm).Should(Respect(fsm))
-		})
-		It("should fail with an invalid Config ID", func() {
-			invalid := &api.FiniteStateMachine{ConfigId: "fake"}
-			_, err := client.PutFiniteStateMachine(context.Background(), invalid)
-			assertStatusCode(codes.FailedPrecondition, err)
-		})
-		It("can retrieve a stored FSM", func() {
-			id := "123456"
-			Ω(store.PutConfig(cfg))
-			Ω(store.PutStateMachine(id, fsm)).Should(Succeed())
-			Ω(client.GetFiniteStateMachine(context.Background(),
-				&api.GetRequest{
-					Id: strings.Join([]string{cfg.Name, id}, storage.KeyPrefixIDSeparator),
-				})).Should(Respect(fsm))
-		})
-		It("will return an Invalid error for an invalid ID", func() {
-			_, err := client.GetFiniteStateMachine(context.Background(), &api.GetRequest{Id: "fake"})
-			assertStatusCode(codes.InvalidArgument, err)
-		})
-		It("will return a NotFound error for a missing ID", func() {
-			_, err := client.GetFiniteStateMachine(context.Background(),
-				&api.GetRequest{Id: "cfg#fake"})
-			assertStatusCode(codes.NotFound, err)
+		Context("handling Statemachine API requests", func() {
+			// Test data setup
+			BeforeEach(func() {
+				cfg = &api.Configuration{
+					Name:    "test-conf",
+					Version: "v1",
+					States:  []string{"start", "stop"},
+					Transitions: []*api.Transition{
+						{From: "start", To: "stop", Event: "shutdown"},
+					},
+					StartingState: "start",
+				}
+				fsm = &api.FiniteStateMachine{ConfigId: GetVersionId(cfg)}
+			})
+			It("should store a valid FSM", func() {
+				Ω(store.PutConfig(cfg)).To(Succeed())
+				resp, err := client.PutFiniteStateMachine(context.Background(),
+					&api.PutFsmRequest{Id: "123456", Fsm: fsm})
+				Ω(err).ToNot(HaveOccurred())
+				Ω(resp).ToNot(BeNil())
+				Ω(resp.Id).To(Equal("123456"))
+				Ω(resp.Fsm).Should(Respect(fsm))
+			})
+			It("should fail with an invalid Config ID", func() {
+				invalid := &api.FiniteStateMachine{ConfigId: "fake"}
+				_, err := client.PutFiniteStateMachine(context.Background(),
+					&api.PutFsmRequest{Fsm: invalid})
+				AssertStatusCode(codes.FailedPrecondition, err)
+			})
+			It("can retrieve a stored FSM", func() {
+				id := "123456"
+				Ω(store.PutConfig(cfg))
+				Ω(store.PutStateMachine(id, fsm)).Should(Succeed())
+				Ω(client.GetFiniteStateMachine(context.Background(),
+					&wrapperspb.StringValue{
+						Value: strings.Join([]string{cfg.Name, id}, storage.KeyPrefixIDSeparator),
+					})).Should(Respect(fsm))
+			})
+			It("will return an Invalid error for a malformed ID", func() {
+				_, err := client.GetFiniteStateMachine(context.Background(), &wrapperspb.StringValue{Value: "fake"})
+				AssertStatusCode(codes.InvalidArgument, err)
+			})
+			It("will return a NotFound error for a missing ID", func() {
+				_, err := client.GetFiniteStateMachine(context.Background(),
+					&wrapperspb.StringValue{Value: "cfg#fake"})
+				AssertStatusCode(codes.NotFound, err)
+			})
+			It("will find all configurations", func() {
+				names := []string{"orders", "devices", "users"}
+				for _, name := range names {
+					cfg = &api.Configuration{
+						Name:    name,
+						Version: "v1",
+						States:  []string{"start", "stop"},
+						Transitions: []*api.Transition{
+							{From: "start", To: "stop", Event: "shutdown"},
+						},
+						StartingState: "start",
+					}
+					Ω(store.PutConfig(cfg)).Should(Succeed())
+				}
+				found, err := client.GetAllConfigurations(context.Background(), &wrapperspb.StringValue{})
+				Ω(err).Should(Succeed())
+				Ω(len(found.Ids)).To(Equal(3))
+				for _, value := range found.Ids {
+					Ω(names).To(ContainElement(value))
+				}
+			})
 		})
 	})
 })
-
-func assertStatusCode(code codes.Code, err error) {
-	Ω(err).To(HaveOccurred())
-	s, ok := status.FromError(err)
-	Ω(ok).To(BeTrue())
-	Ω(s.Code()).To(Equal(code))
-}

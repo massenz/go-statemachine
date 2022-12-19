@@ -34,7 +34,7 @@ var _ = Describe("SQS Publisher", func() {
 		)
 		BeforeEach(func() {
 			notificationsCh = make(chan protos.EventResponse)
-			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &awsLocal.EndpointUri)
+			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &awsLocal.Address)
 			Expect(testPublisher).ToNot(BeNil())
 			// Set to DEBUG when diagnosing test failures
 			testPublisher.SetLogLevel(logging.NONE)
