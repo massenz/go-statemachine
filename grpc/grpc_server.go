@@ -88,8 +88,9 @@ func (s *grpcSubscriber) PutConfiguration(ctx context.Context, cfg *protos.Confi
 	}
 	s.Logger.Trace("configuration stored: %s", api.GetVersionId(cfg))
 	return &protos.PutResponse{
-		Id:     api.GetVersionId(cfg),
-		Config: cfg,
+		Id: api.GetVersionId(cfg),
+		// Note: this is the magic incantation to use a `one_of` field in Protobuf.
+		EntityResponse: &protos.PutResponse_Config{Config: cfg},
 	}, nil
 }
 func (s *grpcSubscriber) GetAllConfigurations(ctx context.Context, req *wrapperspb.StringValue) (
@@ -137,7 +138,7 @@ func (s *grpcSubscriber) PutFiniteStateMachine(ctx context.Context,
 		s.Logger.Error("could not store FSM [%v]: %v", fsm, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return &protos.PutResponse{Id: id, Fsm: fsm}, nil
+	return &protos.PutResponse{Id: id, EntityResponse: &protos.PutResponse_Fsm{Fsm: fsm}}, nil
 }
 
 func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context, id *wrapperspb.StringValue) (
@@ -186,7 +187,7 @@ func NewGrpcServer(config *Config) (*grpc.Server, error) {
 	if config.Timeout == 0 {
 		config.Timeout = DefaultTimeout
 	}
-	gsrv := grpc.NewServer()
-	protos.RegisterStatemachineServiceServer(gsrv, &grpcSubscriber{Config: config})
-	return gsrv, nil
+	server := grpc.NewServer()
+	protos.RegisterStatemachineServiceServer(server, &grpcSubscriber{Config: config})
+	return server, nil
 }

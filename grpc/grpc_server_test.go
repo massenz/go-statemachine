@@ -33,6 +33,7 @@ import (
 	"github.com/massenz/statemachine-proto/golang/api"
 )
 
+var bkgnd = context.Background()
 var _ = Describe("the gRPC Server", func() {
 
 	When("processing events", func() {
@@ -73,7 +74,7 @@ var _ = Describe("the gRPC Server", func() {
 			}
 		})
 		It("should succeed for well-formed events", func() {
-			response, err := client.ProcessEvent(context.Background(), &api.EventRequest{
+			response, err := client.ProcessEvent(bkgnd, &api.EventRequest{
 				Event: &api.Event{
 					EventId: "1",
 					Transition: &api.Transition{
@@ -99,7 +100,7 @@ var _ = Describe("the gRPC Server", func() {
 			}
 		})
 		It("should create an ID for events without", func() {
-			response, err := client.ProcessEvent(context.Background(), &api.EventRequest{
+			response, err := client.ProcessEvent(bkgnd, &api.EventRequest{
 				Event: &api.Event{
 					Transition: &api.Transition{
 						Event: "test-vt",
@@ -121,7 +122,7 @@ var _ = Describe("the gRPC Server", func() {
 			}
 		})
 		It("should fail for missing destination", func() {
-			_, err := client.ProcessEvent(context.Background(), &api.EventRequest{
+			_, err := client.ProcessEvent(bkgnd, &api.EventRequest{
 				Event: &api.Event{
 					Transition: &api.Transition{
 						Event: "test-vt",
@@ -139,7 +140,7 @@ var _ = Describe("the gRPC Server", func() {
 			}
 		})
 		It("should fail for missing event", func() {
-			_, err := client.ProcessEvent(context.Background(), &api.EventRequest{
+			_, err := client.ProcessEvent(bkgnd, &api.EventRequest{
 				Event: &api.Event{
 					Transition: &api.Transition{
 						Event: "",
@@ -218,7 +219,7 @@ var _ = Describe("the gRPC Server", func() {
 			It("should store valid configurations", func() {
 				_, ok := store.GetConfig(GetVersionId(cfg))
 				Ω(ok).To(BeFalse())
-				response, err := client.PutConfiguration(context.Background(), cfg)
+				response, err := client.PutConfiguration(bkgnd, cfg)
 				Ω(err).ToNot(HaveOccurred())
 				Ω(response).ToNot(BeNil())
 				Ω(response.Id).To(Equal(GetVersionId(cfg)))
@@ -234,19 +235,19 @@ var _ = Describe("the gRPC Server", func() {
 					Transitions:   nil,
 					StartingState: "",
 				}
-				_, err := client.PutConfiguration(context.Background(), invalid)
+				_, err := client.PutConfiguration(bkgnd, invalid)
 				AssertStatusCode(codes.InvalidArgument, err)
 			})
 			It("should retrieve a valid configuration", func() {
 				Ω(store.PutConfig(cfg)).To(Succeed())
-				response, err := client.GetConfiguration(context.Background(),
+				response, err := client.GetConfiguration(bkgnd,
 					&wrapperspb.StringValue{Value: GetVersionId(cfg)})
 				Ω(err).ToNot(HaveOccurred())
 				Ω(response).ToNot(BeNil())
 				Ω(response).Should(Respect(cfg))
 			})
 			It("should return an empty configuration for an invalid ID", func() {
-				_, err := client.GetConfiguration(context.Background(), &wrapperspb.StringValue{Value: "fake"})
+				_, err := client.GetConfiguration(bkgnd, &wrapperspb.StringValue{Value: "fake"})
 				AssertStatusCode(codes.NotFound, err)
 			})
 		})
@@ -266,16 +267,16 @@ var _ = Describe("the gRPC Server", func() {
 			})
 			It("should store a valid FSM", func() {
 				Ω(store.PutConfig(cfg)).To(Succeed())
-				resp, err := client.PutFiniteStateMachine(context.Background(),
+				resp, err := client.PutFiniteStateMachine(bkgnd,
 					&api.PutFsmRequest{Id: "123456", Fsm: fsm})
 				Ω(err).ToNot(HaveOccurred())
 				Ω(resp).ToNot(BeNil())
 				Ω(resp.Id).To(Equal("123456"))
-				Ω(resp.Fsm).Should(Respect(fsm))
+				Ω(resp.GetFsm()).Should(Respect(fsm))
 			})
 			It("should fail with an invalid Config ID", func() {
 				invalid := &api.FiniteStateMachine{ConfigId: "fake"}
-				_, err := client.PutFiniteStateMachine(context.Background(),
+				_, err := client.PutFiniteStateMachine(bkgnd,
 					&api.PutFsmRequest{Fsm: invalid})
 				AssertStatusCode(codes.FailedPrecondition, err)
 			})
@@ -283,17 +284,17 @@ var _ = Describe("the gRPC Server", func() {
 				id := "123456"
 				Ω(store.PutConfig(cfg))
 				Ω(store.PutStateMachine(id, fsm)).Should(Succeed())
-				Ω(client.GetFiniteStateMachine(context.Background(),
+				Ω(client.GetFiniteStateMachine(bkgnd,
 					&wrapperspb.StringValue{
 						Value: strings.Join([]string{cfg.Name, id}, storage.KeyPrefixIDSeparator),
 					})).Should(Respect(fsm))
 			})
 			It("will return an Invalid error for a malformed ID", func() {
-				_, err := client.GetFiniteStateMachine(context.Background(), &wrapperspb.StringValue{Value: "fake"})
+				_, err := client.GetFiniteStateMachine(bkgnd, &wrapperspb.StringValue{Value: "fake"})
 				AssertStatusCode(codes.InvalidArgument, err)
 			})
 			It("will return a NotFound error for a missing ID", func() {
-				_, err := client.GetFiniteStateMachine(context.Background(),
+				_, err := client.GetFiniteStateMachine(bkgnd,
 					&wrapperspb.StringValue{Value: "cfg#fake"})
 				AssertStatusCode(codes.NotFound, err)
 			})
@@ -311,11 +312,34 @@ var _ = Describe("the gRPC Server", func() {
 					}
 					Ω(store.PutConfig(cfg)).Should(Succeed())
 				}
-				found, err := client.GetAllConfigurations(context.Background(), &wrapperspb.StringValue{})
+				found, err := client.GetAllConfigurations(bkgnd, &wrapperspb.StringValue{})
 				Ω(err).Should(Succeed())
 				Ω(len(found.Ids)).To(Equal(3))
 				for _, value := range found.Ids {
 					Ω(names).To(ContainElement(value))
+				}
+			})
+			It("will find all version for a configuration", func() {
+				name := "store.api"
+				versions := []string{"v1alpha", "v1beta", "v1"}
+				for _, v := range versions {
+					cfg = &api.Configuration{
+						Name:    name,
+						Version: v,
+						States:  []string{"checkout", "close"},
+						Transitions: []*api.Transition{
+							{From: "checkout", To: "close", Event: "payment"},
+						},
+						StartingState: "checkout",
+					}
+					Ω(store.PutConfig(cfg)).Should(Succeed())
+				}
+				found, err := client.GetAllConfigurations(bkgnd, &wrapperspb.StringValue{Value: name})
+				Ω(err).Should(Succeed())
+				Ω(len(found.Ids)).To(Equal(3))
+				for _, value := range versions {
+					Ω(found.Ids).To(ContainElement(
+						strings.Join([]string{name, value}, storage.KeyPrefixComponentsSeparator)))
 				}
 			})
 		})
