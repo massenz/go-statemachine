@@ -67,7 +67,7 @@ func (csm *RedisStore) GetStateMachine(id string, cfg string) (*protos.FiniteSta
 	var stateMachine protos.FiniteStateMachine
 	err := csm.get(key, &stateMachine)
 	if err != nil {
-		csm.logger.Error("Error retrieving state machine `%s`: %s", key, err.Error())
+		csm.logger.Error("cannot access store for state machine `%s`: %s", key, err.Error())
 		return nil, false
 	}
 	return &stateMachine, true

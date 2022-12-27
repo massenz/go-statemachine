@@ -33,6 +33,9 @@ type Config struct {
 	Timeout       time.Duration
 }
 
+type StatemachineStream = protos.StatemachineService_StreamAllInstateServer
+type ConfigurationStream = protos.StatemachineService_StreamAllConfigurationsServer
+
 var _ protos.StatemachineServiceServer = (*grpcSubscriber)(nil)
 
 const (
@@ -160,6 +163,21 @@ func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context, id *wrappers
 	return fsm, nil
 }
 
+func (s *grpcSubscriber) GetAllInState(ctx context.Context, in *protos.GetAllFsmRequest) (
+	*protos.ListResponse, error) {
+	cfgName := in.Config.GetValue()
+	if cfgName == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "configuration must always be specified")
+	}
+	state := in.State.GetValue()
+	if state == "" {
+		// TODO: implement table scanning
+		return nil, status.Errorf(codes.Unimplemented, "missing state, table scan not implemented")
+	}
+	ids := s.Store.GetAllInState(cfgName, state)
+	return &protos.ListResponse{Ids: ids}, nil
+}
+
 func (s *grpcSubscriber) GetEventOutcome(ctx context.Context, id *wrapperspb.StringValue) (
 	*protos.EventResponse, error) {
 	outcomeId := id.Value
@@ -178,6 +196,48 @@ func (s *grpcSubscriber) GetEventOutcome(ctx context.Context, id *wrapperspb.Str
 		EventId: evtId,
 		Outcome: outcome,
 	}, nil
+}
+
+func (s *grpcSubscriber) StreamAllInstate(in *protos.GetAllFsmRequest, stream StatemachineStream) error {
+	response, err := s.GetAllInState(context.Background(), in)
+	if err != nil {
+		return err
+	}
+	cfgName := in.Config.GetValue()
+	for _, id := range response.GetIds() {
+		fsm, found := s.Store.GetStateMachine(id, cfgName)
+		if !found {
+			return storage.NotFoundError(id)
+		}
+		if err = stream.SendMsg(&protos.PutResponse{
+			Id:             id,
+			EntityResponse: &protos.PutResponse_Fsm{Fsm: fsm},
+		}); err != nil {
+			s.Logger.Error("could not stream response back: %s", err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *grpcSubscriber) StreamAllConfigurations(in *wrapperspb.StringValue, stream ConfigurationStream) error {
+	if in.GetValue() == "" {
+		return status.Errorf(codes.InvalidArgument, "must specify the Configuration name")
+	}
+	response, err := s.GetAllConfigurations(context.Background(), in)
+	if err != nil {
+		return nil
+	}
+	for _, cfgId := range response.GetIds() {
+		cfg, found := s.Store.GetConfig(cfgId)
+		if !found {
+			return storage.NotFoundError(cfgId)
+		}
+		if err = stream.SendMsg(cfg); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // NewGrpcServer creates a new gRPC server to handle incoming events and other API calls.

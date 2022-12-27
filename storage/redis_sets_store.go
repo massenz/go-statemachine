@@ -11,28 +11,31 @@ package storage
 
 import (
 	"context"
+	"fmt"
 )
 
 func (csm *RedisStore) UpdateState(cfgName string, id string, oldState string, newState string) error {
 	var key string
 	var err error
-	if newState == "" {
-		return IllegalStoreError("when updating state, new state cannot be empty")
-	}
 	if oldState != "" {
 		key = NewKeyForMachinesByState(cfgName, oldState)
 		err = csm.client.SRem(context.Background(), key, id).Err()
 		if err != nil {
-			csm.logger.Error("Cannot update FSM [%s#%s] from old state `%s`", cfgName, id, oldState)
-			return err
+			return fmt.Errorf(
+				"cannot remove FSM [%s#%s] from state set `%s`: %s",
+				cfgName, id, oldState, err)
 		}
 	}
-	key = NewKeyForMachinesByState(cfgName, newState)
-	err = csm.client.SAdd(context.Background(), key, id).Err()
-	if err != nil {
-		csm.logger.Error("Cannot update FSM [%s#%s] to new state `%s`", cfgName, id, newState)
+	if newState != "" {
+		key = NewKeyForMachinesByState(cfgName, newState)
+		err = csm.client.SAdd(context.Background(), key, id).Err()
+		if err != nil {
+			return fmt.Errorf(
+				"cannot add FSM [%s#%s] to state set `%s`: %s",
+				cfgName, id, newState, err)
+		}
 	}
-	return err
+	return nil
 }
 
 func (csm *RedisStore) GetAllInState(cfg string, state string) []string {

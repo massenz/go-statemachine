@@ -23,7 +23,7 @@ import (
 
 func TestGrpc(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "gRPC Suite")
+	RunSpecs(t, "gRPC Server")
 }
 
 var container *internals.Container
