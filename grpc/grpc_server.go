@@ -47,9 +47,9 @@ type grpcSubscriber struct {
 	*Config
 }
 
-func (s *grpcSubscriber) ProcessEvent(ctx context.Context, request *protos.EventRequest) (*protos.
+func (s *grpcSubscriber) SendEvent(ctx context.Context, request *protos.EventRequest) (*protos.
 	EventResponse, error) {
-	if request.Dest == "" {
+	if request.GetId() == "" {
 		return nil, status.Error(codes.FailedPrecondition, api.MissingDestinationError.Error())
 	}
 	if request.GetEvent() == nil || request.Event.GetTransition() == nil ||
@@ -141,35 +141,38 @@ func (s *grpcSubscriber) PutFiniteStateMachine(ctx context.Context,
 		s.Logger.Error("could not store FSM [%v]: %v", fsm, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	if err := s.Store.UpdateState(cfg.Name, id, "", fsm.State); err != nil {
+		s.Logger.Error("could not store FSM in state set [%s]: %v", fsm.State, err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
 	return &protos.PutResponse{Id: id, EntityResponse: &protos.PutResponse_Fsm{Fsm: fsm}}, nil
 }
 
-func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context, id *wrapperspb.StringValue) (
+func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context, in *protos.GetFsmRequest) (
 	*protos.FiniteStateMachine, error) {
-	// TODO: use Context to set a timeout, and then pass it on to the Store.
-	//       This may require a pretty large refactoring of the store interface.
-	fsmId := id.Value
-	s.Logger.Debug("looking up FSM %s", fsmId)
-	// The ID in the request contains the FSM ID,
-	// prefixed by the Config Name (which defines the "type" of FSM)
-	splitId := strings.Split(fsmId, storage.KeyPrefixIDSeparator)
-	if len(splitId) != 2 {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid FSM ID: %s", fsmId)
+	cfg := in.GetConfig()
+	if cfg == "" {
+		return nil, status.Error(codes.InvalidArgument, "configuration name must always be provided when looking up statemachine")
 	}
-	fsm, ok := s.Store.GetStateMachine(splitId[1], splitId[0])
+	fsmId := in.GetId()
+	if fsmId == "" {
+		return nil, status.Error(codes.InvalidArgument, "ID must always be provided when looking up statemachine")
+	}
+	s.Logger.Debug("looking up FSM [%s] (Configuration: %s)", fsmId, cfg)
+	fsm, ok := s.Store.GetStateMachine(fsmId, cfg)
 	if !ok {
 		return nil, status.Error(codes.NotFound, storage.NotFoundError(fsmId).Error())
 	}
 	return fsm, nil
 }
 
-func (s *grpcSubscriber) GetAllInState(ctx context.Context, in *protos.GetAllFsmRequest) (
+func (s *grpcSubscriber) GetAllInState(ctx context.Context, in *protos.GetFsmRequest) (
 	*protos.ListResponse, error) {
-	cfgName := in.Config.GetValue()
+	cfgName := in.GetConfig()
 	if cfgName == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "configuration must always be specified")
 	}
-	state := in.State.GetValue()
+	state := in.GetState()
 	if state == "" {
 		// TODO: implement table scanning
 		return nil, status.Errorf(codes.Unimplemented, "missing state, table scan not implemented")
@@ -178,17 +181,12 @@ func (s *grpcSubscriber) GetAllInState(ctx context.Context, in *protos.GetAllFsm
 	return &protos.ListResponse{Ids: ids}, nil
 }
 
-func (s *grpcSubscriber) GetEventOutcome(ctx context.Context, id *wrapperspb.StringValue) (
+func (s *grpcSubscriber) GetEventOutcome(ctx context.Context, in *protos.EventRequest) (
 	*protos.EventResponse, error) {
-	outcomeId := id.Value
-	s.Logger.Debug("looking up EventOutcome %s", outcomeId)
-	dest := strings.Split(outcomeId, storage.KeyPrefixIDSeparator)
-	if len(dest) != 2 {
-		return nil, status.Error(codes.InvalidArgument,
-			fmt.Sprintf("invalid destination [%s] expected: <type>#<id>", outcomeId))
-	}
-	smType, evtId := dest[0], dest[1]
-	outcome, ok := s.Store.GetOutcomeForEvent(evtId, smType)
+	evtId := in.GetId()
+	config := in.GetConfig()
+	s.Logger.Debug("looking up EventOutcome %s (%s)", evtId, config)
+	outcome, ok := s.Store.GetOutcomeForEvent(evtId, config)
 	if !ok {
 		return nil, status.Error(codes.NotFound, fmt.Sprintf("outcome for event %s not found", evtId))
 	}
@@ -198,12 +196,12 @@ func (s *grpcSubscriber) GetEventOutcome(ctx context.Context, id *wrapperspb.Str
 	}, nil
 }
 
-func (s *grpcSubscriber) StreamAllInstate(in *protos.GetAllFsmRequest, stream StatemachineStream) error {
+func (s *grpcSubscriber) StreamAllInstate(in *protos.GetFsmRequest, stream StatemachineStream) error {
 	response, err := s.GetAllInState(context.Background(), in)
 	if err != nil {
 		return err
 	}
-	cfgName := in.Config.GetValue()
+	cfgName := in.GetConfig()
 	for _, id := range response.GetIds() {
 		fsm, found := s.Store.GetStateMachine(id, cfgName)
 		if !found {

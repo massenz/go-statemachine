@@ -43,7 +43,7 @@ var _ = Describe("SQS Subscriber", func() {
 		It("receives events", func() {
 			msg := protos.EventRequest{
 				Event: api.NewEvent("test-event"),
-				Dest:  "some-fsm",
+				Id:    "some-fsm",
 			}
 			msg.Event.EventId = "feed-beef"
 			msg.Event.Originator = "test-subscriber"

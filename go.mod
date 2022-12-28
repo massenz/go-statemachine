@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/massenz/slf4go v0.3.2-g4eb5504
-	github.com/massenz/statemachine-proto/golang v1.0.0-beta-gcb98c26
+	github.com/massenz/statemachine-proto/golang v1.1.0-beta-g1fc5dd8
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.1
 	github.com/testcontainers/testcontainers-go v0.16.0

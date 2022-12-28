@@ -73,7 +73,7 @@ var _ = Describe("the gRPC Server", func() {
 			}
 		})
 		It("should succeed for well-formed events", func() {
-			response, err := client.ProcessEvent(bkgnd, &protos.EventRequest{
+			response, err := client.SendEvent(bkgnd, &protos.EventRequest{
 				Event: &protos.Event{
 					EventId: "1",
 					Transition: &protos.Transition{
@@ -81,7 +81,8 @@ var _ = Describe("the gRPC Server", func() {
 					},
 					Originator: "test",
 				},
-				Dest: "2",
+				Config: "test-cfg",
+				Id:     "2",
 			})
 			Ω(err).ToNot(HaveOccurred())
 			Ω(response).ToNot(BeNil())
@@ -92,21 +93,22 @@ var _ = Describe("the gRPC Server", func() {
 				Ω(evt.Event.EventId).To(Equal("1"))
 				Ω(evt.Event.Transition.Event).To(Equal("test-vt"))
 				Ω(evt.Event.Originator).To(Equal("test"))
-				Ω(evt.Dest).To(Equal("2"))
+				Ω(evt.Id).To(Equal("2"))
 			case <-time.After(10 * time.Millisecond):
 				Fail("Timed out")
 
 			}
 		})
 		It("should create an ID for events without", func() {
-			response, err := client.ProcessEvent(bkgnd, &protos.EventRequest{
+			response, err := client.SendEvent(bkgnd, &protos.EventRequest{
 				Event: &protos.Event{
 					Transition: &protos.Transition{
 						Event: "test-vt",
 					},
 					Originator: "test",
 				},
-				Dest: "123456",
+				Config: "test-cfg",
+				Id:     "123456",
 			})
 			Ω(err).ToNot(HaveOccurred())
 			Ω(response.EventId).ToNot(BeNil())
@@ -121,7 +123,7 @@ var _ = Describe("the gRPC Server", func() {
 			}
 		})
 		It("should fail for missing destination", func() {
-			_, err := client.ProcessEvent(bkgnd, &protos.EventRequest{
+			_, err := client.SendEvent(bkgnd, &protos.EventRequest{
 				Event: &protos.Event{
 					Transition: &protos.Transition{
 						Event: "test-vt",
@@ -139,14 +141,15 @@ var _ = Describe("the gRPC Server", func() {
 			}
 		})
 		It("should fail for missing event", func() {
-			_, err := client.ProcessEvent(bkgnd, &protos.EventRequest{
+			_, err := client.SendEvent(bkgnd, &protos.EventRequest{
 				Event: &protos.Event{
 					Transition: &protos.Transition{
 						Event: "",
 					},
 					Originator: "test",
 				},
-				Dest: "9876",
+				Config: "test",
+				Id:     "9876",
 			})
 			AssertStatusCode(codes.FailedPrecondition, err)
 			done()
@@ -316,6 +319,11 @@ var _ = Describe("the gRPC Server", func() {
 				Ω(resp).ToNot(BeNil())
 				Ω(resp.Id).To(Equal("123456"))
 				Ω(resp.GetFsm()).Should(Respect(fsm))
+				// As we didn't specify a state when creating the FSM, the `StartingState`
+				// was automatically configured.
+				found := store.GetAllInState(cfg.Name, cfg.StartingState)
+				Ω(len(found)).To(Equal(1))
+				Ω(found[0]).To(Equal(resp.Id))
 			})
 			It("should fail with an invalid Config ID", func() {
 				invalid := &protos.FiniteStateMachine{ConfigId: "fake"}
@@ -328,17 +336,29 @@ var _ = Describe("the gRPC Server", func() {
 				Ω(store.PutConfig(cfg))
 				Ω(store.PutStateMachine(id, fsm)).Should(Succeed())
 				Ω(client.GetFiniteStateMachine(bkgnd,
-					&wrapperspb.StringValue{
-						Value: strings.Join([]string{cfg.Name, id}, storage.KeyPrefixIDSeparator),
+					&protos.GetFsmRequest{
+						Config: cfg.Name,
+						Query:  &protos.GetFsmRequest_Id{Id: id},
 					})).Should(Respect(fsm))
 			})
-			It("will return an Invalid error for a malformed ID", func() {
-				_, err := client.GetFiniteStateMachine(bkgnd, &wrapperspb.StringValue{Value: "fake"})
+			It("will return an Invalid error for missing config or ID", func() {
+				_, err := client.GetFiniteStateMachine(bkgnd,
+					&protos.GetFsmRequest{
+						Query: &protos.GetFsmRequest_Id{Id: "fake"},
+					})
+				AssertStatusCode(codes.InvalidArgument, err)
+				_, err = client.GetFiniteStateMachine(bkgnd,
+					&protos.GetFsmRequest{
+						Config: cfg.Name,
+					})
 				AssertStatusCode(codes.InvalidArgument, err)
 			})
 			It("will return a NotFound error for a missing ID", func() {
 				_, err := client.GetFiniteStateMachine(bkgnd,
-					&wrapperspb.StringValue{Value: "cfg#fake"})
+					&protos.GetFsmRequest{
+						Config: cfg.Name,
+						Query:  &protos.GetFsmRequest_Id{Id: "12345"},
+					})
 				AssertStatusCode(codes.NotFound, err)
 			})
 			It("will find all FSMs by State", func() {
@@ -361,16 +381,16 @@ var _ = Describe("the gRPC Server", func() {
 					store.UpdateState("test.m", id, "", "stop")
 
 				}
-				items, err := client.GetAllInState(bkgnd, &protos.GetAllFsmRequest{
-					Config: &wrapperspb.StringValue{Value: "test.m"},
-					State:  &wrapperspb.StringValue{Value: "start"},
+				items, err := client.GetAllInState(bkgnd, &protos.GetFsmRequest{
+					Config: "test.m",
+					Query:  &protos.GetFsmRequest_State{State: "start"},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(len(items.GetIds())).Should(Equal(5))
 				Ω(items.GetIds()).Should(ContainElements("fsm-3", "fsm-5"))
-				items, err = client.GetAllInState(bkgnd, &protos.GetAllFsmRequest{
-					Config: &wrapperspb.StringValue{Value: "test.m"},
-					State:  &wrapperspb.StringValue{Value: "stop"},
+				items, err = client.GetAllInState(bkgnd, &protos.GetFsmRequest{
+					Config: "test.m",
+					Query:  &protos.GetFsmRequest_State{State: "stop"},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(len(items.GetIds())).Should(Equal(3))

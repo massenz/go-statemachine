@@ -146,9 +146,9 @@ var _ = Describe("gRPC Server Streams", func() {
 			})
 			It("should find all FSM", func() {
 				resp, err := client.StreamAllInstate(bkgnd,
-					&api.GetAllFsmRequest{
-						Config: &wrapperspb.StringValue{Value: cfg.Name},
-						State:  &wrapperspb.StringValue{Value: "start"},
+					&api.GetFsmRequest{
+						Config: cfg.Name,
+						Query:  &api.GetFsmRequest_State{State: "start"},
 					})
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(resp).ShouldNot(BeNil())
