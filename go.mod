@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/massenz/slf4go v0.3.2-g4eb5504
-	github.com/massenz/statemachine-proto/golang v0.6.0-ga901a76
+	github.com/massenz/statemachine-proto/golang v1.0.0-beta-gcb98c26
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.18.1
 	github.com/testcontainers/testcontainers-go v0.16.0
@@ -152,11 +152,7 @@ require (
 replace (
 	github.com/docker/cli => github.com/docker/cli v20.10.3-0.20221013132413-1d6c6e2367e2+incompatible // 22.06 master branch
 	github.com/docker/docker => github.com/docker/docker v20.10.3-0.20221013203545-33ab36d6b304+incompatible // 22.06 branch
-
-	// FIXME: temporary replacement to test with local changes
-	github.com/massenz/statemachine-proto/golang => /home/marco/Development/go/statemachine-protos/golang
 	github.com/moby/buildkit => github.com/moby/buildkit v0.10.1-0.20220816171719-55ba9d14360a // same as buildx
-
 	github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.2 // Can be removed on next bump of containerd to > 1.6.4
 
 	// For k8s dependencies, we use a replace directive, to prevent them being
