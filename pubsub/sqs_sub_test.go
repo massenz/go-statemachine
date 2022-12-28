@@ -32,7 +32,7 @@ var _ = Describe("SQS Subscriber", func() {
 		BeforeEach(func() {
 			Expect(awsLocal).ToNot(BeNil())
 			eventsCh = make(chan protos.EventRequest)
-			testSubscriber = pubsub.NewSqsSubscriber(eventsCh, &awsLocal.EndpointUri)
+			testSubscriber = pubsub.NewSqsSubscriber(eventsCh, &awsLocal.Address)
 			Expect(testSubscriber).ToNot(BeNil())
 			// Set to DEBUG when diagnosing failing tests
 			testSubscriber.SetLogLevel(log.NONE)
@@ -43,7 +43,7 @@ var _ = Describe("SQS Subscriber", func() {
 		It("receives events", func() {
 			msg := protos.EventRequest{
 				Event: api.NewEvent("test-event"),
-				Dest:  "some-fsm",
+				Id:    "some-fsm",
 			}
 			msg.Event.EventId = "feed-beef"
 			msg.Event.Originator = "test-subscriber"

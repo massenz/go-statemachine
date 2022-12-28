@@ -119,7 +119,7 @@ var _ = Describe("Event Handlers", func() {
 			id = uuid.NewString()
 			outcome = &protos.EventOutcome{
 				Code:    protos.EventOutcome_Ok,
-				Dest:    "fake-sm",
+				Id:      "fake-sm",
 				Details: "something happened",
 			}
 			Expect(store.AddEventOutcome(id, cfgName, outcome,
@@ -136,7 +136,7 @@ var _ = Describe("Event Handlers", func() {
 			Expect(json.NewDecoder(writer.Body).Decode(&result)).ToNot(HaveOccurred())
 			Expect(result.StatusCode).To(Equal(outcome.Code.String()))
 			Expect(result.Message).To(Equal(outcome.Details))
-			Expect(result.Destination).To(Equal(outcome.Dest))
+			Expect(result.Destination).To(Equal(outcome.Id))
 		})
 		It("with an invalid ID will return Not Found", func() {
 			endpoint := strings.Join([]string{server.ApiPrefix,

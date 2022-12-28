@@ -71,6 +71,6 @@ func MakeOutcomeResponse(outcome *protos.EventOutcome) *OutcomeResponse {
 	return &OutcomeResponse{
 		StatusCode:  outcome.Code.String(),
 		Message:     outcome.Details,
-		Destination: outcome.Dest,
+		Destination: outcome.Id,
 	}
 }

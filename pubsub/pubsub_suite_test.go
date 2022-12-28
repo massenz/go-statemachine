@@ -13,10 +13,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang/protobuf/proto"
-	"github.com/massenz/go-statemachine/pubsub"
-	"github.com/massenz/statemachine-proto/golang/api"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 	"os"
 	"testing"
 	"time"
@@ -27,11 +23,13 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
+
+	internals "github.com/massenz/go-statemachine/internals/testing"
+	"github.com/massenz/go-statemachine/pubsub"
+	"github.com/massenz/statemachine-proto/golang/api"
 )
 
 const (
-	localstackImage    = "localstack/localstack:1.3"
-	localstackEdgePort = "4566"
 	eventsQueue        = "test-events"
 	notificationsQueue = "test-notifications"
 	acksQueue          = "test-acks"
@@ -44,63 +42,27 @@ func TestPubSub(t *testing.T) {
 	RunSpecs(t, "Pub/Sub Suite")
 }
 
-type LocalstackContainer struct {
-	testcontainers.Container
-	EndpointUri string
-}
 
-func SetupAwsLocal(ctx context.Context) (*LocalstackContainer, error) {
-	req := testcontainers.ContainerRequest{
-		Image:        localstackImage,
-		ExposedPorts: []string{localstackEdgePort},
-		WaitingFor:   wait.ForLog("Ready."),
-		Env: map[string]string{
-			"AWS_REGION": "us-west-2",
-			"EDGE_PORT":  "4566",
-			"SERVICES":   "sqs",
-		},
-	}
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	ip, err := container.Host(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	mappedPort, err := container.MappedPort(ctx, localstackEdgePort)
-	if err != nil {
-		return nil, err
-	}
-
-	uri := fmt.Sprintf("http://%s:%s", ip, mappedPort.Port())
-
-	return &LocalstackContainer{Container: container, EndpointUri: uri}, nil
-}
 
 // Although these are constants, we cannot take the pointers unless we declare them vars.
 var (
-	region        = "us-west-2"
-	awsLocal      *LocalstackContainer
+	awsLocal      *internals.Container
 	testSqsClient *sqs.SQS
 )
 
 var _ = BeforeSuite(func() {
-	Expect(os.Setenv("AWS_REGION", region)).ToNot(HaveOccurred())
+	Expect(os.Setenv("AWS_REGION", internals.Region)).ToNot(HaveOccurred())
 
 	var err error
-	awsLocal, err = SetupAwsLocal(context.Background())
+	awsLocal, err = internals.NewLocalstackContainer(context.Background())
 	Expect(err).ToNot(HaveOccurred())
 
+	// Can't take the address of a constant.
+	region := internals.Region
 	testSqsClient = sqs.New(session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 		Config: aws.Config{
-			Endpoint: &awsLocal.EndpointUri,
+			Endpoint: &awsLocal.Address,
 			Region:   &region,
 		},
 	})))
@@ -134,7 +96,7 @@ var _ = AfterSuite(func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
-	awsLocal.Terminate(context.Background())
+	Expect(awsLocal.Terminate(context.Background())).ToNot(HaveOccurred())
 }, 2.0)
 
 // getQueueName provides a way to obtain a process-independent name for the SQS queue,

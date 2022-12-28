@@ -139,7 +139,7 @@ func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
 		return
 	}
 
-	destId := request.Dest
+	destId := request.GetId()
 	if destId == "" {
 		errDetails := fmt.Sprintf("No Destination ID in %v", request.String())
 		s.logger.Error(errDetails)

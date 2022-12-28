@@ -174,7 +174,8 @@ var _ = Describe("RedisStore", func() {
 			cfg := "orders"
 			response := &protos.EventOutcome{
 				Code:    protos.EventOutcome_Ok,
-				Dest:    "1234-feed-beef",
+				Config:  "test",
+				Id:      "1234-feed-beef",
 				Details: "this was just a test",
 			}
 			Expect(store.AddEventOutcome(id, cfg, response, storage.NeverExpire)).ToNot(HaveOccurred())
@@ -191,8 +192,8 @@ var _ = Describe("RedisStore", func() {
 			cfg := "orders"
 			response := &protos.EventOutcome{
 				Code:    protos.EventOutcome_Ok,
-				Dest:    "1234-feed-beef",
 				Details: "this was just a test",
+				Id:      "1234-feed-beef",
 			}
 			key := storage.NewKeyForOutcome(id, cfg)
 			val, _ := proto.Marshal(response)
@@ -332,8 +333,10 @@ var _ = Describe("RedisStore", func() {
 				res = store.GetAllInState("orders", "in_transit")
 				Expect(len(res)).To(Equal(6))
 			})
-			It("will fail for an empty newState", func() {
-				Expect(store.UpdateState("fake", "12345678", "in_transit", "")).ToNot(Succeed())
+			It("will remove with an empty newState", func() {
+				Expect(store.UpdateState("orders", "fsm-1", "in_transit", "")).To(Succeed())
+				res := store.GetAllInState("orders", "in_transit")
+				Ω(res).ToNot(ContainElement("fsm-1"))
 			})
 		})
 	})
