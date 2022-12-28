@@ -66,7 +66,7 @@ var _ = Describe("A Listener", func() {
 			case n := <-notificationsCh:
 				Ω(n.EventId).To(Equal(msg.GetEventId()))
 				Ω(n.Outcome).ToNot(BeNil())
-				Ω(n.Outcome.Dest).To(BeEmpty())
+				Ω(n.Outcome.Id).To(BeEmpty())
 				Ω(n.Outcome.Details).To(Equal(detail))
 				Ω(n.Outcome.Code).To(Equal(protos.EventOutcome_MissingDestination))
 
@@ -84,8 +84,9 @@ var _ = Describe("A Listener", func() {
 				Details: "more details",
 			}
 			request := protos.EventRequest{
-				Event: &event,
-				Dest:  "test#12345-faa44",
+				Event:  &event,
+				Config: "test",
+				Id:     "12345-faa44",
 			}
 			Ω(store.PutConfig(&protos.Configuration{
 				Name:          "test",
@@ -111,7 +112,7 @@ var _ = Describe("A Listener", func() {
 				// First we want to test that the outcome was successful
 				Ω(notification.EventId).To(Equal(event.GetEventId()))
 				Ω(notification.Outcome).ToNot(BeNil())
-				Ω(notification.Outcome.Dest).To(Equal(request.GetDest()))
+				Ω(notification.Outcome.Id).To(Equal(request.GetId()))
 				Ω(notification.Outcome.Details).To(ContainSubstring("transitioned"))
 				Ω(notification.Outcome.Code).To(Equal(protos.EventOutcome_Ok))
 
@@ -136,8 +137,9 @@ var _ = Describe("A Listener", func() {
 				Details: "more details",
 			}
 			request := protos.EventRequest{
-				Event: &event,
-				Dest:  "test#fake-fsm",
+				Event:  &event,
+				Config: "test",
+				Id:     "fake-fsm",
 			}
 			go func() {
 				testListener.ListenForMessages()
@@ -148,7 +150,7 @@ var _ = Describe("A Listener", func() {
 			case n := <-notificationsCh:
 				Ω(n.EventId).To(Equal(request.Event.EventId))
 				Ω(n.Outcome).ToNot(BeNil())
-				Ω(n.Outcome.Dest).To(Equal(request.Dest))
+				Ω(n.Outcome.Id).To(Equal(request.GetId()))
 				Ω(n.Outcome.Code).To(Equal(protos.EventOutcome_FsmNotFound))
 			case <-time.After(timeout):
 				Fail("the listener did not exit when the events channel was closed")
@@ -159,7 +161,6 @@ var _ = Describe("A Listener", func() {
 				Event: &protos.Event{
 					EventId: "feed-beef",
 				},
-				Dest: "",
 			}
 			go func() { testListener.ListenForMessages() }()
 			eventsCh <- request

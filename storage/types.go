@@ -32,12 +32,42 @@ var (
 type ConfigurationStorageManager interface {
 	GetConfig(versionId string) (*protos.Configuration, bool)
 	PutConfig(cfg *protos.Configuration) error
+
+	// GetAllConfigs returns all the `Configurations` that exist in the server, regardless of
+	// the version, and whether are used or not by an FSM.
+	GetAllConfigs() []string
+
+	// GetAllVersions returns the full `name:version` ID of all the Configurations whose
+	// name matches `name`.
+	GetAllVersions(name string) []string
 }
 
 type FiniteStateMachineStorageManager interface {
+	// GetStateMachine will find the FSM with `id and that is configured via a `Configuration` whose
+	// `name` matches `cfg` (without the `version`).
 	GetStateMachine(id string, cfg string) (*protos.FiniteStateMachine, bool)
+
+	// PutStateMachine creates or updates the FSM whose `id` is given.
+	// No further action is taken: no check that the referenced `Configuration` exists, and the
+	// `state` SETs are not updated either: it is the caller's responsibility to call the
+	// `UpdateState` method (possibly with an empty `oldState`, in the case of creation).
 	PutStateMachine(id string, fsm *protos.FiniteStateMachine) error
-	GetAllInState(cfg string, state string) []*protos.FiniteStateMachine
+
+	// GetAllInState looks up all the FSMs that are currently in the given `state` and
+	// are configured with a `Configuration` whose name matches `cfg` (regardless of the
+	// configuration's version).
+	//
+	// It returns the IDs for the FSMs.
+	GetAllInState(cfg string, state string) []string
+
+	// UpdateState will move the FSM's `id` from/to the respective Redis SETs.
+	//
+	// When creating or updating an FSM with `PutStateMachine`, the state SETs are not
+	// modified; it is the responsibility of the caller to manage the FSM state appropriately
+	// (or not, as the case may be).
+	//
+	// `oldState` may be empty in the case of a new FSM being created.
+	UpdateState(cfgName string, id string, oldState string, newState string) error
 }
 
 type EventStorageManager interface {

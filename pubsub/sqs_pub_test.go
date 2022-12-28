@@ -34,7 +34,7 @@ var _ = Describe("SQS Publisher", func() {
 		)
 		BeforeEach(func() {
 			notificationsCh = make(chan protos.EventResponse)
-			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &awsLocal.EndpointUri)
+			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &awsLocal.Address)
 			Expect(testPublisher).ToNot(BeNil())
 			// Set to DEBUG when diagnosing test failures
 			testPublisher.SetLogLevel(logging.NONE)
@@ -46,8 +46,9 @@ var _ = Describe("SQS Publisher", func() {
 				EventId: "feed-beef",
 				Outcome: &protos.EventOutcome{
 					Code:    protos.EventOutcome_InternalError,
-					Dest:    "me",
 					Details: "error details",
+					Config:  "test-cfg",
+					Id:      "abd-456",
 				},
 			}
 			done := make(chan interface{})
@@ -157,8 +158,9 @@ var _ = Describe("SQS Publisher", func() {
 					EventId: evt.EventId,
 					Outcome: &protos.EventOutcome{
 						Code:    protos.EventOutcome_InternalError,
-						Dest:    fmt.Sprintf("test-%d", i),
 						Details: "more details about the error",
+						Config:  "test-cfg",
+						Id:      fmt.Sprintf("fsm-%d", i),
 					},
 				}
 			}
@@ -178,7 +180,7 @@ var _ = Describe("SQS Publisher", func() {
 						g.Expect(receivedEvt.EventId).To(Equal(fmt.Sprintf("event-%d", i)))
 						g.Expect(receivedEvt.Outcome.Code).To(Equal(protos.EventOutcome_InternalError))
 						g.Expect(receivedEvt.Outcome.Details).To(Equal("more details about the error"))
-						g.Expect(receivedEvt.Outcome.Dest).To(ContainSubstring("test-"))
+						g.Expect(receivedEvt.Outcome.Id).To(ContainSubstring("fsm-"))
 					}).Should(Succeed())
 				}
 			}()
