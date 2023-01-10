@@ -67,7 +67,7 @@ var _ = Describe("Configuration Handlers", func() {
 				router.ServeHTTP(writer, req)
 				Expect(writer.Code).To(Equal(http.StatusCreated))
 				location := writer.Header().Get("Location")
-				Expect(strings.HasSuffix(location, "/test.orders:v1")).To(BeTrue())
+				Expect(strings.HasSuffix(location, "/test.orders:v2")).To(BeTrue())
 
 				var response protos.Configuration
 				Expect(json.Unmarshal(writer.Body.Bytes(), &response)).ToNot(HaveOccurred())
@@ -77,7 +77,7 @@ var _ = Describe("Configuration Handlers", func() {
 					"pending",
 					"shipping",
 					"delivered",
-					"complete",
+					"completed",
 					"closed",
 				}))
 				Expect(response.StartingState).To(Equal("start"))
@@ -85,7 +85,7 @@ var _ = Describe("Configuration Handlers", func() {
 			It("should fill the cache", func() {
 				router.ServeHTTP(writer, req)
 				Expect(writer.Code).To(Equal(http.StatusCreated))
-				_, found := store.GetConfig("test.orders:v1")
+				_, found := store.GetConfig("test.orders:v2")
 				Expect(found).To(BeTrue())
 			})
 			It("should fail for an existing version", func() {
