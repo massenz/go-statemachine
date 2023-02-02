@@ -20,14 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      # TODO: run this in a build container instead
-      - uses: arduino/setup-protoc@v1
-        with:
-          version: '3.19'
-      - name: Install protoc-gen & build
+      - name: build
         run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
           make build
 
       - name: Create release tag
