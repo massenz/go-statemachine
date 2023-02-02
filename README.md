@@ -24,7 +24,7 @@ The overall architecture is shown below:
 
 *System Architecture*
 
-The REST API is described [here](#api), the Protobuf messages and gRPC methods are described in [their respective repository](https://github.com/massenz/statemachine-proto), and how [to run the server](#running-the-server) is further below.
+The gRPC API is described [here](#api), the Protobuf messages and gRPC methods are described in [their respective repository](https://github.com/massenz/statemachine-proto), and how [to run the server](#running-the-server) is further below.
 
 The general design approach here optimizes for simplicity and efficiency: we would expect a single instance of the `sm-server` and a relatively low-scale Redis cluster to be able to handle millions of "statemachines" and several thousand events per second.
 
@@ -53,307 +53,97 @@ e1: {event: "evB"}
 
 See [Sending Events](#sending-events) below for details on how to encode an SQS Message to encode an `event`.
 
+## Data Model
 
-## API
+A StateMachine Server (`sm-server`) can track any number of different business entities, from a handful to tens to hundreds of different types of state machines: `users` or `orders` or `devices`, or whatever the actual underlying business needs require to keep track the state of.
 
-The HTTP server exposes a REST API that allows to create (`POST`) and retrieve (`GET`) both `configurations` and `statemachines`, encoding their contents using JSON.
+Each "type" of business entity (e.g., `orders`) is defined by a `Configuration` that defines the `Transitions` the entity may go through, driven by external `Events`.
+
+There can be up to millions (or more) entities of each type: each one of them is a `FiniteStateMachine` (`FSM`), which carries its current state, as well the `History` of `Events` that have driven its state.
+
+For each `Event` (be it successful or not) we keep track of the `EventOutcome`.
+
+
+![Data Model](docs/images/datamodel.png)
+
+*StateMachine Server Data Model*
+
+In the next few sections we will describe the main entities in the data model, the [gRPC API](https://grpc.io/) to manipulate them is described [further below](#grpc-api).
+
 
 ### Configurations
 
-Before creating an FSM, you need to define the associated configuration (trying to create an FSM with a `configuration_version` that does not match an existing `configuration` will result in a `404 NOT FOUND` error).
+A [`Configuration`](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L63-L82) has a distinctive `name` and is further uniquely identified by its `version` - combined, the two define a `config_id` which each FSM **must** reference upon creation.
 
-> `TODO`: we may eventually choose to return a more descriptive error code (e.g., either a `403 FORBIDDEN` or a `406 METHOD NOT ALLOWED` in future)
+Once created, a versioned configuration is **immutable** and cannot be changed: this is largely to prevent the introduction of bugs or causing FSMs to be stuck in an undefined State; if you need to update a Configuration, create a new version.
 
-To create a new configuration use:
+The `version` can really be anything, we recommend **not** using "semantic versioning" (as it would make little sense in this context) and instead use a monotonically increasing integer value (`v1`, `v2`, `v3`, etc.) or the scheme introduced by Kubernetes (`v1alpha`, `v1beta`, `v1`, ...).
 
-```
-POST /api/v1/configurations
+As far as the server logic is concerned, we do not attach any meaning to the configuration version and it is entirely possible to create a `v1` *after* a `v2` has been created (provided there is not an already-created `v1`), alhtouhg this would be confusing and is discouraged.
 
-{
-  "name": "test.orders",
-  "version": "v3",
-  "states": [
-    "start",
-    "waiting",
-    "pending",
-    "shipped",
-    "delivered",
-    "completed",
-    "closed"
-  ],
-  "transitions": [
-    {
-      "from": "start",
-      "to": "pending",
-      "event": "accept"
-    },
-    {
-      "from": "start",
-      "to": "waiting",
-      "event": "pause"
-    },    {
-      "from": "pending",
-      "to": "shipped",
-      "event": "ship"
-    },
-    {
-      "from": "shipped",
-      "to": "delivered",
-      "event": "deliver"
-    },
-    {
-      "from": "delivered",
-      "to": "completed",
-      "event": "sign"
-    },
-    {
-      "from": "completed",
-      "to": "closed",
-      "event": "close"
-    }
-  ],
-  "starting_state": "start"
-}
-```
+A Configuration lists a set of `states` and `transitions` between states, which will drive the FSMs which are configured with it.
 
-You **cannot specify an ID**, one will be created automatically by the server, using both the `name` and `version` and returned in the `Location` header:
+The server allows to retrieve all configurations names, and, for each name, all the versions; for each `{name, version}` tuple it is then possible to retrieve the full configuration data.
 
-```
-201 CREATED
-
-Location: /api/v1/configurations/test.orders:v3
-```
-
-Configurations are deemed to be immutable, so no `PUT` is offered, and also trying to re-create a configuration with the same `{name, version}` tuple will result in a `409 CONFLICT` error.
-
-Configurations can be retrieved using the `GET` and endpoint returned:
-
-```
-GET /api/v1/configurations/test.orders:v3
-
-{
-    "name": "test.orders",
-    "version": "v3",
-    "states": [
-        "start",
-        ...
-        "closed"
-    ],
-    "transitions": [
-        ...
-    ],
-    "startingState": "start"
-}
-```
 
 ### State Machines
 
-To create a `statemachine` simply requires indicating its [configuration](#configurations) and an (optional) ID:
+[`FiniteStateMachines` (FSMs)](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L96-L110) are the core entities managed by `sm-server` and represent business entities which can be modeled as being in a given state, and transitioning to different ones upon receiving `events`.
 
-```
-POST /api/v1/statemachines
+They are configured via a uniquely versioned `Configuration` (`config_id`) and additionally carry the `history` of `Events` that have been received by the FSM.
 
-{
-  "configuration_version": "devices:v3",
-  "id": "6b5af0e8-9033-47e2-97db-337476f1402a"
-}
-```
+An FSM is uniquely identified in the system by their ID (see [the gRPC API](#grpc-api)) namespaced by the configuration `name` (but **not** the version): we assume that Configurations of the same 'name' refer to the same business entities, regardless of the version (which may reflect different stages of development; or even different versions of the FSMs themselves).
 
-if the optional `id` is omitted, one will be generated and returned in the `Location` header (as well as in the body of the response):
+The FSM ID is **not** carried within the body (Protobuf) of the FSM itself.
 
-```
-Location: /api/v1/statemachines/devices/6b5af0e8-9033-47e2-97db-337476f1402a
+> **NOTE**<br/>
+> Currently no additional detail about the entity is stored in the server, as we assume there is another store of data which provides this information.
+>
+> However, this may change in future, and we plan to add the ability to store data within the FSM itself, either via an [`Any` Protocol Buffer](https://developers.google.com/protocol-buffers/docs/reference/csharp/class/google/protobuf/well-known-types/any) or an arbitrarily-encoded (e.g., JSON) string.
+>
+> For more on the `Any` "envelope pattern" see [this article](https://codetrips.com/2021/01/04/implement-the-envelope-wrapper-pattern-in-c-using-google-protocol-buffers/).
 
-{
-    "id": "6b5af0e8-9033-47e2-97db-337476f1402a",
-    "statemachine": {
-        "config_id": "devices:v3",
-        "state": "started"
-    }
-}
-```
+
+### Events
+
+An [`Event`](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L40-L61) is, together with a `FiniteStateMachine`, the central entity of an `sm-server`: it will cause an FSM to `Transition` from one `state` to the next, if allowed by the `Configuration`.
+
+An event is uniquely identified by its `event_id` and has a `timestamp` for when it was generated/sent - if not set by the client sending them to the server, they will be set when processing the event.
+
+Optionally, an Event can have an `Originator` (for example, a URI identifying the system that generated the event) and `Details` that further describe it (this could be a JSON-encoded body, or a string-encoded Protocol Buffer): see an example in [the gRPC Client](clients/grpc_client.go).
+
+Events have [outcomes](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L141-L164) which can be retrieved individually (see below in the [gRPC API](#grpc-api)): these describe whether the event caused a successful transition (with an `Ok` `code`) or there was an error (and if so, further `details`).
+
+It is important to realize that events are processed **asynchronously** and thus their outcome (essentially, whether they resulted in a successful `Transition`) will never be returned after the invocation (and, rather obviously, cannot even be expected when Publishing the event to a topic): they should be retrieved at a later time and/or [error `notifications`](#sqs-notifications) should be consumed by a dedicated client.
+
+The `event_id` can be used for such reconciliation: it is either provided by the client when sending events to `sm-server` or it is auto-generated by the server (as a random UUID) and returned in the `EventResponse`.
+
+> **NOTE**
+>
+> Even though the `EventResponse` protocol buffer has an `outcome` field, this is always `null` when it is returned by an invocation of the `SendEvent` method: the server returns immediately to the caller, while the event is posted to an internal `channel` for processing in a goroutine.
+
+## gRPC API
+
+For a full description and documentation of the gRPC API, please see the [Protocol Buffer definition](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto).
+
+The [gRPC API and examples](https://github.com/massenz/statemachine-proto) are described there too.
+
+An example usage in Go is in the [gRPC Client](clients/grpc_client.go).
+
+
+## Events Listener
+
+We currently listen for events from an [AWS SQS queue](https://aws.amazon.com/sqs/) which is configured at server startup via the `-events` flag.
 
 > **Note**
 >
-> The "type" of FSM (in other words, its configuration's **name** - but **not** the version) is included in the FSM's URI.
-
-To obtain the current state of the FSM, simply use a `GET`:
-
-```
-GET /api/v1/statemachines/devices/6b5af0e8-9033-47e2-97db-337476f1402a
-
-200 OK
-
-{
-    "id": "6b5af0e8-9033-47e2-97db-337476f1402a",
-    "statemachine": {
-        "config_id": "devices:v3",
-        "state": "backorderd",
-        "history": [
-            {
-                "event_id": "258",
-                "timestamp": {
-                    "seconds": 1661733324,
-                    "nanos": 461000000
-                },
-                "transition": {
-                    "from": "started",
-                    "to": "backorderd",
-                    "event": "backorder"
-                },
-                "originator": "SimpleSender"
-            }
-        ]
-    }
-}
-```
-
-which shows that an event `backorder` was sent at `Sun Aug 28 2022 17:35:24 PDT` (the `timestamp` in seconds from epoch) transitioning our device order to a `backordered` state.
-
-Again, the "type" of FSM **must** be specified in the URL (`/devices`).
-
-See [`grpc_client`](clients/grpc_client.go) for a fully worked out example as to how to send events to an FSM.
-
-Trying to create an FSM with an existing ID will cause a `409 Conflict` error to be returned.
-
-#### Updating a State Machine
-
-While it is recommended that changing the `state` or the `configuration` of an FSM is **not** done via API calls as a matter of course, there may be situations in which this may be unavoidable, especially when a new `Configuration` `version` needs to be released and existing FSMs need to use the new one (for example, because the business flow has changed, or a better way to model it has been identified).
-
-In order to allow for those scenarios, there is a `PUT` endpoint that allows for a `statemachine` to be modified: either a new `configuration_version` or `current_state` (or both) can be specified:
-
-```
-PUT /api/v1/statemachines/{config}/{id}
-
-{
-  "configuration_version": "v4",
-  "current_state": "accepted"
-}
-```
-
-if a matching FSM is found, it will be updated and returned in the response:
-
-```
-└─( http --json :7399/api/v1/statemachines/test.orders/2
-
-HTTP/1.1 200 OK
-
-{
-    "id": "2",
-    "statemachine": {
-        "config_id": "test.orders:v3",
-        "state": "started"
-    }
-}
-
-
-└─( http --json PUT :7399/api/v1/statemachines/test.orders/2 \
-        configuration_version=v4 \
-        current_state=accepted
-
-HTTP/1.1 200 OK
-
-{
-    "id": "2",
-    "statemachine": {
-        "config_id": "test.orders:v4",
-        "state": "accepted"
-    }
-}
-
-└─( http --json :7399/api/v1/statemachines/test.orders/2
-
-HTTP/1.1 200 OK
-
-{
-    "id": "2",
-    "statemachine": {
-        "config_id": "test.orders:v4",
-        "state": "accepted"
-    }
-}
-```
-
-If a non-existent configuration is used, a `404` error code is returned:
-
-```
-└─( http --json PUT :7399/api/v1/statemachines/test.orders/2 \
-        configuration_version=v5 \
-        current_state=accepted
-
-HTTP/1.1 404 Not Found
-
-configuration not found
-```
-
-However, **no check is made against the requested new state**, if this is not one allowed in the configuration's `states` the FSM will not be able to process any future events.
-
-If all that is needed is a transition to a new `state` (which cannot be achieved by sending a sequence of `Events`, the recommended method), it is not necessary to specify a new `configuration_version`:
-
-```
-└─( http --json PUT :7399/api/v1/statemachines/test.orders/2  current_state=shipped
-
-HTTP/1.1 200 OK
-
-{
-    "id": "2",
-    "statemachine": {
-        "config_id": "test.orders:v4",
-        "state": "shipped"
-    }
-}
-```
-
-> **Important**
->
-> Given that the `configuration.name` defines the "type" of the FSM, this **cannot** be changed with a PUT request: the `cfg_name` is taken from the API URI path and is joined with the new request `configuration_version` to arrive at a full `Configuration` ID.
->
-> This will **not** work:
->
-> `PUT /api/v1/statemachines/orders/123456  configuration_version=devices:v1`
->
-> even if a `devices:v1` configuration does exist: a 404 error would be returned as we would be looking up a configuration with an ID of `orders:devices:v1`.
-
-
-### Event Outcomes
-
-After [sending an event](#sending-events), the outcome of the event can be retrieved using the `event_id` (either specified, or auto-generated by the server):
-
-```
-GET /api/v1/events/outcome/orders/f8b6a19b-12c9-40b1-aa35-240cd829b014
-
-{
-    "status_code": "Ok",
-    "message": "event [accept] transitioned FSM [25] to state [pending]",
-    "destination": "orders#6b5af0e8-9033-47e2-97db-337476f1402a"
-}
-```
-
-if there was an error, it would be reported too, with the relevant message, if available:
-
-```
-GET /api/v1/events/outcome/test.orders/4018047a-50c1-45ea-b87e-e79b195568db
-
-{
-    "status_code": "TransitionNotAllowed",
-    "message": "event [self-destroy] could not be processed: unexpected event transition",
-    "destination": "test.orders#6b5af0e8-9033-47e2-97db-337476f1402a"
-}
-```
-
-Note that, as for FSMs, we need to qualify the `event_id` with the `configuration.name` in the URL (in this example `test.orders`).
-
-## Sending Events
-
-> Note that **it is not possible to send events via the REST API**: this is **by design** and not just a "missing feature"; please do not submit requests to add a `POST /api/v1/events` API: it's not going to happen.
-
-### SQS Messages
+> The PubSub interface is abstracted in the [`EventsListener`](https://github.com/massenz/go-statemachine/blob/main/pubsub/types.go#L34-L39), and we are planning to add support for Kafka topics (see [Issue #66](https://github.com/massenz/go-statemachine/issues/66))
 
 #### EventRequest
 
 To send an Event to an FSM via an SQS Message we use the [following code](clients/sqs_client.go):
 
-```golang
+```
 // This is the object you want to send across as Event's metadata.
 order := NewOrderDetails(uuid.NewString(), "sqs-cust-1234", 99.99)
 
@@ -390,45 +180,16 @@ _, err = queue.SendMessage(&sqs.SendMessageInput{
 
 This will cause a `backorder` event to be sent to our FSM whose `id` matches the UUID in `Dest`; if there are errors (eg, the FSM does not exist, or the event is not allowed for the machine's configuration and current state) errors may be optionally sent to the SQS queue configured via the `-notifications` option (see [Running the Server](#running-the-server)): see the [`pubsub` code](pubsub/sqs_pub.go) code for details as to how we encode the error message as an SQS message.
 
-See [`EventRequest` in `statemachine-proto`](https://github.com/massenz/statemachine-proto/blob/main/api/statemachine.proto#L86) for details on the event being sent.
+See [`EventRequest` in `statemachine-proto`](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L86) for details on the event being sent.
 
-To try this out, you can use the [`SQS Client`](clients/sqs_client.go) example:
-
-```
-└─( http POST :7399/api/v1/statemachines configuration_version=test.orders:v3 id=26
-HTTP/1.1 201 Created
-Location: /api/v1/statemachines/test.orders/26
-
-{
-    "id": "26",
-    "statemachine": {
-        "config_id": "test.orders:v3",
-        "state": "start"
-    }
-}
-
-└─( SQS_Client -endpoint http://localhost:4566 -q events \
-    -dest test.orders#26 -evt ship
-
-Publishing Event `ship` for FSM `test.orders#26` to SQS Topic: [events]
-Sent event [724ea354-4739-4782-8785-6ce55b86a25d] to queue events
-
-└─( http :7399/api/v1/events/outcome/test.orders/724ea354-4739-4782-8785-6ce55b86a25d
-HTTP/1.1 200 OK
-
-{
-    "destination": "test.orders#26",
-    "message": "event [ship] transitioned FSM [25] to state [shipped]",
-    "status_code": "Ok"
-}
-```
+See the example in the [`SQS Client`](clients/sqs_client.go).
 
 
 #### SQS Notifications
 
-Event processing outcomes are returned in [`EventResponse` protocol buffers](https://github.com/massenz/statemachine-proto/blob/main/api/statemachine.proto#L112), which are then serialized inside the `body` of the SQS message; to retrieve the actual Go struct, you can use code such as this (see [test code](pubsub/sqs_pub_test.go#L148) for actual working code):
+Event processing outcomes are returned in [`EventResponse` protocol buffers](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L112), which are then serialized inside the `body` of the SQS message; to retrieve the actual Go struct, you can use code such as this (see [test code](pubsub/sqs_pub_test.go#L148) for actual working code):
 
-```go
+```
 // `res` is what AWS SQS Client will return to the Messages slice
 var res *sqs.Message = getSqsMessage(getQueueName(notificationsQueue))
 var receivedEvt protos.EventResponse
@@ -448,7 +209,7 @@ return fmt.Errorf("cannot process event to statemachine [%s]: %s,
 
 The possible error codes are (see the `.proto` definition for the up-to-date values):
 
-```proto
+```
   enum StatusCode {
     Ok = 0;
     GenericError = 1;
@@ -460,34 +221,6 @@ The possible error codes are (see the `.proto` definition for the up-to-date val
     ConfigurationNotFound = 7;
   }
 ```
-
-### gRPC Methods
-
-All the actions described above in [the API](#api) section can also be executed via gRPC method calls.
-
-Please refer to [gRPC documentation](https://grpc.io/docs/), the [example gRPC client](clients/grpc_client.go) and [the Protocol Buffers repository](https://github.com/massenz/statemachine-proto) for more information and details as to how to send events using the `ConsumeEvent()` API.
-
-The TL;DR version of all the above is that code like this:
-
-```go
-response, err := client.ProcessEvent(context.Background(),
-    &api.EventRequest{
-        Event: &api.Event{
-            EventId:   uuid.NewString(),
-            Timestamp: timestamppb.Now(),
-            Transition: &api.Transition{
-                Event: "backorder",
-            },
-            Originator: "gRPC Client",
-        },
-        Dest: "6b5af0e8-9033-47e2-97db-337476f1402a",
-    })
-```
-
-like in the SQS example, will cause a `backorder` event to be sent to our FSM whose `id` matches the UUID in `dest`; the `response` message will contain either the ID of the event, or a suitable error will be returned.
-
-**NOTE**<br/>
-As the event processing is asynchronous, the `response` will only contain the `event_id` and an empty `outcome`; use the `event_id` and the `GetEventOutcome(GetRequest)` to retrieve the result of event processing (or directly fetch the FSM via the `GetStatemachine()` method to confirm it has transitioned to the expected state - or not).
 
 
 # Build & Run
@@ -509,7 +242,7 @@ To install the CLI run this:
 They are kept in the [statemachine-proto](https://github.com/massenz/statemachine-proto) repository; nothing specific is needed to use them; however, if you want to review the messages and services definitions, you can see them there.
 
 **Supporting services**<br/>
-The `sm-server` requires a running [Redis](#) server and [AWS Simple Queue Service (SQS)](#); they can be both run locally in containers: see `docker/docker-compose.yaml` and [Container Build & Run](#container-build--run).
+The `sm-server` requires a running [Redis](#) server and [AWS Simple Queue Service (SQS)](#); they can be both run locally in containers: see [the Docker Compose](docker/compose.yaml) configuration and [Container Build & Run](#container-build--run).
 
 
 ## Build & Test
@@ -532,60 +265,28 @@ To create the necessary SQS Queues in AWS, please see the `aws` CLI command in `
 
 ## Running the Server
 
-The `sm-server` accepts a number of configuration options (some of them are **required**):
+The `sm-server` accepts a number of configuration options (some of them are **required**); please use the `-help` option to view the most up-to-date definitions.
 
 ```
 └─( build/bin/sm-server -help
-
-Usage of build/bin/sm-server:
-  -debug
-    	Verbose logs; better to avoid on Production services
-  -endpoint-url string
-    	HTTP URL for AWS SQS to connect to; usually best left undefined, unless required for local testing purposes (LocalStack uses http://localhost:4566)
-  -events string
-    	If defined, it will attempt to connect to the given SQS Queue to receive events from the Pub/Sub system
-  -grpc-port int
-    	The port for the gRPC server (default 7398)
-  -http-port int
-    	HTTP Server port for the REST API (default 7399)
-  -local
-    	If set, it only listens to incoming requests from the local host
-  -max-retries int
-    	Max number of attempts for a recoverable error to be retried against the Redis cluster (default 3)
-  -notifications string
-    	The name of the notification topic in SQS to publish events' outcomes to; if not specified, no outcomes will be published
-  -acks string
-    	(Requires `notifications`) The name of the acks topic in SQS to publish events' outcomes to; if specified, Ok outcomes will be published to the acks topic and other (error) outcomes to the notification topic
-  -redis string
-    	URI for the Redis cluster (host:port)
-  -cluster
-        If set, allows connecting to a Redis instance with cluster-mode enabled
-  -notify-error-only
-        If set, only errors will be sent to notification topics
-  -timeout duration
-    	Timeout for Redis (as a Duration string, e.g. 1s, 20ms, etc.) (default 200ms)
-  -trace
-    	Enables trace logs for every API request and Pub/Sub event; it may impact performance, do not use in production or on heavily loaded systems (will override the -debug option)
 ```
 
-the easiest way is to run it [as a container](#container-build--run) (see also **Supporting Services** in [Prerequisites]](#prerequisites)):
+The easiest way is to run it [as a container](#container-build--run) (see also **Supporting Services** in [Prerequisites]](#prerequisites)):
 
 ```
-tag=$(./get-tag)
-make container
-docker run --rm -d -p 7399:7399 --name sm-server \
+make container && docker run --rm -d -p 7398:7398 --name sm-server \
     --env AWS_ENDPOINT=http://awslocal:4566 --env TIMEOUT=200ms \
-    --env DEBUG=-debug --network docker_sm-net  \
-      massenz/statemachine:${tag}
+    --env DEBUG=-debug --network sm_sm-net  \
+      massenz/statemachine:$(./get-tag)
 ```
+
+(add `-p 7398:7398` if you want to access the HTTP API, but **please note this is deprecated and will soon be removed**).
 
 If you want to connect it to an actual AWS account, configure your AWS credentials appropriately, and use `AWS_PROFILE` if not using the `default` account:
 
 `AWS_PROFILE=my-profile AWS_REGION=us-west-2 build/bin/sm-server -debug -events events`
 
 will try and connect to an SQS queue named `events` in the `us-west-2` region.
-
-The server will expose both an HTTP REST API (on the `-http-port` defined) and a gRPC server (listening on the `-grpc-port`).
 
 For an example of how to send events either to an SQS queue or via a gRPC call, see example clients in the [`clients`](clients) folder.
 
@@ -600,15 +301,14 @@ Running the server inside a container is much preferable; to build the container
 
 and then:
 
-        tag=$(./get-tag)
         docker run --rm -d -p 7399:7399 --name sm-server \
             --env AWS_ENDPOINT=http://awslocal:4566 \
             --env DEBUG=-debug --network docker_sm-net  \
-            massenz/statemachine:${tag}
+            massenz/statemachine:$(./get-tag)
 
 These are the environment variables whose values can be modified as necessary (see also the `Dockerfile`):
 
-```dockerfile
+```
 ENV AWS_REGION=us-west-2
 ENV AWS_PROFILE=sm-bot
 
@@ -667,7 +367,7 @@ Provide enough detail of your changes in the PR comments and make it easy for re
 * if your code contains several lines of "commented out dead code" make sure that you clearly explain why this is so with a `TODO` and an explanation of why are you leaving dead code around (remember, we are using `git` here, there is no such thing "in case we forget" - `git` **never** forgets)
 * try and be consistent with the rest of the code base and, specifically, the code around the changes you are implementing
 * be consistent with the `import` format and sequence: if in doubt, again, look at the existing code and be **consistent**
-* make sure the new code is **covered by unit tests**, use `make cov` to check coverage % and view lines covered in the browser
+* make sure the new code is **covered by unit tests**, use `make coverage` to check coverage % and view lines covered in the browser
 * try and adopt "The Boyscout Rule": leave the campsite cleaner than you found it -- in other words, adding tests, fixing typos, fixing **minor** issues is always **greatly** appreciated
 * conversely, try and keep the PR focused on one topic/issue/change, and one only: we'd rather review 2 PRs, than try and disentangle the two unrelated issues you're trying to address
 

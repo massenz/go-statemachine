@@ -193,7 +193,7 @@ var _ = Describe("FSM Protocol Buffers", func() {
 			})
 			It("JSON can be unmarshalled", func() {
 				Expect(orders.Name).To(Equal("test.orders"))
-				Expect(orders.Version).To(Equal("v1"))
+				Expect(orders.Version).To(Equal("v2"))
 
 			})
 			It("can be created and events received", func() {
@@ -202,8 +202,8 @@ var _ = Describe("FSM Protocol Buffers", func() {
 				Expect(fsm.FSM).ToNot(BeNil())
 				Expect(fsm.FSM.State).To(Equal("start"))
 
-				Expect(fsm.SendEvent(NewEvent("accepted"))).ToNot(HaveOccurred())
-				Expect(fsm.SendEvent(NewEvent("shipped"))).ToNot(HaveOccurred())
+				Expect(fsm.SendEvent(NewEvent("accept"))).ToNot(HaveOccurred())
+				Expect(fsm.SendEvent(NewEvent("ship"))).ToNot(HaveOccurred())
 
 				Expect(fsm.FSM.State).To(Equal("shipping"))
 				Expect(len(fsm.FSM.History)).To(Equal(2))

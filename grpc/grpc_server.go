@@ -11,18 +11,26 @@ package grpc
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/massenz/slf4go/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/massenz/go-statemachine/api"
+	"github.com/massenz/go-statemachine/internal/config"
 	"github.com/massenz/go-statemachine/storage"
+
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
@@ -31,6 +39,10 @@ type Config struct {
 	Store         storage.StoreManager
 	Logger        *logging.Log
 	Timeout       time.Duration
+	ServerAddress string
+	TlsEnabled    bool
+	TlsCerts      string
+	TlsMutual     bool
 }
 
 type StatemachineStream = protos.StatemachineService_StreamAllInstateServer
@@ -240,12 +252,78 @@ func (s *grpcSubscriber) StreamAllConfigurations(in *wrapperspb.StringValue, str
 
 // NewGrpcServer creates a new gRPC server to handle incoming events and other API calls.
 // The `Config` can be used to configure the backing store, a timeout and the logger.
-func NewGrpcServer(config *Config) (*grpc.Server, error) {
-	// Unless explicitly configured, we use for the server the same timeout as for the Redis store
-	if config.Timeout == 0 {
-		config.Timeout = DefaultTimeout
+func NewGrpcServer(cfg *Config) (*grpc.Server, error) {
+	var creds credentials.TransportCredentials
+	if !cfg.TlsEnabled {
+		logging.RootLog.Warn("TLS is disabled for gRPC server, using insecure credentials")
+		creds = insecure.NewCredentials()
+	} else {
+		logging.RootLog.Debug("TLS is enabled for gRPC server")
+		serverTLSConfig, err := SetupTLSConfig(cfg)
+		if err != nil {
+			logging.RootLog.Error("could not setup TLS config: %q", err)
+			return nil, err
+		}
+		creds = credentials.NewTLS(serverTLSConfig)
 	}
-	server := grpc.NewServer()
-	protos.RegisterStatemachineServiceServer(server, &grpcSubscriber{Config: config})
+	if cfg.Timeout == 0 {
+		cfg.Timeout = DefaultTimeout
+	}
+	server := grpc.NewServer(grpc.Creds(creds))
+	protos.RegisterStatemachineServiceServer(server, &grpcSubscriber{Config: cfg})
 	return server, nil
+}
+
+// TODO: move to its own grpc_tls.go file in this package.
+func SetupTLSConfig(cfg *Config) (*tls.Config, error) {
+	var err error
+	var tlsConfig = &tls.Config{
+		Certificates: make([]tls.Certificate, 1),
+	}
+	if cfg.TlsCerts == "" {
+		certsDir := os.Getenv(config.TlsConfigDirEnv)
+		if certsDir != "" {
+			cfg.TlsCerts = certsDir
+		} else {
+			cfg.TlsCerts = config.DefaultConfigDir
+		}
+	}
+	certFile := filepath.Join(cfg.TlsCerts, config.ServerCertFile)
+	keyFile := filepath.Join(cfg.TlsCerts, config.ServerKeyFile)
+	cfg.Logger.Info("setting up TLS: Server Certificate: %s, Key: %s", certFile, keyFile)
+	tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		cfg.Logger.Error("cannot load certs: %s", err)
+		return nil, err
+	}
+	cfg.Logger.Info("Adding CA Cert: %s/%s", cfg.TlsCerts, config.CAFile)
+	ca, err := ParseCAFile(filepath.Join(cfg.TlsCerts, config.CAFile))
+	if err != nil {
+		return nil, err
+	}
+	if cfg.TlsMutual {
+		tlsConfig.ClientCAs = ca
+		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+	} else {
+		tlsConfig.ClientAuth = tls.NoClientCert
+	}
+	tlsConfig.ServerName = cfg.ServerAddress
+	return tlsConfig, nil
+}
+
+func ParseCAFile(caFile string) (*x509.CertPool, error) {
+	_, err := os.Stat(caFile)
+	if err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, err
+	}
+	ca := x509.NewCertPool()
+	ok := ca.AppendCertsFromPEM(b)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse root certificate: %q", caFile)
+	}
+	return ca, nil
 }

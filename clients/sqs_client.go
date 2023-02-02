@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
+	"github.com/massenz/go-statemachine/clients/common"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
 
@@ -45,10 +46,11 @@ func NewSqs(endpoint *string) *sqs.SQS {
 
 // main simulates a Client sending an SQS event message for an Order entity
 // whose status is being tracked by `sm-server`.
-func main() {
+func main2() {
 	endpoint := flag.String("endpoint", "", "Use http://localhost:4566 to use LocalStack")
 	q := flag.String("q", "", "The SQS Queue to send an Event to")
-	fsmId := flag.String("dest", "", "The ID for the FSM to send an Event to")
+	cfg := flag.String("config", "", "The type of FSM (Configuration name)")
+	fsmId := flag.String("id", "", "The ID for the FSM to send an Event to")
 	event := flag.String("evt", "", "The Event for the FSM")
 	flag.Parse()
 
@@ -66,7 +68,7 @@ func main() {
 	fmt.Printf("Publishing Event `%s` for FSM `%s` to SQS Topic: [%s]\n", *event, *fsmId, *q)
 
 	// This is the object you want to send across as Event's metadata.
-	order := NewOrderDetails(uuid.NewString(), "sqs-cust-1234", 99.99)
+	order := common.NewOrderDetails(uuid.NewString(), "sqs-cust-1234", 99.99)
 
 	msg := &protos.EventRequest{
 		Event: &protos.Event{
@@ -87,7 +89,8 @@ func main() {
 
 		// This is the unique ID for the entity you are sending the event to; MUST
 		// match the `id` of an existing `statemachine` (see the REST API).
-		Dest: *fsmId,
+		Config: *cfg,
+		Id:     *fsmId,
 	}
 
 	_, err = queue.SendMessage(&sqs.SendMessageInput{

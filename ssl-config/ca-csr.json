@@ -1,0 +1,16 @@
+{
+    "CN": "AlertAvert.com CA",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "O": "AlertAvert.com",
+            "OU": "Engineering",
+            "L": "Sunnyvale",
+            "ST": "CA",
+            "C": "US"
+        }
+    ]
+}

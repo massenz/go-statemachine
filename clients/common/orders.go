@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 AlertAvert.com.  All rights reserved.
+ * Copyright (c) 2023 AlertAvert.com.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0
  * http://www.apache.org/licenses/LICENSE-2.0
@@ -7,10 +7,12 @@
  * Author: Marco Massenzio (marco@alertavert.com)
  */
 
-package main
+package common
 
 import (
 	"encoding/json"
+	protos "github.com/massenz/statemachine-proto/golang/api"
+	"os"
 	"time"
 )
 
@@ -36,4 +38,20 @@ func (o *OrderDetails) String() string {
 		panic(error)
 	}
 	return string(res)
+}
+
+func ReadConfig(filePath string, config *protos.Configuration) error {
+	// Open the file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Decode the file into the struct
+	err = json.NewDecoder(file).Decode(config)
+	if err != nil {
+		return err
+	}
+	return nil
 }

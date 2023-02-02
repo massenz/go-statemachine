@@ -26,7 +26,8 @@ RUN chown sm-bot:sm-bot /app
 
 USER sm-bot
 ADD docker/aws-credentials /home/sm-bot/.aws/credentials
-COPY build/bin/sm-server docker/entrypoint.sh ./
+ADD certs/* /etc/statemachine/certs/
+ADD build/bin/sm-server docker/entrypoint.sh ./
 
 EXPOSE ${SERVER_PORT}
 ENTRYPOINT ["./entrypoint.sh"]

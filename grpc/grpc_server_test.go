@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/massenz/slf4go/logging"
+	slf4go "github.com/massenz/slf4go/logging"
 	g "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -44,23 +44,20 @@ var _ = Describe("the gRPC Server", func() {
 		BeforeEach(func() {
 			var err error
 			testCh = make(chan protos.EventRequest, 5)
-			listener, err = net.Listen("tcp", ":0")
+			listener, err = net.Listen("tcp", "localhost:5763")
 			Ω(err).ShouldNot(HaveOccurred())
 
-			cc, err := g.Dial(listener.Addr().String(),
-				g.WithTransportCredentials(insecure.NewCredentials()))
-			Ω(err).ShouldNot(HaveOccurred())
-
-			client = protos.NewStatemachineServiceClient(cc)
+			client = NewClient(listener.Addr().String(), false)
 			// TODO: use GinkgoWriter for logs
-			l := logging.NewLog("grpc-server-test")
-			l.Level = logging.NONE
+			l := slf4go.NewLog("grpc-server-test")
+			l.Level = slf4go.DEBUG
 			// Note the `Config` here has no store configured, because we are
 			// only testing events in this Context, and those are never stored
 			// in Redis by the gRPC server (other parts of the system do).
 			server, err := grpc.NewGrpcServer(&grpc.Config{
 				EventsChannel: testCh,
 				Logger:        l,
+				ServerAddress: listener.Addr().String(),
 			})
 			Ω(err).ToNot(HaveOccurred())
 			Ω(server).ToNot(BeNil())
@@ -175,14 +172,14 @@ var _ = Describe("the gRPC Server", func() {
 		// Server setup
 		BeforeEach(func() {
 			store = storage.NewRedisStoreWithDefaults(container.Address)
-			store.SetLogLevel(logging.NONE)
+			store.SetLogLevel(slf4go.NONE)
 			listener, _ = net.Listen("tcp", ":0")
 			cc, _ := g.Dial(listener.Addr().String(),
 				g.WithTransportCredentials(insecure.NewCredentials()))
 			client = protos.NewStatemachineServiceClient(cc)
 			// Use this to log errors when diagnosing test failures; then set to NONE once done.
-			l := logging.NewLog("grpc-server-test")
-			l.Level = logging.NONE
+			l := slf4go.NewLog("grpc-server-test")
+			l.Level = slf4go.NONE
 			server, _ := grpc.NewGrpcServer(&grpc.Config{
 				Store:  store,
 				Logger: l,
