@@ -16,18 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Build
-      run: |
-        make build
-    - name: Run Containers
-      run: |
-        mkdir -p ${HOME}/.aws && cp data/credentials ${HOME}/.aws/
-        export AWS_REGION=us-west-2
-        make services
-        sleep 3
-        make queues
     - name: Generate Certs
       run: |
+        export GOPATH=/opt/go
+        mkdir -p $GOPATH/bin
+        export PATH=$GOPATH/bin:$PATH
         go install github.com/cloudflare/cfssl/cmd/cfssl@v1.6.3
         go install github.com/cloudflare/cfssl/cmd/cfssljson@v1.6.3
         make gencert
