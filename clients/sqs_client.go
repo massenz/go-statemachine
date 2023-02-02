@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
+	"github.com/massenz/go-statemachine/clients/common"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
 
@@ -67,7 +68,7 @@ func main2() {
 	fmt.Printf("Publishing Event `%s` for FSM `%s` to SQS Topic: [%s]\n", *event, *fsmId, *q)
 
 	// This is the object you want to send across as Event's metadata.
-	order := NewOrderDetails(uuid.NewString(), "sqs-cust-1234", 99.99)
+	order := common.NewOrderDetails(uuid.NewString(), "sqs-cust-1234", 99.99)
 
 	msg := &protos.EventRequest{
 		Event: &protos.Event{

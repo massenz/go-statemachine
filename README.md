@@ -367,7 +367,7 @@ Provide enough detail of your changes in the PR comments and make it easy for re
 * if your code contains several lines of "commented out dead code" make sure that you clearly explain why this is so with a `TODO` and an explanation of why are you leaving dead code around (remember, we are using `git` here, there is no such thing "in case we forget" - `git` **never** forgets)
 * try and be consistent with the rest of the code base and, specifically, the code around the changes you are implementing
 * be consistent with the `import` format and sequence: if in doubt, again, look at the existing code and be **consistent**
-* make sure the new code is **covered by unit tests**, use `make cov` to check coverage % and view lines covered in the browser
+* make sure the new code is **covered by unit tests**, use `make coverage` to check coverage % and view lines covered in the browser
 * try and adopt "The Boyscout Rule": leave the campsite cleaner than you found it -- in other words, adding tests, fixing typos, fixing **minor** issues is always **greatly** appreciated
 * conversely, try and keep the PR focused on one topic/issue/change, and one only: we'd rather review 2 PRs, than try and disentangle the two unrelated issues you're trying to address
 

@@ -42,8 +42,10 @@ img=$(shell docker images -q --filter=reference=$(image))
 clean: ## Cleans up the binary, container image and other data
 	@rm -f $(out)
 	@[ ! -z $(img) ] && docker rmi $(img) || true
+	@rm -rf certs
 
 .PHONY: build test container cov clean fmt
+
 fmt: ## Formats the Go source code using 'go fmt'
 	@go fmt $(pkgs) ./cmd ./clients
 
@@ -83,3 +85,32 @@ queues: ## Creates the SQS Queues in LocalStack
 		aws --no-cli-pager --endpoint-url=http://localhost:4566 \
 			--region us-west-2 \
  			sqs create-queue --queue-name $$queue; done >/dev/null
+
+##@ TLS Support
+#
+# This section is WIP and subject to change
+
+config_dir := ssl-config
+ca-csr := $(config_dir)/ca-csr.json
+ca-config := $(config_dir)/ca-config.json
+server-csr := $(config_dir)/localhost-csr.json
+
+.PHONY: gencert
+gencert: $(ca-csr) $(config) $(server-csr) ## Generates all certificates in the certs directory (requires cfssl and cfssl, see https://github.com/cloudflare/cfssl#installation)
+	cfssl gencert \
+		-initca $(ca-csr) | cfssljson -bare ca
+
+
+	cfssl gencert \
+		-ca=ca.pem \
+		-ca-key=ca-key.pem \
+		-config=$(ca-config) \
+		-profile=server \
+		$(server-csr)  | cfssljson -bare server
+	@mkdir -p certs
+	@mv *.pem *.csr certs/
+	@echo "Certificates generated in $(shell pwd)/certs"
+
+.PHONY: clean-cert
+clean-cert:
+	@rm -rf certs
