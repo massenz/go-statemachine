@@ -39,8 +39,8 @@ jobs:
 
     - name: Generate Certs
       run: |
-        go get github.com/cloudflare/cfssl/cmd/cfssl@v1.4.1
-        go get github.com/cloudflare/cfssl/cmd/cfssljson@v1.4.1
+        go install github.com/cloudflare/cfssl/cmd/cfssl@v1.6.3
+        go install github.com/cloudflare/cfssl/cmd/cfssljson@v1.6.3
         make gencert
 
     - name: Test
