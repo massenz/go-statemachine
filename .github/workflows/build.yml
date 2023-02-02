@@ -16,19 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: arduino/setup-protoc@v1
-      with:
-        version: '3.19'
-
-    - name: Install protoc-gen
-      run: |
-        go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
-        go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
-
     - name: Build
       run: |
         make build
-
     - name: Run Containers
       run: |
         mkdir -p ${HOME}/.aws && cp data/credentials ${HOME}/.aws/
@@ -36,13 +26,11 @@ jobs:
         make services
         sleep 3
         make queues
-
     - name: Generate Certs
       run: |
         go install github.com/cloudflare/cfssl/cmd/cfssl@v1.6.3
         go install github.com/cloudflare/cfssl/cmd/cfssljson@v1.6.3
         make gencert
-
     - name: Test
       run: |
         go test ./api ./grpc ./pubsub ./server ./storage
