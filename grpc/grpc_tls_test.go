@@ -10,9 +10,16 @@
 package grpc_test
 
 import (
+	"context"
+	"fmt"
+	"github.com/massenz/go-statemachine/storage"
 	slf4go "github.com/massenz/slf4go/logging"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+	"math/rand"
 	"net"
+	"os"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -21,38 +28,61 @@ import (
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
-var _ = Describe("the gRPC Server", func() {
+var _ = Describe("gRPC Server with TLS", func() {
 	When("processing events", func() {
 		var testCh chan protos.EventRequest
 		var listener net.Listener
 		var client protos.StatemachineServiceClient
+		var done func()
+		var addr string
 
 		BeforeEach(func() {
 			var err error
+			addr = fmt.Sprintf("localhost:%d", (rand.Int()%25535)+10000)
 			testCh = make(chan protos.EventRequest, 5)
-			listener, err = net.Listen("tcp", "localhost:5764")
+			listener, err = net.Listen("tcp", addr)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			// TODO: use GinkgoWriter for logs
 			l := slf4go.NewLog("grpc-TLS-test")
-			l.Level = slf4go.DEBUG
-
-			client = NewClient(listener.Addr().String(), true)
-
+			l.Level = slf4go.NONE
+			d, _ := os.Getwd()
+			fmt.Println(">>>>", d)
 			server, err := grpc.NewGrpcServer(&grpc.Config{
 				EventsChannel: testCh,
 				Logger:        l,
-				ServerAddress: listener.Addr().String(),
+				ServerAddress: addr,
+				Store:         storage.NewInMemoryStore(),
 				TlsEnabled:    true,
 				TlsCerts:      "../certs",
+				// TODO: add mTLS tests
+				TlsMutual: false,
 			})
 			Ω(err).ToNot(HaveOccurred())
 			Ω(server).ToNot(BeNil())
-
+			go func() {
+				Ω(server.Serve(listener)).Should(Succeed())
+			}()
+			done = func() {
+				server.Stop()
+			}
 		})
-		It("should connect using TLS", func() {
-			_, err := client.GetAllConfigurations(bkgnd, &wrapperspb.StringValue{Value: "test"})
-			Expect(err).ToNot(HaveOccurred())
+		AfterEach(func() {
+			done()
+		})
+		It("should connect a client using TLS", func() {
+			client = NewClient(addr, true)
+			ctx, cancel := context.WithTimeout(bkgnd, 300*time.Millisecond)
+			defer cancel()
+			_, err := client.GetAllConfigurations(ctx, &wrapperspb.StringValue{Value: "test.orders"})
+			Ω(err).ToNot(HaveOccurred())
+		})
+		It("should refuse non TLS connections", func() {
+			ctx, cancel := context.WithTimeout(bkgnd, 300*time.Millisecond)
+			defer cancel()
+			client = NewClient(addr, false)
+			_, err := client.GetAllConfigurations(ctx, &wrapperspb.StringValue{Value: "test.orders"})
+			AssertStatusCode(codes.Unavailable, err)
 		})
 	})
 })

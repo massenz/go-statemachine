@@ -11,12 +11,12 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"github.com/massenz/go-statemachine/api"
 	"github.com/massenz/go-statemachine/clients/common"
 	"github.com/massenz/go-statemachine/grpc"
-	slf4go "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	g "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -24,25 +24,24 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
+	"strings"
 	"time"
 )
 
 func NewClient(address string, hasTls bool) protos.StatemachineServiceClient {
+	addr := strings.Split(address, ":")
 	var creds credentials.TransportCredentials
 	if !hasTls {
 		fmt.Println("WARN: TLS Disabled")
 		creds = insecure.NewCredentials()
 	} else {
-		clientTlsConfig, err := grpc.SetupTLSConfig(&grpc.Config{
-			Logger:        slf4go.RootLog,
-			ServerAddress: address,
-			TlsEnabled:    true,
-			TlsCerts:      "certs",
-			TlsMutual:     false,
-		})
+		clientTlsConfig := &tls.Config{}
+		ca, err := grpc.ParseCAFile("certs/ca.pem")
 		if err != nil {
 			panic(err)
 		}
+		clientTlsConfig.RootCAs = ca
+		clientTlsConfig.ServerName = addr[0]
 		creds = credentials.NewTLS(clientTlsConfig)
 	}
 	cc, _ := g.Dial(address, g.WithTransportCredentials(creds))

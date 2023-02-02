@@ -12,9 +12,7 @@ package grpc_test
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
-	"fmt"
-	"github.com/massenz/go-statemachine/internal/config"
+	"github.com/massenz/go-statemachine/grpc"
 	internals "github.com/massenz/go-statemachine/internal/testing"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	g "google.golang.org/grpc"
@@ -22,8 +20,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -60,12 +57,16 @@ func AssertStatusCode(code codes.Code, err error) {
 func NewClient(address string, isTls bool) protos.StatemachineServiceClient {
 	var creds credentials.TransportCredentials
 	if isTls {
-		ca := filepath.Join("../certs", config.CAFile)
-		_, err := os.Stat(ca)
+		clientTlsConfig := &tls.Config{}
+		ca, err := grpc.ParseCAFile("../certs/ca.pem")
 		Expect(err).ToNot(HaveOccurred())
+		clientTlsConfig.RootCAs = ca
 
-		clientTlsConfig, _ := setupClientTLSConfig(ca)
-		clientTlsConfig.ServerName = address
+		// NOTE: need to remove the :port from the address, or Cert validation will fail.
+		addr := strings.Split(address, ":")
+		Expect(len(addr)).Should(BeNumerically(">=", 1), addr)
+		clientTlsConfig.ServerName = addr[0]
+
 		creds = credentials.NewTLS(clientTlsConfig)
 	} else {
 		creds = insecure.NewCredentials()
@@ -73,26 +74,4 @@ func NewClient(address string, isTls bool) protos.StatemachineServiceClient {
 	cc, _ := g.Dial(address, g.WithTransportCredentials(creds))
 	client := protos.NewStatemachineServiceClient(cc)
 	return client
-}
-
-func setupClientTLSConfig(caFile string) (*tls.Config, error) {
-	var err error
-	var tlsConfig = &tls.Config{
-		Certificates: make([]tls.Certificate, 1),
-	}
-	_, err = os.Stat(caFile)
-	if err != nil {
-		b, err := os.ReadFile(caFile)
-		if err != nil {
-			return nil, err
-		}
-		ca := x509.NewCertPool()
-		ok := ca.AppendCertsFromPEM(b)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse root certificate: %q", caFile)
-		}
-		tlsConfig.RootCAs = ca
-		tlsConfig.ClientAuth = tls.NoClientCert
-	}
-	return tlsConfig, nil
 }

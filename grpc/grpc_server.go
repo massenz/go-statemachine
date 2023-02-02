@@ -296,35 +296,34 @@ func SetupTLSConfig(cfg *Config) (*tls.Config, error) {
 		cfg.Logger.Error("cannot load certs: %s", err)
 		return nil, err
 	}
-	err = AddCaFile(tlsConfig, cfg)
+	cfg.Logger.Info("Adding CA Cert: %s/%s", cfg.TlsCerts, config.CAFile)
+	ca, err := ParseCAFile(filepath.Join(cfg.TlsCerts, config.CAFile))
 	if err != nil {
 		return nil, err
 	}
+	if cfg.TlsMutual {
+		tlsConfig.ClientCAs = ca
+		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+	} else {
+		tlsConfig.ClientAuth = tls.NoClientCert
+	}
+	tlsConfig.ServerName = cfg.ServerAddress
 	return tlsConfig, nil
 }
 
-func AddCaFile(tlsConfig *tls.Config, serverCfg *Config) error {
-	caFile := filepath.Join(serverCfg.TlsCerts, config.CAFile)
+func ParseCAFile(caFile string) (*x509.CertPool, error) {
 	_, err := os.Stat(caFile)
-	if err == nil {
-		serverCfg.Logger.Info("Adding CA Cert: %s", caFile)
-		b, err := os.ReadFile(caFile)
-		if err != nil {
-			return err
-		}
-		ca := x509.NewCertPool()
-		ok := ca.AppendCertsFromPEM(b)
-		if !ok {
-			return fmt.Errorf("failed to parse root certificate: %q", caFile)
-		}
-		tlsConfig.RootCAs = ca
-		tlsConfig.ClientCAs = ca
-		if serverCfg.TlsMutual {
-			tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
-		} else {
-			tlsConfig.ClientAuth = tls.NoClientCert
-		}
-		tlsConfig.ServerName = serverCfg.ServerAddress
+	if err != nil {
+		return nil, err
 	}
-	return err
+	b, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, err
+	}
+	ca := x509.NewCertPool()
+	ok := ca.AppendCertsFromPEM(b)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse root certificate: %q", caFile)
+	}
+	return ca, nil
 }
