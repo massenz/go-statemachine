@@ -9,9 +9,6 @@ FROM  ubuntu:22.04
 RUN apt-get update && apt-get install ca-certificates -y
 RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
 
-# Fake AWS configuration to connect to LocalStack docker.
-ENV AWS_REGION=us-west-2 AWS_PROFILE=sm-bot
-
 # Sensible defaults for the server, for reference
 # we list all the environment variables used by the
 # entrypoint script.
@@ -25,8 +22,6 @@ WORKDIR /app
 RUN chown sm-bot:sm-bot /app
 
 USER sm-bot
-ADD docker/aws-credentials /home/sm-bot/.aws/credentials
-ADD certs/* /etc/statemachine/certs/
 ADD build/bin/sm-server docker/entrypoint.sh ./
 
 EXPOSE ${SERVER_PORT}
