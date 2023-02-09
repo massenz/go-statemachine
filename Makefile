@@ -108,7 +108,8 @@ gencert: $(ca-csr) $(config) $(server-csr) ## Generates all certificates in the 
 		-profile=server \
 		$(server-csr)  | cfssljson -bare server
 	@mkdir -p certs
-	@mv *.pem *.csr certs/
+	@mv *.pem certs/
+	@rm *.csr
 	@echo "Certificates generated in $(shell pwd)/certs"
 
 .PHONY: clean-cert
