@@ -52,7 +52,7 @@ jobs:
           file: docker/Dockerfile
 #          platforms: ${{ matrix.platforms }}
           push: true
-          tags: ghcr.io/${{ env.IMAGE }}:${{ env.TAG }}
+          tags: ghcr.io/ghcr.io/${{ github.repository }}:${{ env.TAG }}
  
 #      - uses: ncipollo/release-action@v1.10.0
 #        with:
