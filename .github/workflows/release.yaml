@@ -9,18 +9,16 @@ name: Release
 on:
   push:
     branches:
-      - ghcr-test
+      - release
 env:
   AUTHOR: ${{ github.event.pusher.name }}
   EMAIL: ${{ github.event.pusher.email }}
-  IMAGE: massenz/statemachine
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
       - name: build
         run: |
           make build
@@ -29,32 +27,28 @@ jobs:
         run: |
           TAG=$(./get-tag)
           echo TAG=${TAG} >> $GITHUB_ENV
-#          git config user.name "$AUTHOR"
-#          git config user.email "<$EMAIL>"
-#          git tag -a $TAG -m "Release $TAG"
-#          git push --tags
+          git config user.name "$AUTHOR"
+          git config user.email "<$EMAIL>"
+          git tag -a $TAG -m "Release $TAG"
+          git push --tags
 
-#      - name: Build & Push container
-#        run: |
-#          make container
-#          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p
-#          docker push $IMAGE:$TAG
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and push Docker images
         uses: docker/build-push-action@v4.0.0
         with:
           context: .
           file: docker/Dockerfile
-#          platforms: ${{ matrix.platforms }}
+          platforms: ${{ matrix.platforms }}
           push: true
-          tags: ghcr.io/ghcr.io/${{ github.repository }}:${{ env.TAG }}
- 
-#      - uses: ncipollo/release-action@v1.10.0
-#        with:
-#          tag: ${{ env.TAG }}
-#          generateReleaseNotes: true
+          tags: ghcr.io/${{ github.repository }}:${{ env.TAG }}
+
+      - uses: ncipollo/release-action@v1.10.0
+        with:
+          tag: ${{ env.TAG }}
+          generateReleaseNotes: true
