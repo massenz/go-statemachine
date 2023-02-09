@@ -39,17 +39,21 @@ jobs:
 #          make container
 #          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p
 #          docker push $IMAGE:$TAG
-
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push Docker images
         uses: docker/build-push-action@v4.0.0
         with:
           context: .
           file: docker/Dockerfile
-          platforms: ${{ matrix.platforms }}
+#          platforms: ${{ matrix.platforms }}
           push: true
           tags: ghcr.io/${{ env.IMAGE }}:${{ env.TAG }}
-          github-token: ${{ secrets.GHCR_TOKEN }}
-
+ 
 #      - uses: ncipollo/release-action@v1.10.0
 #        with:
 #          tag: ${{ env.TAG }}
