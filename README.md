@@ -297,42 +297,47 @@ Logs are sent to `stdout` by default, but this can be changed using the [`slf4go
 
 Running the server inside a container is much preferable; to build the container use:
 
-        make container
+        GOOS=linux make build && make container
 
 and then:
 
-        docker run --rm -d -p 7399:7399 --name sm-server \
-            --env AWS_ENDPOINT=http://awslocal:4566 \
-            --env DEBUG=-debug --network docker_sm-net  \
-            massenz/statemachine:$(./get-tag)
+```
+docker run --rm  -p 7398:7398 --name sm_server --network sm_sm-net \
+    -v $(pwd)/docker/aws-credentials:/home/sm-bot/.aws/credentials \
+    -v $(pwd)/certs:/etc/statemachine/certs \
+    --env AWS_ENDPOINT=http://awslocal:4566 --env AWS_REGION=us-west-2 --env AWS_PROFILE=sm-bot \
+    --env TIMEOUT=200ms --env DEBUG=-debug  \
+    massenz/statemachine:$(make version)
+```
 
 These are the environment variables whose values can be modified as necessary (see also the `Dockerfile`):
 
 ```
-ENV AWS_REGION=us-west-2
-ENV AWS_PROFILE=sm-bot
-
-# Sensible defaults for the server
-# See entrypoint.sh
 ENV SERVER_PORT=7399
 ENV EVENTS_Q=events
 ENV ERRORS_Q=notifications
 ENV REDIS=redis
 ENV REDIS_PORT=6379
 ENV DEBUG=""
-
-# Optional settings for the server
-ENV ACKS="-acks acks"
-ENV CLUSTER="-cluster"
-ENV NOTIFY_ERRORS_ONLY="-notify-errors-only"
 ```
 
 Additionally, a valid `credentials` file will need to be mounted (using the `-v` flag) in the container if connecting to AWS (instead of LocalStack):
 
-        -v /full/path/to/.aws/credentials:/home/sm-bot/.aws/credentials
+    -v /full/path/to/.aws/credentials:/home/sm-bot/.aws/credentials
 
 where the `[profile]` matches the value in `AWS_PROFILE`.
 
+To run with TLS enabled, generate certs with `make gencert` and then mount the volume on the Docker image:
+
+    -v $(pwd)/certs:/etc/statemachine/certs
+
+Alternatively, use the `-insecure` flag to disable TLS.
+
+If you see this error:
+```
+2023/02/20 03:15:44 main.go:201: [FATAL] open /etc/statemachine/certs/server.pem: no such file or directory
+```
+run `make gencert`.
 
 # Contributing
 

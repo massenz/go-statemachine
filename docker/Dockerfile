@@ -11,7 +11,9 @@ LABEL org.opencontainers.image.source=https://github.com/massenz/go-statemachine
 LABEL org.opencontainers.image.description="Statemachine gRPC Server"
 LABEL org.opencontainers.image.licenses=Apache-2.0
 
-RUN apt-get update && apt-get install ca-certificates -y
+ARG appname
+
+#RUN apt-get update && apt-get install ca-certificates -y
 RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
 
 # Sensible defaults for the server, for reference
@@ -27,7 +29,8 @@ WORKDIR /app
 RUN chown sm-bot:sm-bot /app
 
 USER sm-bot
-ADD build/bin/sm-server docker/entrypoint.sh ./
+ADD $appname ./sm-server
+ADD docker/entrypoint.sh ./
 
 EXPOSE ${SERVER_PORT}
 ENTRYPOINT ["./entrypoint.sh"]
