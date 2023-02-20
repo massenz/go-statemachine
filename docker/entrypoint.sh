@@ -48,8 +48,8 @@ then
 fi
 
 cmd="./sm-server -http-port ${SERVER_PORT} -grpc-port ${GRPC_PORT} \
--events ${EVENTS_Q} -redis ${REDIS}:${REDIS_PORT} \
-${CLUSTER:-} ${DEBUG:-} ${endpoint} \
+-events ${EVENTS_Q} -redis ${REDIS:-} \
+${DEBUG:-} ${endpoint} \
 ${errors_only} ${timeout} ${retries} \
 ${acks} ${notifications} \
 $@"

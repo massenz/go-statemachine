@@ -10,6 +10,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/massenz/go-statemachine/grpc"
@@ -76,10 +77,9 @@ func main() {
 	var notifyErrorsOnly = flag.Bool("notify-errors-only", false,
 		"If set, only errors will be sent to notification topic (cannot be used with -acks)")
 	var port = flag.Int("http-port", 7399, "HTTP Server port for the REST API")
-	var redisUrl = flag.String("redis", "", "For single node redis instances: URI "+
-		"for the Redis instance (host:port). For redis clusters: a comma-separated list of redis nodes. "+
-		"If using an ElastiCache Redis cluster with cluster mode enabled, "+
-		"this can also be the configuration endpoint.")
+	var redisUrl = flag.String("redis", "", "For single node Redis instances: host:port "+
+		"for the Redis instance. For redis clusters: a comma-separated list of redis nodes. "+
+		"If using an ElastiCache Redis cluster with cluster mode enabled, this can also be the configuration endpoint.")
 	var timeout = flag.Duration("timeout", storage.DefaultTimeout,
 		"Timeout for Redis (as a Duration string, e.g. 1s, 20ms, etc.)")
 	var trace = flag.Bool("trace", false,
@@ -98,8 +98,7 @@ func main() {
 	addr := fmt.Sprintf("%s:%d", host, *port)
 
 	if *redisUrl == "" {
-		logger.Warn("in-memory storage configured, all data will NOT survive a server restart")
-		store = storage.NewInMemoryStore()
+		logger.Fatal(errors.New("in-memory store deprecated, a Redis server must be configured"))
 	} else {
 		logger.Info("connecting to Redis server at %s", *redisUrl)
 		logger.Info("with timeout: %s, max-retries: %d", *timeout, *maxRetries)
@@ -153,7 +152,7 @@ func main() {
 	logger.Info("gRPC server running at tcp://:%d", *grpcPort)
 	go startGrpcServer(*grpcPort, *noTls, eventsCh)
 
-	// TODO: configure & start server using TLS, if configured to do so.
+	// TODO: REST Server is deprecated and will be removed soon.
 	scheme := "http"
 	logger.Info("HTTP server (REST API) running at %s://%s", scheme, addr)
 	srv := server.NewHTTPServer(addr, serverLogLevel)

@@ -22,8 +22,8 @@ RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
 #
 ENV GRPC_PORT=7398 SERVER_PORT=7399 DEBUG=""  \
     EVENTS_Q="events" NOTIFICATIONS_Q="notifications" \
-    ACKS_Q="" ERRORS_ONLY=1 \
-    CLUSTER="" REDIS=redis REDIS_PORT=6379
+    ACKS_Q="" ERRORS_ONLY=t \
+    CLUSTER="" REDIS="redis:6379"
 
 WORKDIR /app
 RUN chown sm-bot:sm-bot /app

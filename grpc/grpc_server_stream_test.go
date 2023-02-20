@@ -39,7 +39,7 @@ var _ = Describe("gRPC Server Streams", func() {
 		)
 		// Server setup
 		BeforeEach(func() {
-			store = storage.NewRedisStoreWithDefaults(container.Address)
+			store = storage.NewRedisStoreWithDefaults(redisContainer.Address)
 			store.SetLogLevel(logging.NONE)
 			listener, _ = net.Listen("tcp", ":0")
 			cc, _ := g.Dial(listener.Addr().String(),
@@ -63,7 +63,7 @@ var _ = Describe("gRPC Server Streams", func() {
 		AfterEach(func() {
 			done()
 			rdb := redis.NewClient(&redis.Options{
-				Addr: container.Address,
+				Addr: redisContainer.Address,
 				DB:   storage.DefaultRedisDb,
 			})
 			rdb.FlushDB(context.Background())
