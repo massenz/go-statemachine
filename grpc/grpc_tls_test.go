@@ -18,7 +18,6 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	"math/rand"
 	"net"
-	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -46,13 +45,11 @@ var _ = Describe("gRPC Server with TLS", func() {
 			// TODO: use GinkgoWriter for logs
 			l := slf4go.NewLog("grpc-TLS-test")
 			l.Level = slf4go.NONE
-			d, _ := os.Getwd()
-			fmt.Println(">>>>", d)
 			server, err := grpc.NewGrpcServer(&grpc.Config{
 				EventsChannel: testCh,
 				Logger:        l,
 				ServerAddress: addr,
-				Store:         storage.NewInMemoryStore(),
+				Store:         storage.NewRedisStoreWithDefaults(redisContainer.Address),
 				TlsEnabled:    true,
 				TlsCerts:      "../certs",
 				// TODO: add mTLS tests
