@@ -32,7 +32,7 @@ var _ = Describe("A Listener", func() {
 		BeforeEach(func() {
 			eventsCh = make(chan protos.EventRequest)
 			notificationsCh = make(chan protos.EventResponse)
-			store = storage.NewInMemoryStore()
+			store = storage.NewRedisStoreWithDefaults(redisContainer.Address)
 			store.SetLogLevel(logging.NONE)
 			testListener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
 				EventsChannel:        eventsCh,
