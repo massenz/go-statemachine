@@ -32,7 +32,6 @@ import (
 const (
 	eventsQueue        = "test-events"
 	notificationsQueue = "test-notifications"
-	acksQueue          = "test-acks"
 	timeout            = 1 * time.Second       // Default timeout for Eventually is 1s
 	pollingInterval    = 10 * time.Millisecond // Default polling interval for Eventually is 10ms
 )
@@ -66,7 +65,7 @@ var _ = BeforeSuite(func() {
 		},
 	})))
 
-	for _, topic := range []string{eventsQueue, notificationsQueue, acksQueue} {
+	for _, topic := range []string{eventsQueue, notificationsQueue} {
 		topic = fmt.Sprintf("%s-%d", topic, GinkgoParallelProcess())
 		if _, err := testSqsClient.GetQueueUrl(&sqs.GetQueueUrlInput{QueueName: &topic}); err != nil {
 			// the queue does not exist and ought to be created

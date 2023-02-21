@@ -89,9 +89,8 @@ container: $(dockerbin) ## Builds the container image
 .PHONY: start
 start: ## Starts the Redis and LocalStack containers, and Creates the SQS Queues in LocalStack
 	@RELEASE=$(release) BASEDIR=$(shell pwd) docker compose -f $(compose) --project-name sm up redis localstack -d
-	@echo "Waiting for LocalStack AWS to come up..."
-	@sleep 3
-	@for queue in events notifications acks; do \
+	@sleep 1
+	@for queue in events notifications; do \
 		aws --no-cli-pager --endpoint-url=http://localhost:4566 \
 			--region us-west-2 \
  			sqs create-queue --queue-name $$queue; done >/dev/null

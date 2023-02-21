@@ -62,6 +62,13 @@ func (listener *EventsListener) ListenForMessages() {
 				fmt.Sprintf("no Configuration name specified")))
 			continue
 		}
+		// The event is well-formed, we can store for later retrieval
+		if err := listener.store.PutEvent(request.Event, config, storage.NeverExpire); err != nil {
+			listener.PostNotificationAndReportOutcome(makeResponse(&request,
+				protos.EventOutcome_InternalError,
+				fmt.Sprintf("could not store event: %v", err)))
+			continue
+		}
 		fsm, ok := listener.store.GetStateMachine(fsmId, config)
 		if !ok {
 			listener.PostNotificationAndReportOutcome(makeResponse(&request,
@@ -105,13 +112,9 @@ func (listener *EventsListener) ListenForMessages() {
 					config, fsmId, err)))
 			continue
 		}
-		// All good, we want to report success too.
 		listener.logger.Debug("Event `%s` transitioned FSM [%s] to state `%s` from state `%s` - updating store",
 			request.Event.Transition.Event, fsmId, fsm.State, previousState)
-		listener.PostNotificationAndReportOutcome(makeResponse(&request,
-			protos.EventOutcome_Ok,
-			fmt.Sprintf("event [%s] transitioned FSM [%s] to state [%s]",
-				request.Event.Transition.Event, fsmId, fsm.State)))
+		listener.reportOutcome(makeResponse(&request, protos.EventOutcome_Ok, ""))
 	}
 }
 
