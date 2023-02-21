@@ -54,9 +54,6 @@ var (
 func main() {
 	defer close(eventsCh)
 
-	var acksTopic = flag.String("acks", "",
-		"(Requires `-notifications`) The name of the topic in SQS to publish Ok outcomes to; "+
-			"unless the -notify-errors-only flag is set")
 	var awsEndpoint = flag.String("endpoint-url", "",
 		"HTTP URL for AWS SQS to connect to; usually best left undefined, "+
 			"unless required for local testing purposes (LocalStack uses http://localhost:4566)")
@@ -74,8 +71,6 @@ func main() {
 	var notificationsTopic = flag.String("notifications", "",
 		"(optional) The name of the topic to publish events' outcomes to; if not "+
 			"specified, no outcomes will be published")
-	var notifyErrorsOnly = flag.Bool("notify-errors-only", false,
-		"If set, only errors will be sent to notification topic (cannot be used with -acks)")
 	var port = flag.Int("http-port", 7399, "HTTP Server port for the REST API")
 	var redisUrl = flag.String("redis", "", "For single node Redis instances: host:port "+
 		"for the Redis instance. For redis clusters: a comma-separated list of redis nodes. "+
@@ -109,9 +104,6 @@ func main() {
 	if *eventsTopic == "" {
 		logger.Warn("no PubSub event topic configured, events can only be sent via gRPC calls")
 	}
-	if *acksTopic != "" && *notifyErrorsOnly {
-		logger.Fatal(fmt.Errorf("cannot set an acks topic while disabling errors notifications"))
-	}
 	logger.Info("connecting to SQS Topic: %s", *eventsTopic)
 	sub = pubsub.NewSqsSubscriber(eventsCh, awsEndpoint)
 	if sub == nil {
@@ -120,19 +112,13 @@ func main() {
 
 	if *notificationsTopic != "" {
 		logger.Info("notifications topic: %s", *notificationsTopic)
-		if *notifyErrorsOnly {
-			logger.Info("only errors will be published to the notifications topic")
-		}
-		if *acksTopic != "" {
-			logger.Info("acks topic: %s", *acksTopic)
-		}
 		notificationsCh = make(chan protos.EventResponse)
 		defer close(notificationsCh)
 		pub = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint)
 		if pub == nil {
 			panic("Cannot create a valid SQS Publisher")
 		}
-		go pub.Publish(*notificationsTopic, *acksTopic, *notifyErrorsOnly)
+		go pub.Publish(*notificationsTopic)
 	}
 	listener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
 		EventsChannel:        eventsCh,
