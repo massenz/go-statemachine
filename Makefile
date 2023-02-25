@@ -21,7 +21,7 @@ dockerfile := docker/Dockerfile
 # Edit only the packages list, when adding new functionality,
 # the rest is deduced automatically.
 #
-pkgs := ./api ./grpc ./pubsub ./server ./storage
+pkgs := ./api ./grpc ./pubsub ./storage
 all_go := $(shell for d in $(pkgs); do find $$d -name "*.go"; done)
 test_srcs := $(shell for d in $(pkgs); do find $$d -name "*_test.go"; done)
 srcs := $(filter-out $(test_srcs),$(all_go))
@@ -61,16 +61,16 @@ fmt: ## Formats the Go source code using 'go fmt'
 $(bin): cmd/main.go $(srcs)
 	@mkdir -p $(shell dirname $(bin))
 	GOOS=$(GOOS); GOARCH=$(GOARCH); go build \
-		-ldflags "-X $(GOMOD)/server.Release=$(release)" \
+		-ldflags "-X $(GOMOD)/api.Release=$(release)" \
 		-o $(bin) cmd/main.go
 
 $(dockerbin):
 	GOOS=linux; GOARCH=amd64; go build \
-		-ldflags "-X $(GOMOD)/server.Release=$(release)" \
+		-ldflags "-X $(GOMOD)/api.Release=$(release)" \
 		-o $(dockerbin) cmd/main.go
 
 .PHONY: build
-build: $(bin) ## Builds the server
+build: $(bin) ## Builds the Statemachine server binary
 
 test: $(srcs) $(test_srcs)  ## Runs all tests
 	ginkgo $(pkgs)
@@ -89,13 +89,13 @@ container: $(dockerbin) ## Builds the container image
 .PHONY: start
 start: ## Starts the Redis and LocalStack containers, and Creates the SQS Queues in LocalStack
 	@RELEASE=$(release) BASEDIR=$(shell pwd) docker compose -f $(compose) --project-name sm up redis localstack -d
-	@sleep 1
+	@sleep 3
 	@for queue in events notifications; do \
 		aws --no-cli-pager --endpoint-url=http://localhost:4566 \
 			--region us-west-2 \
  			sqs create-queue --queue-name $$queue; done >/dev/null
  	# We need to wait for the SQS Queues to be up before starting the server.
-	@RELEASE=$(release) BASEDIR=$(shell pwd) docker compose -f $(compose) --project-name sm up server -d
+	#@RELEASE=$(release) BASEDIR=$(shell pwd) docker compose -f $(compose) --project-name sm up server -d
 
 .PHONY: stop
 stop: ## Stops the Redis and LocalStack containers
