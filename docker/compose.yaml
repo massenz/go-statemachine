@@ -31,6 +31,25 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
       - sm-net
+  server:
+    depends_on:
+      - localstack
+      - redis
+    networks:
+      - sm-net
+    ports:
+      - '7398:7398'
+      - '7399:7399'
+    image: "massenz/statemachine:${RELEASE}"
+    environment:
+      AWS_ENDPOINT: "http://awslocal:4566"
+      AWS_REGION: us-west-2
+      AWS_PROFILE: sm-bot
+      TIMEOUT: 200ms
+      DEBUG: -debug
+    volumes:
+      - ${BASEDIR}/docker/aws-credentials:/home/sm-bot/.aws/credentials
+      - ${BASEDIR}/certs:/etc/statemachine/certs
 
 # To connect to the servers in this stack, from a docker run
 # via Docker, use `--network statemachine_backend`.

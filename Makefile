@@ -1,12 +1,18 @@
 # Copyright (c) 2022 AlertAvert.com.  All rights reserved.
 # Created by M. Massenzio, 2022-03-14
 
-bin := build/bin
-out := $(bin)/sm-server
-tag := $(shell ./get-tag)
-image := massenz/statemachine
-module := $(shell go list -m)
 
+GOOS ?= $(shell uname -s | tr "[:upper:]" "[:lower:]")
+GOARCH ?= amd64
+GOMOD := $(shell go list -m)
+
+version := v0.10.0
+release := $(version)-g$(shell git rev-parse --short HEAD)
+prog := sm-server
+bin := out/bin/$(prog)-$(version)_$(GOOS)-$(GOARCH)
+dockerbin := out/bin/$(prog)-$(version)_linux-amd64
+
+image := massenz/statemachine
 compose := docker/compose.yaml
 dockerfile := docker/Dockerfile
 
@@ -15,7 +21,7 @@ dockerfile := docker/Dockerfile
 # Edit only the packages list, when adding new functionality,
 # the rest is deduced automatically.
 #
-pkgs := ./api ./grpc ./pubsub ./server ./storage
+pkgs := ./api ./grpc ./pubsub ./storage
 all_go := $(shell for d in $(pkgs); do find $$d -name "*.go"; done)
 test_srcs := $(shell for d in $(pkgs); do find $$d -name "*_test.go"; done)
 srcs := $(filter-out $(test_srcs),$(all_go))
@@ -40,21 +46,31 @@ help: ## Display this help.
 .PHONY: clean
 img=$(shell docker images -q --filter=reference=$(image))
 clean: ## Cleans up the binary, container image and other data
-	@rm -f $(out)
+	@rm -f $(bin)
 	@[ ! -z $(img) ] && docker rmi $(img) || true
 	@rm -rf certs
 
-.PHONY: build test container cov clean fmt
+version: ## Displays the current version tag (release)
+	@echo $(release)
 
 fmt: ## Formats the Go source code using 'go fmt'
 	@go fmt $(pkgs) ./cmd ./clients
 
 ##@ Development
-$(out): cmd/main.go $(srcs)
-	go build -ldflags "-X $(module)/server.Release=$(tag)" -o $(out) cmd/main.go
-	@chmod +x $(out)
+.PHONY: build test container cov clean fmt
+$(bin): cmd/main.go $(srcs)
+	@mkdir -p $(shell dirname $(bin))
+	GOOS=$(GOOS); GOARCH=$(GOARCH); go build \
+		-ldflags "-X $(GOMOD)/api.Release=$(release)" \
+		-o $(bin) cmd/main.go
 
-build: $(out) ## Builds the server
+$(dockerbin):
+	GOOS=linux; GOARCH=amd64; go build \
+		-ldflags "-X $(GOMOD)/api.Release=$(release)" \
+		-o $(dockerbin) cmd/main.go
+
+.PHONY: build
+build: $(bin) ## Builds the Statemachine server binary
 
 test: $(srcs) $(test_srcs)  ## Runs all tests
 	ginkgo $(pkgs)
@@ -66,25 +82,25 @@ cov: $(srcs) $(test_srcs)  ## Runs the Test Coverage target and opens a browser 
 ##@ Container Management
 # Convenience targets to run locally containers and
 # setup the test environments.
-#
-.PHONY: container
-container: $(out) ## Builds the container image
-	docker build -f $(dockerfile) -t $(image):$(tag) .
 
-.PHONY: services
-services: ## Starts the Redis and LocalStack containers
-	@docker compose -f $(compose) --project-name sm up -d
+container: $(dockerbin) ## Builds the container image
+	docker build --build-arg appname=$(dockerbin) -f $(dockerfile) -t $(image):$(release) .
+
+.PHONY: start
+start: ## Starts the Redis and LocalStack containers, and Creates the SQS Queues in LocalStack
+	@RELEASE=$(release) BASEDIR=$(shell pwd) docker compose -f $(compose) --project-name sm up redis localstack -d
+	@sleep 3
+	@for queue in events notifications; do \
+		aws --no-cli-pager --endpoint-url=http://localhost:4566 \
+			--region us-west-2 \
+ 			sqs create-queue --queue-name $$queue; done >/dev/null
+ 	# We need to wait for the SQS Queues to be up before starting the server.
+	#@RELEASE=$(release) BASEDIR=$(shell pwd) docker compose -f $(compose) --project-name sm up server -d
 
 .PHONY: stop
 stop: ## Stops the Redis and LocalStack containers
 	@docker compose -f $(compose) --project-name sm down
 
-.PHONY: queues
-queues: ## Creates the SQS Queues in LocalStack
-	@for queue in events notifications acks; do \
-		aws --no-cli-pager --endpoint-url=http://localhost:4566 \
-			--region us-west-2 \
- 			sqs create-queue --queue-name $$queue; done >/dev/null
 
 ##@ TLS Support
 #
@@ -108,7 +124,8 @@ gencert: $(ca-csr) $(config) $(server-csr) ## Generates all certificates in the 
 		-profile=server \
 		$(server-csr)  | cfssljson -bare server
 	@mkdir -p certs
-	@mv *.pem *.csr certs/
+	@mv *.pem certs/
+	@rm *.csr
 	@echo "Certificates generated in $(shell pwd)/certs"
 
 .PHONY: clean-cert

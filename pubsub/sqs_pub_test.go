@@ -11,14 +11,14 @@ package pubsub_test
 
 import (
 	. "github.com/JiaYongfei/respect/gomega"
-	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"fmt"
+
 	"github.com/golang/protobuf/proto"
+	"github.com/google/uuid"
 	"github.com/massenz/slf4go/logging"
-	"time"
 
 	"github.com/massenz/go-statemachine/api"
 	"github.com/massenz/go-statemachine/pubsub"
@@ -54,7 +54,7 @@ var _ = Describe("SQS Publisher", func() {
 			done := make(chan interface{})
 			go func() {
 				defer close(done)
-				go testPublisher.Publish(getQueueName(notificationsQueue), "", false)
+				go testPublisher.Publish(getQueueName(notificationsQueue))
 			}()
 			notificationsCh <- notification
 			res := getSqsMessage(getQueueName(notificationsQueue))
@@ -70,9 +70,9 @@ var _ = Describe("SQS Publisher", func() {
 			close(notificationsCh)
 			Eventually(done).Should(BeClosed())
 		})
-		It("will publish successful outcomes", func() {
+		It("will not publish successful outcomes", func() {
 			notification := protos.EventResponse{
-				EventId: "dead-beef",
+				EventId: "ok-event",
 				Outcome: &protos.EventOutcome{
 					Code: protos.EventOutcome_Ok,
 				},
@@ -80,77 +80,33 @@ var _ = Describe("SQS Publisher", func() {
 			done := make(chan interface{})
 			go func() {
 				defer close(done)
-				go testPublisher.Publish(getQueueName(notificationsQueue), "", false)
+				go testPublisher.Publish(getQueueName(notificationsQueue))
 			}()
 			notificationsCh <- notification
-			m := getSqsMessage(getQueueName(notificationsQueue))
-			var response protos.EventResponse
-			Eventually(func(g Gomega) {
-				g.Expect(proto.UnmarshalText(*m.Body, &response)).ShouldNot(HaveOccurred())
-				g.Expect(&response).To(Respect(&notification))
+			Consistently(func(g Gomega) {
+				m := getSqsMessage(getQueueName(notificationsQueue))
+				g.Expect(m).To(BeNil())
 			}).Should(Succeed())
 			close(notificationsCh)
 			Eventually(done).Should(BeClosed())
-		})
-		It("will publish OK outcomes to acks queue if configured", func() {
-			errorResponse := protos.EventResponse{
-				EventId: uuid.NewString(),
-				Outcome: &protos.EventOutcome{
-					Code: protos.EventOutcome_InternalError,
-				},
-			}
-			okResponse := protos.EventResponse{
-				EventId: uuid.NewString(),
-				Outcome: &protos.EventOutcome{
-					Code: protos.EventOutcome_Ok,
-				},
-			}
-			done := make(chan interface{})
-			go func() {
-				defer close(done)
-				go testPublisher.Publish(getQueueName(notificationsQueue), getQueueName(acksQueue), false)
-			}()
-
-			notificationsCh <- errorResponse
-			notificationsCh <- okResponse
-			Eventually(func(g Gomega) {
-				var response protos.EventResponse
-				errMsg := getSqsMessage(getQueueName(notificationsQueue))
-				g.Expect(proto.UnmarshalText(*errMsg.Body, &response)).ShouldNot(HaveOccurred())
-				g.Expect(&response).To(Respect(&errorResponse))
-
-				okMsg := getSqsMessage(getQueueName(acksQueue))
-				g.Expect(proto.UnmarshalText(*okMsg.Body, &response)).ShouldNot(HaveOccurred())
-				g.Expect(&response).To(Respect(&okResponse))
-				// There are no more messages in the notifications queue
-				g.Expect(getSqsMessage(getQueueName(notificationsQueue))).Should(BeNil())
-			}).Should(Succeed())
-
-			close(notificationsCh)
-			select {
-			case <-done:
-				Succeed()
-			case <-time.After(timeout):
-				Fail("timed out waiting for Publisher to exit")
-			}
 		})
 		It("will terminate gracefully when the notifications channel is closed", func() {
 			done := make(chan interface{})
 			go func() {
 				defer close(done)
-				go testPublisher.Publish(getQueueName(notificationsQueue), "", false)
+				go testPublisher.Publish(getQueueName(notificationsQueue))
 			}()
 			close(notificationsCh)
 			Eventually(done).Should(BeClosed())
 		})
 		It("will survive an empty Message", func() {
-			go testPublisher.Publish(getQueueName(notificationsQueue), "", false)
+			go testPublisher.Publish(getQueueName(notificationsQueue))
 			notificationsCh <- protos.EventResponse{}
 			close(notificationsCh)
 			getSqsMessage(getQueueName(notificationsQueue))
 		})
 		It("will send several messages within a short timeframe", func() {
-			go testPublisher.Publish(getQueueName(notificationsQueue), "", false)
+			go testPublisher.Publish(getQueueName(notificationsQueue))
 			for i := range [10]int{} {
 				evt := api.NewEvent("do-something")
 				evt.EventId = fmt.Sprintf("event-%d", i)
@@ -197,20 +153,14 @@ var _ = Describe("SQS Publisher", func() {
 			done := make(chan interface{})
 			go func() {
 				defer close(done)
-				go testPublisher.Publish(getQueueName(notificationsQueue), getQueueName(acksQueue), true)
+				go testPublisher.Publish(getQueueName(notificationsQueue))
 			}()
 
 			notificationsCh <- responseOk
-			// Confirm neither queues got the Ok message
-			// Note we need to "consistently" check, or we may get a false positive if
-			// we check only once and the message is not yet in the queue.
 			Consistently(func(g Gomega) {
 				res := getSqsMessage(getQueueName(notificationsQueue))
 				Expect(res).To(BeNil())
-				res = getSqsMessage(getQueueName(acksQueue))
-				Expect(res).To(BeNil())
 			}, "200ms").Should(Succeed())
-
 			close(notificationsCh)
 			Eventually(done).Should(BeClosed())
 		})

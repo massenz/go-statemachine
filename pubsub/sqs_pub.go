@@ -16,7 +16,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	slf4go "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
-	"strconv"
 )
 
 // NewSqsPublisher will create a new `Publisher` to send error notifications received on the
@@ -57,36 +56,21 @@ func GetQueueUrl(client *sqs.SQS, topic string) string {
 	return *out.QueueUrl
 }
 
-// Publish sends an message to provided topics depending on SQS Publisher settings.
-// If an acksTopic is provided, it will send Ok outcomes to that topic and errors to errorsTopic;
-// else, all outcomes will be sent to the errorsTopic. If notifyErrorsOnly is true, only error outcomes
-// will be sent.
-func (s *SqsPublisher) Publish(errorsTopic string, acksTopic string, notifyErrorsOnly bool) {
+// Publish receives notifications from the SqsPublisher channel, and sends a message to a topic.
+func (s *SqsPublisher) Publish(errorsTopic string) {
 	errorsQueueUrl := GetQueueUrl(s.client, errorsTopic)
-	var acksQueueUrl string
-	if acksTopic != "" {
-		acksQueueUrl = GetQueueUrl(s.client, acksTopic)
-	}
 	delay := int64(0)
-	s.logger.Info("SQS Publisher started for topics: %s %s", errorsQueueUrl, acksQueueUrl)
-	s.logger.Info("SQS Publisher notifyErrorsOnly: %s", strconv.FormatBool(notifyErrorsOnly))
 	for eventResponse := range s.notifications {
 		isOKOutcome := eventResponse.Outcome != nil && eventResponse.Outcome.Code == protos.EventOutcome_Ok
-		if isOKOutcome && notifyErrorsOnly {
-			s.logger.Debug("Skipping notification for Ok outcome [Event ID: %s]", eventResponse.EventId)
+		if isOKOutcome {
+			s.logger.Warn("unexpected notification for Ok outcome [Event ID: %s]", eventResponse.EventId)
 			continue
 		}
-		queueUrl := errorsQueueUrl
-		if isOKOutcome && acksTopic != "" {
-			queueUrl = acksQueueUrl
-		}
-
-		s.logger.Debug("[%s] %s", eventResponse.String(), queueUrl)
 		msgResult, err := s.client.SendMessage(&sqs.SendMessageInput{
 			DelaySeconds: &delay,
 			// Encodes the Event as a string, using Protobuf implementation.
 			MessageBody: aws.String(proto.MarshalTextString(&eventResponse)),
-			QueueUrl:    &queueUrl,
+			QueueUrl:    &errorsQueueUrl,
 		})
 		if err != nil {
 			s.logger.Error("Cannot publish eventResponse (%s): %v", eventResponse.String(), err)

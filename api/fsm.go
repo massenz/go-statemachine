@@ -25,6 +25,8 @@ const (
 )
 
 var (
+	Release string
+
 	MalformedConfigurationError   = fmt.Errorf("this configuration cannot be parsed")
 	MissingNameConfigurationError = fmt.Errorf(
 		"configuration must always specify a name (and optionally a version)")
@@ -43,7 +45,7 @@ var (
 
 	// Logger is made accessible so that its `Level` can be changed
 	// or can be sent to a `NullLog` during testing.
-	Logger = log.NewLog("fsm")
+	Logger = log.NewLog("api")
 )
 
 // ConfiguredStateMachine is the internal representation of an FSM, which

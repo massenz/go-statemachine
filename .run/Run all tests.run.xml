@@ -2,7 +2,7 @@
   <configuration default="false" name="Run all tests" type="GoTestRunConfiguration" factoryName="Go Test" singleton="false">
     <module name="statemachine" />
     <working_directory value="$PROJECT_DIR$" />
-    <parameters value="./api ./grpc ./pubsub ./storage ./server" />
+    <parameters value="./api ./grpc ./pubsub ./storage" />
     <kind value="DIRECTORY" />
     <package value="github.com/massenz/go-statemachine" />
     <directory value="$PROJECT_DIR$" />

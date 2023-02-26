@@ -32,7 +32,6 @@ import (
 const (
 	eventsQueue        = "test-events"
 	notificationsQueue = "test-notifications"
-	acksQueue          = "test-acks"
 	timeout            = 1 * time.Second       // Default timeout for Eventually is 1s
 	pollingInterval    = 10 * time.Millisecond // Default polling interval for Eventually is 10ms
 )
@@ -42,12 +41,11 @@ func TestPubSub(t *testing.T) {
 	RunSpecs(t, "Pub/Sub Suite")
 }
 
-
-
 // Although these are constants, we cannot take the pointers unless we declare them vars.
 var (
-	awsLocal      *internals.Container
-	testSqsClient *sqs.SQS
+	awsLocal       *internals.Container
+	redisContainer *internals.Container
+	testSqsClient  *sqs.SQS
 )
 
 var _ = BeforeSuite(func() {
@@ -55,7 +53,7 @@ var _ = BeforeSuite(func() {
 
 	var err error
 	awsLocal, err = internals.NewLocalstackContainer(context.Background())
-	Expect(err).ToNot(HaveOccurred())
+	Ω(err).ToNot(HaveOccurred())
 
 	// Can't take the address of a constant.
 	region := internals.Region
@@ -67,36 +65,21 @@ var _ = BeforeSuite(func() {
 		},
 	})))
 
-	for _, topic := range []string{eventsQueue, notificationsQueue, acksQueue} {
+	for _, topic := range []string{eventsQueue, notificationsQueue} {
 		topic = fmt.Sprintf("%s-%d", topic, GinkgoParallelProcess())
-
-		_, err := testSqsClient.GetQueueUrl(&sqs.GetQueueUrlInput{
-			QueueName: &topic,
-		})
-		if err != nil {
+		if _, err := testSqsClient.GetQueueUrl(&sqs.GetQueueUrlInput{QueueName: &topic}); err != nil {
 			// the queue does not exist and ought to be created
-			_, err = testSqsClient.CreateQueue(&sqs.CreateQueueInput{
-				QueueName: &topic,
-			})
+			_, err = testSqsClient.CreateQueue(&sqs.CreateQueueInput{QueueName: &topic})
 			Expect(err).NotTo(HaveOccurred())
 		}
 	}
+	redisContainer, err = internals.NewRedisContainer(context.Background())
+	Ω(err).ToNot(HaveOccurred())
 }, 2.0)
 
 var _ = AfterSuite(func() {
-	for _, topic := range []string{eventsQueue, notificationsQueue, acksQueue} {
-		topic = getQueueName(topic)
-
-		out, err := testSqsClient.GetQueueUrl(&sqs.GetQueueUrlInput{
-			QueueName: &topic,
-		})
-		Expect(err).NotTo(HaveOccurred())
-		if out != nil {
-			_, err = testSqsClient.DeleteQueue(&sqs.DeleteQueueInput{QueueUrl: out.QueueUrl})
-			Expect(err).NotTo(HaveOccurred())
-		}
-	}
-	Expect(awsLocal.Terminate(context.Background())).ToNot(HaveOccurred())
+	Ω(awsLocal.Terminate(context.Background())).ToNot(HaveOccurred())
+	Ω(redisContainer.Terminate(context.Background())).ToNot(HaveOccurred())
 }, 2.0)
 
 // getQueueName provides a way to obtain a process-independent name for the SQS queue,

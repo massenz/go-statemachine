@@ -14,6 +14,7 @@ import (
 	"crypto/tls"
 	"github.com/massenz/go-statemachine/grpc"
 	internals "github.com/massenz/go-statemachine/internal/testing"
+	slf4go "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	g "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -32,17 +33,19 @@ func TestGrpc(t *testing.T) {
 	RunSpecs(t, "gRPC Server")
 }
 
-var container *internals.Container
+var redisContainer *internals.Container
 var _ = BeforeSuite(func() {
 	var err error
-	container, err = internals.NewRedisContainer(context.Background())
+	redisContainer, err = internals.NewRedisContainer(context.Background())
 	Expect(err).ToNot(HaveOccurred())
+	// Muting the RootLog to prevent annoying warning re TLS
+	slf4go.RootLog.Level = slf4go.NONE
 	// Note the timeout here is in seconds (and it's not a time.Duration either)
 }, 5.0)
 
 var _ = AfterSuite(func() {
-	if container != nil {
-		Expect(container.Terminate(context.Background())).To(Succeed())
+	if redisContainer != nil {
+		Expect(redisContainer.Terminate(context.Background())).To(Succeed())
 	}
 }, 2.0)
 
