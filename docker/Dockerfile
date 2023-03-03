@@ -12,6 +12,7 @@ LABEL org.opencontainers.image.description="Statemachine gRPC Server"
 LABEL org.opencontainers.image.licenses=Apache-2.0
 
 ARG appname
+ARG hc
 
 #RUN apt-get update && apt-get install ca-certificates -y
 RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
@@ -19,18 +20,21 @@ RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
 # Sensible defaults for the server, for reference
 # we list all the environment variables used by the
 # entrypoint script.
-#
 ENV GRPC_PORT=7398 SERVER_PORT=7399 DEBUG=""  \
     EVENTS_Q="events" NOTIFICATIONS_Q="notifications" \
     ACKS_Q="" ERRORS_ONLY=t \
-    CLUSTER="" REDIS="redis:6379"
+    CLUSTER="" REDIS="redis:6379" \
+    TIMEOUT=500ms INSECURE=""
 
 WORKDIR /app
 RUN chown sm-bot:sm-bot /app
 
 USER sm-bot
 ADD $appname ./sm-server
+ADD $hc ./ping
 ADD docker/entrypoint.sh ./
 
 EXPOSE ${SERVER_PORT}
 ENTRYPOINT ["./entrypoint.sh"]
+HEALTHCHECK --start-period=5s --interval=30s --timeout=200ms --retries=5 \
+  CMD ./ping -host localhost:$GRPC_PORT -timeout $TIMEOUT $INSECURE
