@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	"os"
 	"path/filepath"
@@ -57,6 +58,30 @@ const (
 type grpcSubscriber struct {
 	protos.UnimplementedStatemachineServiceServer
 	*Config
+}
+
+// Health will return the status of the server and the underlying store
+func (s *grpcSubscriber) Health(context.Context, *emptypb.Empty) (*protos.HealthResponse, error) {
+	var response = &protos.HealthResponse{
+		State:      protos.HealthResponse_READY,
+		Release:    api.Release,
+		TlsEnabled: s.TlsEnabled,
+	}
+	if s.Store == nil {
+		s.Logger.Error("Redis store not initialized, cannot process requests")
+		return nil, status.Error(codes.Internal, "data store not configured")
+	}
+	if s.EventsChannel == nil {
+		s.Logger.Error("events channel not initialized, cannot process events")
+		response.State = protos.HealthResponse_NOT_READY
+		return response, nil
+	}
+	err := s.Store.Health()
+	if err != nil {
+		s.Logger.Error("Redis store not ready: %v", err)
+		response.State = protos.HealthResponse_NOT_READY
+	}
+	return response, nil
 }
 
 func (s *grpcSubscriber) SendEvent(ctx context.Context, request *protos.EventRequest) (*protos.
@@ -180,8 +205,8 @@ func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context, in *protos.G
 
 func (s *grpcSubscriber) GetAllInState(ctx context.Context, in *protos.GetFsmRequest) (
 	*protos.ListResponse, error) {
-	cfgName := in.GetConfig()
-	if cfgName == "" {
+	cfg := in.GetConfig()
+	if cfg == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "configuration must always be specified")
 	}
 	state := in.GetState()
@@ -189,16 +214,16 @@ func (s *grpcSubscriber) GetAllInState(ctx context.Context, in *protos.GetFsmReq
 		// TODO: implement table scanning
 		return nil, status.Errorf(codes.Unimplemented, "missing state, table scan not implemented")
 	}
-	ids := s.Store.GetAllInState(cfgName, state)
+	ids := s.Store.GetAllInState(cfg, state)
 	return &protos.ListResponse{Ids: ids}, nil
 }
 
 func (s *grpcSubscriber) GetEventOutcome(ctx context.Context, in *protos.EventRequest) (
 	*protos.EventResponse, error) {
 	evtId := in.GetId()
-	config := in.GetConfig()
-	s.Logger.Debug("looking up EventOutcome %s (%s)", evtId, config)
-	outcome, ok := s.Store.GetOutcomeForEvent(evtId, config)
+	cfg := in.GetConfig()
+	s.Logger.Debug("looking up EventOutcome %s (%s)", evtId, cfg)
+	outcome, ok := s.Store.GetOutcomeForEvent(evtId, cfg)
 	if !ok {
 		return nil, status.Error(codes.NotFound, fmt.Sprintf("outcome for event %s not found", evtId))
 	}
