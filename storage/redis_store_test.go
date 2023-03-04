@@ -26,6 +26,7 @@ import (
 
 var _ = Describe("RedisStore", func() {
 
+	const configId = "orders:v4"
 	Context("for simple operations", func() {
 		var store storage.StoreManager
 		var rdb *redis.Client
@@ -120,7 +121,7 @@ var _ = Describe("RedisStore", func() {
 			id := "99" // uuid.New().String()
 			var found protos.FiniteStateMachine
 			fsm := &protos.FiniteStateMachine{
-				ConfigId: "orders:v4",
+				ConfigId: configId,
 				State:    "in_transit",
 				History: []*protos.Event{
 					{Transition: &protos.Transition{Event: "confirmed"}, Originator: "bot"},
@@ -284,51 +285,52 @@ var _ = Describe("RedisStore", func() {
 			// Cleaning up the DB to prevent "dirty" store to impact test results
 			rdb.FlushDB(context.Background())
 		}, 0.2)
+		const fsmIdFmt = "fsm-%d"
 		It("finds them by state", func() {
 			for id := 1; id < 5; id++ {
 				fsm := &protos.FiniteStateMachine{
-					ConfigId: "orders:v4",
+					ConfigId: configId,
 					State:    "in_transit",
 					History: []*protos.Event{
 						{Transition: &protos.Transition{Event: "confirmed"}, Originator: "bot"},
 						{Transition: &protos.Transition{Event: "shipped"}, Originator: "bot"},
 					},
 				}
-				fsmId := fmt.Sprintf("fsm-%d", id)
+				fsmId := fmt.Sprintf(fsmIdFmt, id)
 				Expect(store.PutStateMachine(fsmId, fsm)).ToNot(HaveOccurred())
 				Expect(store.UpdateState("orders", fsmId, "", fsm.State))
 			}
 			res := store.GetAllInState("orders", "in_transit")
 			Expect(len(res)).To(Equal(4))
 			for id := 1; id < 5; id++ {
-				Expect(res).To(ContainElement(fmt.Sprintf("fsm-%d", id)))
+				Expect(res).To(ContainElement(fmt.Sprintf(fsmIdFmt, id)))
 			}
 		})
 		When("transitioning state", func() {
 			BeforeEach(func() {
 				for id := 1; id < 10; id++ {
 					fsm := &protos.FiniteStateMachine{
-						ConfigId: "orders:v4",
+						ConfigId: configId,
 						State:    "in_transit",
 						History: []*protos.Event{
 							{Transition: &protos.Transition{Event: "confirmed"}, Originator: "bot"},
 							{Transition: &protos.Transition{Event: "shipped"}, Originator: "bot"},
 						},
 					}
-					fsmId := fmt.Sprintf("fsm-%d", id)
+					fsmId := fmt.Sprintf(fsmIdFmt, id)
 					Expect(store.PutStateMachine(fsmId, fsm)).ToNot(HaveOccurred())
 					Expect(store.UpdateState("orders", fsmId, "", fsm.State))
 				}
 			})
 			It("finds them", func() {
 				for id := 3; id < 6; id++ {
-					fsmId := fmt.Sprintf("fsm-%d", id)
+					fsmId := fmt.Sprintf(fsmIdFmt, id)
 					Expect(store.UpdateState("orders", fsmId, "in_transit", "shipped"))
 				}
 				res := store.GetAllInState("orders", "shipped")
 				Expect(len(res)).To(Equal(3))
 				for id := 3; id < 6; id++ {
-					Expect(res).To(ContainElement(fmt.Sprintf("fsm-%d", id)))
+					Expect(res).To(ContainElement(fmt.Sprintf(fsmIdFmt, id)))
 				}
 				res = store.GetAllInState("orders", "in_transit")
 				Expect(len(res)).To(Equal(6))

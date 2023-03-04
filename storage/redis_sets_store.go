@@ -14,6 +14,11 @@ import (
 	"fmt"
 )
 
+const (
+	ReturningItemsFmt   = "Returning %d items"
+	NoConfigurationsFmt = "Could not retrieve configurations: %s"
+)
+
 func (csm *RedisStore) UpdateState(cfgName string, id string, oldState string, newState string) error {
 	var key string
 	var err error
@@ -44,10 +49,11 @@ func (csm *RedisStore) GetAllInState(cfg string, state string) []string {
 	key := NewKeyForMachinesByState(cfg, state)
 	fsms, err := csm.client.SMembers(context.Background(), key).Result()
 	if err != nil {
-		csm.logger.Error("Could not retrieve FSMs for state `%s`: %s", state, err)
+		const format = "Could not retrieve FSMs for state `%s`: %s"
+		csm.logger.Error(format, state, err)
 		return nil
 	}
-	csm.logger.Debug("Returning %d items", len(fsms))
+	csm.logger.Debug(ReturningItemsFmt, len(fsms))
 	return fsms
 }
 
@@ -56,10 +62,10 @@ func (csm *RedisStore) GetAllConfigs() []string {
 	csm.logger.Debug("Looking up all configs in DB")
 	configs, err := csm.client.SMembers(context.Background(), ConfigsPrefix).Result()
 	if err != nil {
-		csm.logger.Error("Could not retrieve configurations: %s", err)
+		csm.logger.Error(NoConfigurationsFmt, err)
 		return nil
 	}
-	csm.logger.Debug("Returning %d items", len(configs))
+	csm.logger.Debug(ReturningItemsFmt, len(configs))
 	return configs
 }
 
@@ -67,9 +73,9 @@ func (csm *RedisStore) GetAllVersions(name string) []string {
 	csm.logger.Debug("Looking up all versions for Configurations `%s` in DB", name)
 	configs, err := csm.client.SMembers(context.Background(), NewKeyForConfig(name)).Result()
 	if err != nil {
-		csm.logger.Error("Could not retrieve configurations: %s", err)
+		csm.logger.Error(NoConfigurationsFmt, err)
 		return nil
 	}
-	csm.logger.Debug("Returning %d items", len(configs))
+	csm.logger.Debug(ReturningItemsFmt, len(configs))
 	return configs
 }

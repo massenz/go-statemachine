@@ -114,10 +114,14 @@ func (s *grpcSubscriber) SendEvent(ctx context.Context, request *protos.EventReq
 }
 
 func (s *grpcSubscriber) PutConfiguration(ctx context.Context, cfg *protos.Configuration) (*protos.PutResponse, error) {
-	// FIXME: use Context to set a timeout, etc.
 	if err := api.CheckValid(cfg); err != nil {
 		s.Logger.Error("invalid configuration: %v", err)
 		return nil, status.Errorf(codes.InvalidArgument, "invalid configuration: %v", err)
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		if deadline.Before(time.Now()) {
+			return nil, ctx.Err()
+		}
 	}
 	if err := s.Store.PutConfig(cfg); err != nil {
 		s.Logger.Error("could not store configuration: %v", err)
@@ -125,6 +129,11 @@ func (s *grpcSubscriber) PutConfiguration(ctx context.Context, cfg *protos.Confi
 			return nil, status.Errorf(codes.AlreadyExists, "cannot store configuration: %v", err)
 		}
 		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		if deadline.Before(time.Now()) {
+			return nil, ctx.Err()
+		}
 	}
 	s.Logger.Trace("configuration stored: %s", api.GetVersionId(cfg))
 	return &protos.PutResponse{
@@ -164,6 +173,11 @@ func (s *grpcSubscriber) PutFiniteStateMachine(ctx context.Context,
 		return nil, status.Error(codes.FailedPrecondition, storage.NotFoundError(
 			fsm.ConfigId).Error())
 	}
+	if deadline, ok := ctx.Deadline(); ok {
+		if deadline.Before(time.Now()) {
+			return nil, ctx.Err()
+		}
+	}
 	var id = request.Id
 	if id == "" {
 		id = uuid.NewString()
@@ -178,6 +192,8 @@ func (s *grpcSubscriber) PutFiniteStateMachine(ctx context.Context,
 		s.Logger.Error("could not store FSM [%v]: %v", fsm, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	// we cannot interrupt here, even if deadline is passed, as it would leave the
+	// store in an inconsistent state.
 	if err := s.Store.UpdateState(cfg.Name, id, "", fsm.State); err != nil {
 		s.Logger.Error("could not store FSM in state set [%s]: %v", fsm.State, err)
 		return nil, status.Error(codes.Internal, err.Error())
