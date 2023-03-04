@@ -43,10 +43,11 @@ var _ = Describe("A Listener", func() {
 			// Set to DEBUG when diagnosing test failures
 			testListener.SetLogLevel(logging.NONE)
 		})
+		const eventId = "1234-abcdef"
 		It("can post error notifications", func() {
 			defer close(notificationsCh)
 			msg := protos.Event{
-				EventId:    "feed-beef",
+				EventId:    eventId,
 				Originator: "me",
 				Transition: &protos.Transition{
 					Event: "test-me",
@@ -76,17 +77,18 @@ var _ = Describe("A Listener", func() {
 		})
 		It("can process well-formed events", func() {
 			event := protos.Event{
-				EventId:    "feed-beef",
+				EventId:    eventId,
 				Originator: "me",
 				Transition: &protos.Transition{
 					Event: "move",
 				},
 				Details: "more details",
 			}
+			const requestId = "12345-faa44"
 			request := protos.EventRequest{
 				Event:  &event,
 				Config: "test",
-				Id:     "12345-faa44",
+				Id:     requestId,
 			}
 			Ω(store.PutConfig(&protos.Configuration{
 				Name:          "test",
@@ -95,7 +97,7 @@ var _ = Describe("A Listener", func() {
 				Transitions:   []*protos.Transition{{From: "start", To: "end", Event: "move"}},
 				StartingState: "start",
 			})).ToNot(HaveOccurred())
-			Ω(store.PutStateMachine("12345-faa44", &protos.FiniteStateMachine{
+			Ω(store.PutStateMachine(requestId, &protos.FiniteStateMachine{
 				ConfigId: "test:v1",
 				State:    "start",
 				History:  nil,
@@ -109,7 +111,7 @@ var _ = Describe("A Listener", func() {
 
 			Eventually(func(g Gomega) {
 				// Now we want to test that the state machine was updated
-				fsm, ok := store.GetStateMachine("12345-faa44", "test")
+				fsm, ok := store.GetStateMachine(requestId, "test")
 				g.Ω(ok).ToNot(BeFalse())
 				g.Ω(fsm.State).To(Equal("end"))
 				g.Ω(len(fsm.History)).To(Equal(1))
@@ -123,7 +125,7 @@ var _ = Describe("A Listener", func() {
 		})
 		It("sends notifications for missing state-machine", func() {
 			event := protos.Event{
-				EventId:    "feed-beef",
+				EventId:    eventId,
 				Originator: "me",
 				Transition: &protos.Transition{
 					Event: "move",
@@ -152,7 +154,7 @@ var _ = Describe("A Listener", func() {
 		It("sends notifications for missing destinations", func() {
 			request := protos.EventRequest{
 				Event: &protos.Event{
-					EventId: "feed-beef",
+					EventId: eventId,
 				},
 			}
 			go func() { testListener.ListenForMessages() }()

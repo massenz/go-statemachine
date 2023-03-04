@@ -22,9 +22,48 @@ import (
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"strings"
 )
 
-var _ = Describe("RedisStore", func() {
+const (
+	cfgName  = "orders"
+	fsmIdFmt = "fsm-%d"
+)
+
+// configId is a constant in all but name
+var configId = strings.Join([]string{cfgName, "v4"}, api.ConfigurationVersionSeparator)
+
+func setupStoreRedis() (storage.StoreManager, *redis.Client) {
+	store := storage.NewRedisStoreWithDefaults(container.Address)
+	Expect(store).ToNot(BeNil())
+	store.SetLogLevel(slf4go.NONE)
+
+	// This is used to go "behind the back" of our StoreManager and mess with it for testing
+	// purposes. Do NOT do this in your code.
+	rdb := redis.NewClient(&redis.Options{
+		Addr: container.Address,
+		DB:   storage.DefaultRedisDb,
+	})
+	return store, rdb
+}
+
+func storeSomeFSMs(store storage.StoreManager, count int) {
+	for id := 1; id < count; id++ {
+		fsm := &protos.FiniteStateMachine{
+			ConfigId: configId,
+			State:    "in_transit",
+			History: []*protos.Event{
+				{Transition: &protos.Transition{Event: "confirmed"}, Originator: "bot"},
+				{Transition: &protos.Transition{Event: "shipped"}, Originator: "bot"},
+			},
+		}
+		fsmId := fmt.Sprintf(fsmIdFmt, id)
+		Expect(store.PutStateMachine(fsmId, fsm)).ToNot(HaveOccurred())
+		Expect(store.UpdateState("orders", fsmId, "", fsm.State))
+	}
+}
+
+var _ = Describe("Redis Store", func() {
 
 	Context("for simple operations", func() {
 		var store storage.StoreManager
@@ -38,18 +77,7 @@ var _ = Describe("RedisStore", func() {
 				StartingState: "start",
 			}
 			Expect(container).ToNot(BeNil())
-			store = storage.NewRedisStoreWithDefaults(container.Address)
-			Expect(store).ToNot(BeNil())
-			// Mute unnecessary logging during tests; re-enable (
-			// and set to DEBUG) when diagnosing failures.
-			store.SetLogLevel(slf4go.NONE)
-
-			// This is used to go "behind the back" of our StoreManager and mess with it for testing
-			// purposes. Do NOT do this in your code.
-			rdb = redis.NewClient(&redis.Options{
-				Addr: container.Address,
-				DB:   storage.DefaultRedisDb,
-			})
+			store, rdb = setupStoreRedis()
 		}, 0.5)
 		AfterEach(func() {
 			// Cleaning up the DB to prevent "dirty" store to impact test results
@@ -120,7 +148,7 @@ var _ = Describe("RedisStore", func() {
 			id := "99" // uuid.New().String()
 			var found protos.FiniteStateMachine
 			fsm := &protos.FiniteStateMachine{
-				ConfigId: "orders:v4",
+				ConfigId: configId,
 				State:    "in_transit",
 				History: []*protos.Event{
 					{Transition: &protos.Transition{Event: "confirmed"}, Originator: "bot"},
@@ -128,7 +156,7 @@ var _ = Describe("RedisStore", func() {
 				},
 			}
 			Expect(store.PutStateMachine(id, fsm)).ToNot(HaveOccurred())
-			val, err := rdb.Get(context.Background(), storage.NewKeyForMachine(id, "orders")).Bytes()
+			val, err := rdb.Get(context.Background(), storage.NewKeyForMachine(id, cfgName)).Bytes()
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
@@ -145,20 +173,20 @@ var _ = Describe("RedisStore", func() {
 		It("can get events back", func() {
 			id := uuid.New().String()
 			ev := api.NewEvent("confirmed")
-			key := storage.NewKeyForEvent(id, "orders")
+			key := storage.NewKeyForEvent(id, cfgName)
 			val, _ := proto.Marshal(ev)
 			_, err := rdb.Set(context.Background(), key, val, storage.NeverExpire).Result()
 			Expect(err).ToNot(HaveOccurred())
 
-			found, ok := store.GetEvent(id, "orders")
+			found, ok := store.GetEvent(id, cfgName)
 			Expect(ok).To(BeTrue())
 			Expect(found).To(Respect(ev))
 		})
 		It("can save events", func() {
 			ev := api.NewEvent("confirmed")
 			id := ev.EventId
-			Expect(store.PutEvent(ev, "orders", storage.NeverExpire)).ToNot(HaveOccurred())
-			val, err := rdb.Get(context.Background(), storage.NewKeyForEvent(id, "orders")).Bytes()
+			Expect(store.PutEvent(ev, cfgName, storage.NeverExpire)).ToNot(HaveOccurred())
+			val, err := rdb.Get(context.Background(), storage.NewKeyForEvent(id, cfgName)).Bytes()
 			Expect(err).ToNot(HaveOccurred())
 
 			var found protos.Event
@@ -166,12 +194,12 @@ var _ = Describe("RedisStore", func() {
 			Expect(&found).To(Respect(ev))
 		})
 		It("will return an error for a non-existent event", func() {
-			_, ok := store.GetEvent("fake", "orders")
+			_, ok := store.GetEvent("fake", cfgName)
 			Expect(ok).To(BeFalse())
 		})
 		It("can save an event Outcome", func() {
 			id := uuid.New().String()
-			cfg := "orders"
+			cfg := cfgName
 			response := &protos.EventOutcome{
 				Code:    protos.EventOutcome_Ok,
 				Config:  "test",
@@ -189,7 +217,7 @@ var _ = Describe("RedisStore", func() {
 		})
 		It("can get an event Outcome", func() {
 			id := uuid.New().String()
-			cfg := "orders"
+			cfg := cfgName
 			response := &protos.EventOutcome{
 				Code:    protos.EventOutcome_Ok,
 				Details: "this was just a test",
@@ -210,7 +238,7 @@ var _ = Describe("RedisStore", func() {
 			Expect(store.PutStateMachine("fake", nil)).To(HaveOccurred())
 		})
 		It("should gracefully handle a nil Event", func() {
-			Expect(store.PutEvent(nil, "orders", storage.NeverExpire)).To(HaveOccurred())
+			Expect(store.PutEvent(nil, cfgName, storage.NeverExpire)).To(HaveOccurred())
 		})
 		It("should gracefully handle a nil Outcome", func() {
 			Expect(store.AddEventOutcome("fake", "test", nil,
@@ -223,17 +251,7 @@ var _ = Describe("RedisStore", func() {
 		var rdb *redis.Client
 
 		BeforeEach(func() {
-			Expect(container).ToNot(BeNil())
-			store = storage.NewRedisStoreWithDefaults(container.Address)
-			Expect(store).ToNot(BeNil())
-			store.SetLogLevel(slf4go.NONE)
-
-			// This is used to go "behind the back" of our StoreManager and mess with it for testing
-			// purposes. Do NOT do this in your code.
-			rdb = redis.NewClient(&redis.Options{
-				Addr: container.Address,
-				DB:   storage.DefaultRedisDb,
-			})
+			store, rdb = setupStoreRedis()
 		}, 0.5)
 		AfterEach(func() {
 			// Cleaning up the DB to prevent "dirty" store to impact test results
@@ -241,20 +259,20 @@ var _ = Describe("RedisStore", func() {
 		}, 0.2)
 
 		It("can get all configuration names", func() {
-			for _, name := range []string{"orders", "devices", "users"} {
+			for _, name := range []string{cfgName, "devices", "users"} {
 				Expect(store.PutConfig(&protos.Configuration{Name: name, Version: "v3", StartingState: "start"})).
 					ToNot(HaveOccurred())
 			}
 			configs := store.GetAllConfigs()
 			Expect(len(configs)).To(Equal(3))
-			Expect(configs).To(ContainElements("orders", "devices", "users"))
+			Expect(configs).To(ContainElements(cfgName, "devices", "users"))
 		})
 		It("can get all versions of a configuration", func() {
 			for _, version := range []string{"v1alpha1", "v1beta", "v1"} {
-				Expect(store.PutConfig(&protos.Configuration{Name: "orders", Version: version, StartingState: "start"})).
+				Expect(store.PutConfig(&protos.Configuration{Name: cfgName, Version: version, StartingState: "start"})).
 					ToNot(HaveOccurred())
 			}
-			configs := store.GetAllVersions("orders")
+			configs := store.GetAllVersions(cfgName)
 			Expect(len(configs)).To(Equal(3))
 			Expect(configs).To(ContainElements("orders:v1alpha1", "orders:v1beta", "orders:v1"))
 		})
@@ -268,74 +286,40 @@ var _ = Describe("RedisStore", func() {
 		var rdb *redis.Client
 
 		BeforeEach(func() {
-			Expect(container).ToNot(BeNil())
-			store = storage.NewRedisStoreWithDefaults(container.Address)
-			Expect(store).ToNot(BeNil())
-			store.SetLogLevel(slf4go.NONE)
-
-			// This is used to go "behind the back" of our StoreManager and mess with it for testing
-			// purposes. Do NOT do this in your code.
-			rdb = redis.NewClient(&redis.Options{
-				Addr: container.Address,
-				DB:   storage.DefaultRedisDb,
-			})
+			store, rdb = setupStoreRedis()
 		}, 0.5)
 		AfterEach(func() {
 			// Cleaning up the DB to prevent "dirty" store to impact test results
 			rdb.FlushDB(context.Background())
 		}, 0.2)
 		It("finds them by state", func() {
-			for id := 1; id < 5; id++ {
-				fsm := &protos.FiniteStateMachine{
-					ConfigId: "orders:v4",
-					State:    "in_transit",
-					History: []*protos.Event{
-						{Transition: &protos.Transition{Event: "confirmed"}, Originator: "bot"},
-						{Transition: &protos.Transition{Event: "shipped"}, Originator: "bot"},
-					},
-				}
-				fsmId := fmt.Sprintf("fsm-%d", id)
-				Expect(store.PutStateMachine(fsmId, fsm)).ToNot(HaveOccurred())
-				Expect(store.UpdateState("orders", fsmId, "", fsm.State))
-			}
-			res := store.GetAllInState("orders", "in_transit")
+			storeSomeFSMs(store, 5)
+			res := store.GetAllInState(cfgName, "in_transit")
 			Expect(len(res)).To(Equal(4))
 			for id := 1; id < 5; id++ {
-				Expect(res).To(ContainElement(fmt.Sprintf("fsm-%d", id)))
+				Expect(res).To(ContainElement(fmt.Sprintf(fsmIdFmt, id)))
 			}
 		})
 		When("transitioning state", func() {
 			BeforeEach(func() {
-				for id := 1; id < 10; id++ {
-					fsm := &protos.FiniteStateMachine{
-						ConfigId: "orders:v4",
-						State:    "in_transit",
-						History: []*protos.Event{
-							{Transition: &protos.Transition{Event: "confirmed"}, Originator: "bot"},
-							{Transition: &protos.Transition{Event: "shipped"}, Originator: "bot"},
-						},
-					}
-					fsmId := fmt.Sprintf("fsm-%d", id)
-					Expect(store.PutStateMachine(fsmId, fsm)).ToNot(HaveOccurred())
-					Expect(store.UpdateState("orders", fsmId, "", fsm.State))
-				}
+				storeSomeFSMs(store, 10)
 			})
 			It("finds them", func() {
 				for id := 3; id < 6; id++ {
-					fsmId := fmt.Sprintf("fsm-%d", id)
-					Expect(store.UpdateState("orders", fsmId, "in_transit", "shipped"))
+					fsmId := fmt.Sprintf(fsmIdFmt, id)
+					Expect(store.UpdateState(cfgName, fsmId, "in_transit", "shipped"))
 				}
-				res := store.GetAllInState("orders", "shipped")
+				res := store.GetAllInState(cfgName, "shipped")
 				Expect(len(res)).To(Equal(3))
 				for id := 3; id < 6; id++ {
-					Expect(res).To(ContainElement(fmt.Sprintf("fsm-%d", id)))
+					Expect(res).To(ContainElement(fmt.Sprintf(fsmIdFmt, id)))
 				}
-				res = store.GetAllInState("orders", "in_transit")
+				res = store.GetAllInState(cfgName, "in_transit")
 				Expect(len(res)).To(Equal(6))
 			})
 			It("will remove with an empty newState", func() {
-				Expect(store.UpdateState("orders", "fsm-1", "in_transit", "")).To(Succeed())
-				res := store.GetAllInState("orders", "in_transit")
+				Expect(store.UpdateState(cfgName, "fsm-1", "in_transit", "")).To(Succeed())
+				res := store.GetAllInState(cfgName, "in_transit")
 				Ω(res).ToNot(ContainElement("fsm-1"))
 			})
 		})

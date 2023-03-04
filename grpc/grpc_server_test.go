@@ -35,83 +35,68 @@ import (
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
+var NotImplemented = storage.NotImplementedError("mock")
+
 type Mockstore struct {
 	mock.Mock
 }
 
 func (m *Mockstore) SetLogLevel(level slf4go.LogLevel) {
-	//TODO implement me
-	panic("implement me")
 }
 
 func (m *Mockstore) GetConfig(versionId string) (*protos.Configuration, bool) {
-	//TODO implement me
-	panic("implement me")
+	return nil, false
 }
 
 func (m *Mockstore) PutConfig(cfg *protos.Configuration) error {
-	//TODO implement me
-	panic("implement me")
+	return NotImplemented
 }
 
 func (m *Mockstore) GetAllConfigs() []string {
-	//TODO implement me
-	panic("implement me")
+	return nil
 }
 
 func (m *Mockstore) GetAllVersions(name string) []string {
-	//TODO implement me
-	panic("implement me")
+	return nil
 }
 
 func (m *Mockstore) GetStateMachine(id string, cfg string) (*protos.FiniteStateMachine, bool) {
-	//TODO implement me
-	panic("implement me")
+	return nil, false
 }
 
 func (m *Mockstore) PutStateMachine(id string, fsm *protos.FiniteStateMachine) error {
-	//TODO implement me
-	panic("implement me")
+	return NotImplemented
 }
 
 func (m *Mockstore) GetAllInState(cfg string, state string) []string {
-	//TODO implement me
-	panic("implement me")
+	return nil
 }
 
 func (m *Mockstore) UpdateState(cfgName string, id string, oldState string, newState string) error {
-	//TODO implement me
-	panic("implement me")
+	return NotImplemented
 }
 
 func (m *Mockstore) GetEvent(id string, cfg string) (*protos.Event, bool) {
-	//TODO implement me
-	panic("implement me")
+	return nil, false
 }
 
 func (m *Mockstore) PutEvent(event *protos.Event, cfg string, ttl time.Duration) error {
-	//TODO implement me
-	panic("implement me")
+	return NotImplemented
 }
 
 func (m *Mockstore) AddEventOutcome(eventId string, cfgName string, response *protos.EventOutcome, ttl time.Duration) error {
-	//TODO implement me
-	panic("implement me")
+	return NotImplemented
 }
 
 func (m *Mockstore) GetOutcomeForEvent(eventId string, cfgName string) (*protos.EventOutcome, bool) {
-	//TODO implement me
-	panic("implement me")
+	return nil, false
 }
 
 func (m *Mockstore) SetTimeout(duration time.Duration) {
-	//TODO implement me
-	panic("implement me")
 }
 
 func (m *Mockstore) GetTimeout() time.Duration {
-	//TODO implement me
-	panic("implement me")
+	return 0
 }
 
 func (m *Mockstore) Health() error {
@@ -162,12 +147,13 @@ var _ = Describe("the gRPC Server", func() {
 				g.Ω(hr.State).Should(Equal(protos.HealthResponse_READY))
 			}, 100*time.Millisecond, 20*time.Millisecond).Should(Succeed())
 		})
+		const EventName = "test-event"
 		It("should succeed for well-formed events", func() {
 			response, err := client.SendEvent(bkgnd, &protos.EventRequest{
 				Event: &protos.Event{
 					EventId: "1",
 					Transition: &protos.Transition{
-						Event: "test-vt",
+						Event: EventName,
 					},
 					Originator: "test",
 				},
@@ -181,7 +167,7 @@ var _ = Describe("the gRPC Server", func() {
 			select {
 			case evt := <-testCh:
 				Ω(evt.Event.EventId).To(Equal("1"))
-				Ω(evt.Event.Transition.Event).To(Equal("test-vt"))
+				Ω(evt.Event.Transition.Event).To(Equal(EventName))
 				Ω(evt.Event.Originator).To(Equal("test"))
 				Ω(evt.Id).To(Equal("2"))
 			case <-time.After(10 * time.Millisecond):
@@ -193,7 +179,7 @@ var _ = Describe("the gRPC Server", func() {
 			response, err := client.SendEvent(bkgnd, &protos.EventRequest{
 				Event: &protos.Event{
 					Transition: &protos.Transition{
-						Event: "test-vt",
+						Event: EventName,
 					},
 					Originator: "test",
 				},
@@ -207,7 +193,7 @@ var _ = Describe("the gRPC Server", func() {
 			select {
 			case evt := <-testCh:
 				Ω(evt.Event.EventId).Should(Equal(generatedId))
-				Ω(evt.Event.Transition.Event).To(Equal("test-vt"))
+				Ω(evt.Event.Transition.Event).To(Equal(EventName))
 			case <-time.After(10 * time.Millisecond):
 				Fail("Timed out")
 			}
@@ -216,7 +202,7 @@ var _ = Describe("the gRPC Server", func() {
 			_, err := client.SendEvent(bkgnd, &protos.EventRequest{
 				Event: &protos.Event{
 					Transition: &protos.Transition{
-						Event: "test-vt",
+						Event: EventName,
 					},
 					Originator: "test",
 				},
@@ -452,34 +438,35 @@ var _ = Describe("the gRPC Server", func() {
 				AssertStatusCode(codes.NotFound, err)
 			})
 			It("will find all FSMs by State", func() {
+				const ConfigName = "test.m"
 				for i := 1; i <= 5; i++ {
 					id := fmt.Sprintf("fsm-%d", i)
 					Ω(store.PutStateMachine(id,
 						&protos.FiniteStateMachine{
-							ConfigId: "test.m:v1",
+							ConfigId: ConfigName + ":v1",
 							State:    "start",
 						})).Should(Succeed())
-					store.UpdateState("test.m", id, "", "start")
+					store.UpdateState(ConfigName, id, "", "start")
 				}
 				for i := 10; i < 13; i++ {
 					id := fmt.Sprintf("fsm-%d", i)
 					Ω(store.PutStateMachine(id,
 						&protos.FiniteStateMachine{
-							ConfigId: "test.m:v1",
+							ConfigId: ConfigName + ":v1",
 							State:    "stop",
 						})).Should(Succeed())
-					store.UpdateState("test.m", id, "", "stop")
+					store.UpdateState(ConfigName, id, "", "stop")
 
 				}
 				items, err := client.GetAllInState(bkgnd, &protos.GetFsmRequest{
-					Config: "test.m",
+					Config: ConfigName,
 					Query:  &protos.GetFsmRequest_State{State: "start"},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(len(items.GetIds())).Should(Equal(5))
 				Ω(items.GetIds()).Should(ContainElements("fsm-3", "fsm-5"))
 				items, err = client.GetAllInState(bkgnd, &protos.GetFsmRequest{
-					Config: "test.m",
+					Config: ConfigName,
 					Query:  &protos.GetFsmRequest_State{State: "stop"},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
