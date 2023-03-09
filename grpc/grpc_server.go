@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	"os"
 	"path/filepath"
@@ -59,6 +60,30 @@ type grpcSubscriber struct {
 	*Config
 }
 
+// Health will return the status of the server and the underlying store
+func (s *grpcSubscriber) Health(context.Context, *emptypb.Empty) (*protos.HealthResponse, error) {
+	var response = &protos.HealthResponse{
+		State:      protos.HealthResponse_READY,
+		Release:    api.Release,
+		TlsEnabled: s.TlsEnabled,
+	}
+	if s.Store == nil {
+		s.Logger.Error("Redis store not initialized, cannot process requests")
+		return nil, status.Error(codes.Internal, "data store not configured")
+	}
+	if s.EventsChannel == nil {
+		s.Logger.Error("events channel not initialized, cannot process events")
+		response.State = protos.HealthResponse_NOT_READY
+		return response, nil
+	}
+	err := s.Store.Health()
+	if err != nil {
+		s.Logger.Error("Redis store not ready: %v", err)
+		response.State = protos.HealthResponse_NOT_READY
+	}
+	return response, nil
+}
+
 func (s *grpcSubscriber) SendEvent(ctx context.Context, request *protos.EventRequest) (*protos.
 	EventResponse, error) {
 	if request.GetId() == "" {
@@ -89,10 +114,14 @@ func (s *grpcSubscriber) SendEvent(ctx context.Context, request *protos.EventReq
 }
 
 func (s *grpcSubscriber) PutConfiguration(ctx context.Context, cfg *protos.Configuration) (*protos.PutResponse, error) {
-	// FIXME: use Context to set a timeout, etc.
 	if err := api.CheckValid(cfg); err != nil {
 		s.Logger.Error("invalid configuration: %v", err)
 		return nil, status.Errorf(codes.InvalidArgument, "invalid configuration: %v", err)
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		if deadline.Before(time.Now()) {
+			return nil, ctx.Err()
+		}
 	}
 	if err := s.Store.PutConfig(cfg); err != nil {
 		s.Logger.Error("could not store configuration: %v", err)
@@ -100,6 +129,11 @@ func (s *grpcSubscriber) PutConfiguration(ctx context.Context, cfg *protos.Confi
 			return nil, status.Errorf(codes.AlreadyExists, "cannot store configuration: %v", err)
 		}
 		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		if deadline.Before(time.Now()) {
+			return nil, ctx.Err()
+		}
 	}
 	s.Logger.Trace("configuration stored: %s", api.GetVersionId(cfg))
 	return &protos.PutResponse{
@@ -123,8 +157,9 @@ func (s *grpcSubscriber) GetConfiguration(ctx context.Context, configId *wrapper
 	*protos.Configuration, error) {
 	cfgId := configId.Value
 	s.Logger.Trace("retrieving Configuration %s", cfgId)
-	cfg, found := s.Store.GetConfig(cfgId)
-	if !found {
+	cfg, err := s.Store.GetConfig(cfgId)
+	if err != nil {
+		s.Logger.Error("could not get configuration: %v", err)
 		return nil, status.Errorf(codes.NotFound, "configuration %s not found", cfgId)
 	}
 	return cfg, nil
@@ -134,10 +169,15 @@ func (s *grpcSubscriber) PutFiniteStateMachine(ctx context.Context,
 	request *protos.PutFsmRequest) (*protos.PutResponse, error) {
 	fsm := request.Fsm
 	// First check that the configuration for the FSM is valid
-	cfg, ok := s.Store.GetConfig(fsm.ConfigId)
-	if !ok {
+	cfg, err := s.Store.GetConfig(fsm.ConfigId)
+	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, storage.NotFoundError(
 			fsm.ConfigId).Error())
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		if deadline.Before(time.Now()) {
+			return nil, ctx.Err()
+		}
 	}
 	var id = request.Id
 	if id == "" {
@@ -153,6 +193,8 @@ func (s *grpcSubscriber) PutFiniteStateMachine(ctx context.Context,
 		s.Logger.Error("could not store FSM [%v]: %v", fsm, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	// we cannot interrupt here, even if deadline is passed, as it would leave the
+	// store in an inconsistent state.
 	if err := s.Store.UpdateState(cfg.Name, id, "", fsm.State); err != nil {
 		s.Logger.Error("could not store FSM in state set [%s]: %v", fsm.State, err)
 		return nil, status.Error(codes.Internal, err.Error())
@@ -171,8 +213,8 @@ func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context, in *protos.G
 		return nil, status.Error(codes.InvalidArgument, "ID must always be provided when looking up statemachine")
 	}
 	s.Logger.Debug("looking up FSM [%s] (Configuration: %s)", fsmId, cfg)
-	fsm, ok := s.Store.GetStateMachine(fsmId, cfg)
-	if !ok {
+	fsm, err := s.Store.GetStateMachine(fsmId, cfg)
+	if err != nil {
 		return nil, status.Error(codes.NotFound, storage.NotFoundError(fsmId).Error())
 	}
 	return fsm, nil
@@ -180,8 +222,8 @@ func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context, in *protos.G
 
 func (s *grpcSubscriber) GetAllInState(ctx context.Context, in *protos.GetFsmRequest) (
 	*protos.ListResponse, error) {
-	cfgName := in.GetConfig()
-	if cfgName == "" {
+	cfg := in.GetConfig()
+	if cfg == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "configuration must always be specified")
 	}
 	state := in.GetState()
@@ -189,18 +231,18 @@ func (s *grpcSubscriber) GetAllInState(ctx context.Context, in *protos.GetFsmReq
 		// TODO: implement table scanning
 		return nil, status.Errorf(codes.Unimplemented, "missing state, table scan not implemented")
 	}
-	ids := s.Store.GetAllInState(cfgName, state)
+	ids := s.Store.GetAllInState(cfg, state)
 	return &protos.ListResponse{Ids: ids}, nil
 }
 
 func (s *grpcSubscriber) GetEventOutcome(ctx context.Context, in *protos.EventRequest) (
 	*protos.EventResponse, error) {
 	evtId := in.GetId()
-	config := in.GetConfig()
-	s.Logger.Debug("looking up EventOutcome %s (%s)", evtId, config)
-	outcome, ok := s.Store.GetOutcomeForEvent(evtId, config)
-	if !ok {
-		return nil, status.Error(codes.NotFound, fmt.Sprintf("outcome for event %s not found", evtId))
+	cfg := in.GetConfig()
+	s.Logger.Debug("looking up EventOutcome %s (%s)", evtId, cfg)
+	outcome, err := s.Store.GetOutcomeForEvent(evtId, cfg)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "cannot get outcome for event %s: %v", evtId, err)
 	}
 	return &protos.EventResponse{
 		EventId: evtId,
@@ -215,9 +257,9 @@ func (s *grpcSubscriber) StreamAllInstate(in *protos.GetFsmRequest, stream State
 	}
 	cfgName := in.GetConfig()
 	for _, id := range response.GetIds() {
-		fsm, found := s.Store.GetStateMachine(id, cfgName)
-		if !found {
-			return storage.NotFoundError(id)
+		fsm, err := s.Store.GetStateMachine(id, cfgName)
+		if err != nil {
+			return err
 		}
 		if err = stream.SendMsg(&protos.PutResponse{
 			Id:             id,
@@ -239,9 +281,9 @@ func (s *grpcSubscriber) StreamAllConfigurations(in *wrapperspb.StringValue, str
 		return nil
 	}
 	for _, cfgId := range response.GetIds() {
-		cfg, found := s.Store.GetConfig(cfgId)
-		if !found {
-			return storage.NotFoundError(cfgId)
+		cfg, err := s.Store.GetConfig(cfgId)
+		if err != nil {
+			return err
 		}
 		if err = stream.SendMsg(cfg); err != nil {
 			return err

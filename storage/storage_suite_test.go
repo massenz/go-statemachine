@@ -28,7 +28,8 @@ var container *internals.Container
 var _ = BeforeSuite(func() {
 	var err error
 	container, err = internals.NewRedisContainer(context.Background())
-	Expect(err).ToNot(HaveOccurred())
+	Ω(err).ToNot(HaveOccurred())
+	Ω(container).ToNot(BeNil())
 	// Note the timeout here is in seconds (and it's not a time.Duration either)
 }, 5.0)
 

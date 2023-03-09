@@ -24,9 +24,6 @@ import (
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
-// TODO: should we need to generalize and abstract the implementation of a Subscriber?
-//  This would be necessary if we were to implement a different message broker (e.g., Kafka)
-
 // getSqsClient connects to AWS and obtains an SQS client; passing `nil` as the `awsEndpointUrl` will
 // connect by default to AWS; use a different (possibly local) URL for a LocalStack test deployment.
 func getSqsClient(awsEndpointUrl *string) *sqs.SQS {
@@ -61,11 +58,12 @@ func NewSqsSubscriber(eventsChannel chan<- protos.EventRequest, sqsUrl *string) 
 		return nil
 	}
 	return &SqsSubscriber{
-		logger:          log.NewLog("SQS-Sub"),
-		client:          client,
-		events:          eventsChannel,
-		Timeout:         DefaultVisibilityTimeout,
-		PollingInterval: DefaultPollingInterval,
+		logger:               log.NewLog("SQS-Sub"),
+		client:               client,
+		events:               eventsChannel,
+		Timeout:              DefaultVisibilityTimeout,
+		PollingInterval:      DefaultPollingInterval,
+		MessageRemoveRetries: DefaultRetries,
 	}
 }
 
@@ -134,14 +132,14 @@ func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
 	var request protos.EventRequest
 	err := proto.UnmarshalText(*msg.Body, &request)
 	if err != nil {
-		s.logger.Error("Message %v has invalid body: %s", msg.MessageId, err.Error())
+		s.logger.Error("message %v has invalid body: %s", msg.MessageId, err.Error())
 		// TODO: publish error to DLQ.
 		return
 	}
 
 	destId := request.GetId()
 	if destId == "" {
-		errDetails := fmt.Sprintf("No Destination ID in %v", request.String())
+		errDetails := fmt.Sprintf("no Destination ID in %v", request.String())
 		s.logger.Error(errDetails)
 		// TODO: publish error to DLQ.
 		return
@@ -150,16 +148,19 @@ func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
 	api.UpdateEvent(request.Event)
 	s.events <- request
 
-	s.logger.Debug("Removing message %v from SQS", *msg.MessageId)
-	_, err = s.client.DeleteMessage(&sqs.DeleteMessageInput{
-		QueueUrl:      queueUrl,
-		ReceiptHandle: msg.ReceiptHandle,
-	})
-	if err != nil {
-		// FIXME: add retries
-		errDetails := fmt.Sprintf("Failed to remove message %v from SQS", msg.MessageId)
-		s.logger.Error("%s: %v", errDetails, err)
-		// TODO: publish error to DLQ, should also retry removal here.
+	for i := 0; i < s.MessageRemoveRetries; i++ {
+		s.logger.Debug("removing message %v from SQS", *msg.MessageId)
+		_, err = s.client.DeleteMessage(&sqs.DeleteMessageInput{
+			QueueUrl:      queueUrl,
+			ReceiptHandle: msg.ReceiptHandle,
+		})
+		if err != nil {
+			errDetails := fmt.Sprintf("failed to remove message %v from SQS (attempt: %d)",
+				msg.MessageId, i+1)
+			s.logger.Error("%s: %v", errDetails, err)
+		} else {
+			break
+		}
 	}
-	s.logger.Trace("Message %v removed", msg.MessageId)
+	s.logger.Trace("message %v removed", msg.MessageId)
 }

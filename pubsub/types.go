@@ -25,6 +25,9 @@ const (
 	// message from the queue.
 	// See: https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html
 	DefaultVisibilityTimeout = 5 * time.Second
+
+	// DefaultRetries is the number of times we will try to remove the message from the SQS queue
+	DefaultRetries = 3
 )
 
 // An EventsListener will process `EventRequests` in a separate goroutine.
@@ -59,9 +62,10 @@ type SqsPublisher struct {
 // The subscriber will poll the queue for new messages,
 // and will post them on the `events` channel from where an `EventsListener` will process them.
 type SqsSubscriber struct {
-	logger          *log.Log
-	client          *sqs.SQS
-	events          chan<- protos.EventRequest
-	Timeout         time.Duration
-	PollingInterval time.Duration
+	logger               *log.Log
+	client               *sqs.SQS
+	events               chan<- protos.EventRequest
+	Timeout              time.Duration
+	PollingInterval      time.Duration
+	MessageRemoveRetries int
 }

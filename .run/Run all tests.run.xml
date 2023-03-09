@@ -4,7 +4,7 @@
     <working_directory value="$PROJECT_DIR$" />
     <parameters value="./api ./grpc ./pubsub ./storage" />
     <kind value="DIRECTORY" />
-    <package value="github.com/massenz/go-statemachine" />
+    <package value="github.com/massenz/go-statemachine/api" />
     <directory value="$PROJECT_DIR$" />
     <filePath value="$PROJECT_DIR$" />
     <framework value="gotest" />

@@ -10,6 +10,7 @@
 package pubsub_test
 
 import (
+	. "github.com/JiaYongfei/respect/gomega"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -43,10 +44,11 @@ var _ = Describe("A Listener", func() {
 			// Set to DEBUG when diagnosing test failures
 			testListener.SetLogLevel(logging.NONE)
 		})
+		const eventId = "1234-abcdef"
 		It("can post error notifications", func() {
 			defer close(notificationsCh)
 			msg := protos.Event{
-				EventId:    "feed-beef",
+				EventId:    eventId,
 				Originator: "me",
 				Transition: &protos.Transition{
 					Event: "test-me",
@@ -76,17 +78,18 @@ var _ = Describe("A Listener", func() {
 		})
 		It("can process well-formed events", func() {
 			event := protos.Event{
-				EventId:    "feed-beef",
+				EventId:    eventId,
 				Originator: "me",
 				Transition: &protos.Transition{
 					Event: "move",
 				},
 				Details: "more details",
 			}
+			const requestId = "12345-faa44"
 			request := protos.EventRequest{
 				Event:  &event,
 				Config: "test",
-				Id:     "12345-faa44",
+				Id:     requestId,
 			}
 			Ω(store.PutConfig(&protos.Configuration{
 				Name:          "test",
@@ -95,7 +98,7 @@ var _ = Describe("A Listener", func() {
 				Transitions:   []*protos.Transition{{From: "start", To: "end", Event: "move"}},
 				StartingState: "start",
 			})).ToNot(HaveOccurred())
-			Ω(store.PutStateMachine("12345-faa44", &protos.FiniteStateMachine{
+			Ω(store.PutStateMachine(requestId, &protos.FiniteStateMachine{
 				ConfigId: "test:v1",
 				State:    "start",
 				History:  nil,
@@ -109,21 +112,21 @@ var _ = Describe("A Listener", func() {
 
 			Eventually(func(g Gomega) {
 				// Now we want to test that the state machine was updated
-				fsm, ok := store.GetStateMachine("12345-faa44", "test")
-				g.Ω(ok).ToNot(BeFalse())
+				fsm, err := store.GetStateMachine(requestId, "test")
+				g.Ω(err).To(BeNil())
 				g.Ω(fsm.State).To(Equal("end"))
 				g.Ω(len(fsm.History)).To(Equal(1))
 				g.Ω(fsm.History[0].Details).To(Equal("more details"))
 				g.Ω(fsm.History[0].Transition.Event).To(Equal("move"))
 			}).Should(Succeed())
-			Eventually(func() bool {
-				_, found := store.GetEvent(event.EventId, "test")
-				return found
-			}).Should(BeTrue())
+			Eventually(func() storage.StoreErr {
+				_, err := store.GetEvent(event.EventId, "test")
+				return err
+			}).Should(BeNil())
 		})
 		It("sends notifications for missing state-machine", func() {
 			event := protos.Event{
-				EventId:    "feed-beef",
+				EventId:    eventId,
 				Originator: "me",
 				Transition: &protos.Transition{
 					Event: "move",
@@ -152,7 +155,7 @@ var _ = Describe("A Listener", func() {
 		It("sends notifications for missing destinations", func() {
 			request := protos.EventRequest{
 				Event: &protos.Event{
-					EventId: "feed-beef",
+					EventId: eventId,
 				},
 			}
 			go func() { testListener.ListenForMessages() }()
@@ -213,18 +216,22 @@ var _ = Describe("A Listener", func() {
 					return nil
 				}
 			}).Should(BeNil())
-			Eventually(func() *protos.Event {
-				e, _ := store.GetEvent(event.EventId, request.Config)
-				return e
-			}, 100*time.Millisecond, 20*time.Millisecond).ShouldNot(BeNil())
-			Eventually(func() protos.EventOutcome_StatusCode {
-				e, ok := store.GetOutcomeForEvent(event.EventId, request.Config)
-				if ok {
-					return e.Code
+			Eventually(func(g Gomega) {
+				evt, err := store.GetEvent(event.EventId, request.Config)
+				Ω(err).ToNot(HaveOccurred())
+				if evt != nil {
+					Ω(evt).To(Respect(&event))
 				} else {
-					return protos.EventOutcome_GenericError
+					Fail("event is nil")
 				}
-			}, 100*time.Millisecond, 20*time.Millisecond).Should(Equal(protos.EventOutcome_Ok))
+			}, 100*time.Millisecond, 20*time.Millisecond).Should(Succeed())
+			Eventually(func(g Gomega) {
+				outcome, err := store.GetOutcomeForEvent(event.EventId, request.Config)
+				Ω(err).ToNot(HaveOccurred())
+				if outcome != nil {
+					Ω(outcome.Code).To(Equal(protos.EventOutcome_Ok))
+				}
+			}, 100*time.Millisecond, 20*time.Millisecond).Should(Succeed())
 		})
 	})
 })

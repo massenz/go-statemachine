@@ -6,11 +6,12 @@ GOOS ?= $(shell uname -s | tr "[:upper:]" "[:lower:]")
 GOARCH ?= amd64
 GOMOD := $(shell go list -m)
 
-version := v0.10.0
+version := v0.11.0
 release := $(version)-g$(shell git rev-parse --short HEAD)
 prog := sm-server
 bin := out/bin/$(prog)-$(version)_$(GOOS)-$(GOARCH)
 dockerbin := out/bin/$(prog)-$(version)_linux-amd64
+healthcheck := out/bin/grpc-health_linux-amd64
 
 image := massenz/statemachine
 compose := docker/compose.yaml
@@ -60,14 +61,17 @@ fmt: ## Formats the Go source code using 'go fmt'
 .PHONY: build test container cov clean fmt
 $(bin): cmd/main.go $(srcs)
 	@mkdir -p $(shell dirname $(bin))
-	GOOS=$(GOOS); GOARCH=$(GOARCH); go build \
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		-ldflags "-X $(GOMOD)/api.Release=$(release)" \
 		-o $(bin) cmd/main.go
 
-$(dockerbin):
-	GOOS=linux; GOARCH=amd64; go build \
+$(dockerbin): $(srcs)
+	GOOS=linux GOARCH=amd64 go build \
 		-ldflags "-X $(GOMOD)/api.Release=$(release)" \
 		-o $(dockerbin) cmd/main.go
+
+$(healthcheck): grpc_health.go
+	GOOS=linux GOARCH=amd64 go build -o $(healthcheck) grpc_health.go
 
 .PHONY: build
 build: $(bin) ## Builds the Statemachine server binary
@@ -83,8 +87,10 @@ cov: $(srcs) $(test_srcs)  ## Runs the Test Coverage target and opens a browser 
 # Convenience targets to run locally containers and
 # setup the test environments.
 
-container: $(dockerbin) ## Builds the container image
-	docker build --build-arg appname=$(dockerbin) -f $(dockerfile) -t $(image):$(release) .
+container: $(dockerbin) $(healthcheck) ## Builds the container image
+	docker build --build-arg appname=$(dockerbin) \
+		--build-arg hc=$(healthcheck) \
+		-f $(dockerfile) -t $(image):$(release) .
 
 .PHONY: start
 start: ## Starts the Redis and LocalStack containers, and Creates the SQS Queues in LocalStack

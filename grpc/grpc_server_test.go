@@ -12,12 +12,14 @@ package grpc_test
 import (
 	"context"
 	"fmt"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 	slf4go "github.com/massenz/slf4go/logging"
+	"github.com/stretchr/testify/mock"
 	g "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -33,6 +35,74 @@ import (
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
+var NotImplemented = storage.NotImplementedError("mock")
+
+type Mockstore struct {
+	mock.Mock
+}
+
+func (m *Mockstore) SetLogLevel(level slf4go.LogLevel) {
+}
+
+func (m *Mockstore) GetConfig(versionId string) (*protos.Configuration, storage.StoreErr) {
+	return nil, nil
+}
+
+func (m *Mockstore) PutConfig(cfg *protos.Configuration) storage.StoreErr {
+	return NotImplemented
+}
+
+func (m *Mockstore) GetAllConfigs() []string {
+	return nil
+}
+
+func (m *Mockstore) GetAllVersions(name string) []string {
+	return nil
+}
+
+func (m *Mockstore) GetStateMachine(id string, cfg string) (*protos.FiniteStateMachine, storage.StoreErr) {
+	return nil, NotImplemented
+}
+
+func (m *Mockstore) PutStateMachine(id string, fsm *protos.FiniteStateMachine) error {
+	return NotImplemented
+}
+
+func (m *Mockstore) GetAllInState(cfg string, state string) []string {
+	return nil
+}
+
+func (m *Mockstore) UpdateState(cfgName string, id string, oldState string, newState string) error {
+	return NotImplemented
+}
+
+func (m *Mockstore) GetEvent(id string, cfg string) (*protos.Event, storage.StoreErr) {
+	return nil, NotImplemented
+}
+
+func (m *Mockstore) PutEvent(event *protos.Event, cfg string, ttl time.Duration) error {
+	return NotImplemented
+}
+
+func (m *Mockstore) AddEventOutcome(eventId string, cfgName string, response *protos.EventOutcome, ttl time.Duration) error {
+	return NotImplemented
+}
+
+func (m *Mockstore) GetOutcomeForEvent(eventId string, cfgName string) (*protos.EventOutcome, storage.StoreErr) {
+	return nil, NotImplemented
+}
+
+func (m *Mockstore) SetTimeout(duration time.Duration) {
+}
+
+func (m *Mockstore) GetTimeout() time.Duration {
+	return 0
+}
+
+func (m *Mockstore) Health() error {
+	return nil
+}
+
 var bkgnd = context.Background()
 var _ = Describe("the gRPC Server", func() {
 	When("processing events", func() {
@@ -44,7 +114,7 @@ var _ = Describe("the gRPC Server", func() {
 		BeforeEach(func() {
 			var err error
 			testCh = make(chan protos.EventRequest, 5)
-			listener, err = net.Listen("tcp", "localhost:5763")
+			listener, err = net.Listen("tcp", ":0")
 			Ω(err).ShouldNot(HaveOccurred())
 
 			client = NewClient(listener.Addr().String(), false)
@@ -58,6 +128,7 @@ var _ = Describe("the gRPC Server", func() {
 				EventsChannel: testCh,
 				Logger:        l,
 				ServerAddress: listener.Addr().String(),
+				Store:         new(Mockstore),
 			})
 			Ω(err).ToNot(HaveOccurred())
 			Ω(server).ToNot(BeNil())
@@ -69,12 +140,20 @@ var _ = Describe("the gRPC Server", func() {
 				server.Stop()
 			}
 		})
+		It("should have a healthy status", func() {
+			Eventually(func(g Gomega) {
+				hr, err := client.Health(bkgnd, &emptypb.Empty{})
+				g.Ω(err).ToNot(HaveOccurred())
+				g.Ω(hr.State).Should(Equal(protos.HealthResponse_READY))
+			}, 100*time.Millisecond, 20*time.Millisecond).Should(Succeed())
+		})
+		const EventName = "test-event"
 		It("should succeed for well-formed events", func() {
 			response, err := client.SendEvent(bkgnd, &protos.EventRequest{
 				Event: &protos.Event{
 					EventId: "1",
 					Transition: &protos.Transition{
-						Event: "test-vt",
+						Event: EventName,
 					},
 					Originator: "test",
 				},
@@ -88,7 +167,7 @@ var _ = Describe("the gRPC Server", func() {
 			select {
 			case evt := <-testCh:
 				Ω(evt.Event.EventId).To(Equal("1"))
-				Ω(evt.Event.Transition.Event).To(Equal("test-vt"))
+				Ω(evt.Event.Transition.Event).To(Equal(EventName))
 				Ω(evt.Event.Originator).To(Equal("test"))
 				Ω(evt.Id).To(Equal("2"))
 			case <-time.After(10 * time.Millisecond):
@@ -100,7 +179,7 @@ var _ = Describe("the gRPC Server", func() {
 			response, err := client.SendEvent(bkgnd, &protos.EventRequest{
 				Event: &protos.Event{
 					Transition: &protos.Transition{
-						Event: "test-vt",
+						Event: EventName,
 					},
 					Originator: "test",
 				},
@@ -114,7 +193,7 @@ var _ = Describe("the gRPC Server", func() {
 			select {
 			case evt := <-testCh:
 				Ω(evt.Event.EventId).Should(Equal(generatedId))
-				Ω(evt.Event.Transition.Event).To(Equal("test-vt"))
+				Ω(evt.Event.Transition.Event).To(Equal(EventName))
 			case <-time.After(10 * time.Millisecond):
 				Fail("Timed out")
 			}
@@ -123,7 +202,7 @@ var _ = Describe("the gRPC Server", func() {
 			_, err := client.SendEvent(bkgnd, &protos.EventRequest{
 				Event: &protos.Event{
 					Transition: &protos.Transition{
-						Event: "test-vt",
+						Event: EventName,
 					},
 					Originator: "test",
 				},
@@ -216,14 +295,14 @@ var _ = Describe("the gRPC Server", func() {
 				}
 			})
 			It("should store valid configurations", func() {
-				_, ok := store.GetConfig(GetVersionId(cfg))
-				Ω(ok).To(BeFalse())
+				_, err := store.GetConfig(GetVersionId(cfg))
+				Ω(err).ToNot(BeNil())
 				response, err := client.PutConfiguration(bkgnd, cfg)
 				Ω(err).ToNot(HaveOccurred())
 				Ω(response).ToNot(BeNil())
 				Ω(response.Id).To(Equal(GetVersionId(cfg)))
-				found, ok := store.GetConfig(response.Id)
-				Ω(ok).Should(BeTrue())
+				found, err := store.GetConfig(response.Id)
+				Ω(err).Should(BeNil())
 				Ω(found).Should(Respect(cfg))
 			})
 			It("should fail for invalid configuration", func() {
@@ -359,34 +438,35 @@ var _ = Describe("the gRPC Server", func() {
 				AssertStatusCode(codes.NotFound, err)
 			})
 			It("will find all FSMs by State", func() {
+				const ConfigName = "test.m"
 				for i := 1; i <= 5; i++ {
 					id := fmt.Sprintf("fsm-%d", i)
 					Ω(store.PutStateMachine(id,
 						&protos.FiniteStateMachine{
-							ConfigId: "test.m:v1",
+							ConfigId: ConfigName + ":v1",
 							State:    "start",
 						})).Should(Succeed())
-					store.UpdateState("test.m", id, "", "start")
+					store.UpdateState(ConfigName, id, "", "start")
 				}
 				for i := 10; i < 13; i++ {
 					id := fmt.Sprintf("fsm-%d", i)
 					Ω(store.PutStateMachine(id,
 						&protos.FiniteStateMachine{
-							ConfigId: "test.m:v1",
+							ConfigId: ConfigName + ":v1",
 							State:    "stop",
 						})).Should(Succeed())
-					store.UpdateState("test.m", id, "", "stop")
+					store.UpdateState(ConfigName, id, "", "stop")
 
 				}
 				items, err := client.GetAllInState(bkgnd, &protos.GetFsmRequest{
-					Config: "test.m",
+					Config: ConfigName,
 					Query:  &protos.GetFsmRequest_State{State: "start"},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 				Ω(len(items.GetIds())).Should(Equal(5))
 				Ω(items.GetIds()).Should(ContainElements("fsm-3", "fsm-5"))
 				items, err = client.GetAllInState(bkgnd, &protos.GetFsmRequest{
-					Config: "test.m",
+					Config: ConfigName,
 					Query:  &protos.GetFsmRequest_State{State: "stop"},
 				})
 				Ω(err).ShouldNot(HaveOccurred())

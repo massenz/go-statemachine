@@ -69,16 +69,16 @@ func (listener *EventsListener) ListenForMessages() {
 				fmt.Sprintf("could not store event: %v", err)))
 			continue
 		}
-		fsm, ok := listener.store.GetStateMachine(fsmId, config)
-		if !ok {
+		fsm, err := listener.store.GetStateMachine(fsmId, config)
+		if err != nil {
 			listener.PostNotificationAndReportOutcome(makeResponse(&request,
 				protos.EventOutcome_FsmNotFound,
 				fmt.Sprintf("statemachine [%s] could not be found", fsmId)))
 			continue
 		}
 		// TODO: cache the configuration locally: they are immutable anyway.
-		cfg, ok := listener.store.GetConfig(fsm.ConfigId)
-		if !ok {
+		cfg, err := listener.store.GetConfig(fsm.ConfigId)
+		if err != nil {
 			listener.PostNotificationAndReportOutcome(makeResponse(&request,
 				protos.EventOutcome_ConfigurationNotFound,
 				fmt.Sprintf("configuration [%s] could not be found", fsm.ConfigId)))
