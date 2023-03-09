@@ -6,7 +6,7 @@ GOOS ?= $(shell uname -s | tr "[:upper:]" "[:lower:]")
 GOARCH ?= amd64
 GOMOD := $(shell go list -m)
 
-version := v0.10.1
+version := v0.11.0
 release := $(version)-g$(shell git rev-parse --short HEAD)
 prog := sm-server
 bin := out/bin/$(prog)-$(version)_$(GOOS)-$(GOARCH)
