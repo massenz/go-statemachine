@@ -6,7 +6,7 @@ GOOS ?= $(shell uname -s | tr "[:upper:]" "[:lower:]")
 GOARCH ?= amd64
 GOMOD := $(shell go list -m)
 
-version := v0.10.1
+version := v0.11.0
 release := $(version)-g$(shell git rev-parse --short HEAD)
 prog := sm-server
 bin := out/bin/$(prog)-$(version)_$(GOOS)-$(GOARCH)
@@ -70,8 +70,8 @@ $(dockerbin): $(srcs)
 		-ldflags "-X $(GOMOD)/api.Release=$(release)" \
 		-o $(dockerbin) cmd/main.go
 
-$(healthcheck): clients/grpc_health.go
-	GOOS=linux GOARCH=amd64 go build -o $(healthcheck) clients/grpc_health.go
+$(healthcheck): grpc_health.go
+	GOOS=linux GOARCH=amd64 go build -o $(healthcheck) grpc_health.go
 
 .PHONY: build
 build: $(bin) ## Builds the Statemachine server binary

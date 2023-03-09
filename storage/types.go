@@ -16,22 +16,26 @@ import (
 	"time"
 )
 
-func Error(msg string) func(string) error {
+type StoreErr = error
+
+func Error(msg string) func(string) StoreErr {
 	return func(key string) error {
 		return fmt.Errorf(msg, key)
 	}
 }
 
 var (
-	IllegalStoreError   = Error("error storing invalid data: %v")
 	AlreadyExistsError  = Error("key %s already exists")
+	GenericStoreError   = Error("store error: %v")
+	InvalidDataError    = Error("error storing invalid data: %v")
 	NotFoundError       = Error("key %s not found")
 	NotImplementedError = Error("functionality %s has not been implemented yet")
+	TooManyAttempts     = Error("retries exceeded")
 )
 
-type ConfigurationStorageManager interface {
-	GetConfig(versionId string) (*protos.Configuration, bool)
-	PutConfig(cfg *protos.Configuration) error
+type ConfigStore interface {
+	GetConfig(versionId string) (*protos.Configuration, StoreErr)
+	PutConfig(cfg *protos.Configuration) StoreErr
 
 	// GetAllConfigs returns all the `Configurations` that exist in the server, regardless of
 	// the version, and whether are used or not by an FSM.
@@ -42,16 +46,16 @@ type ConfigurationStorageManager interface {
 	GetAllVersions(name string) []string
 }
 
-type FiniteStateMachineStorageManager interface {
+type FSMStore interface {
 	// GetStateMachine will find the FSM with `id and that is configured via a `Configuration` whose
 	// `name` matches `cfg` (without the `version`).
-	GetStateMachine(id string, cfg string) (*protos.FiniteStateMachine, bool)
+	GetStateMachine(id string, cfg string) (*protos.FiniteStateMachine, StoreErr)
 
 	// PutStateMachine creates or updates the FSM whose `id` is given.
 	// No further action is taken: no check that the referenced `Configuration` exists, and the
 	// `state` SETs are not updated either: it is the caller's responsibility to call the
 	// `UpdateState` method (possibly with an empty `oldState`, in the case of creation).
-	PutStateMachine(id string, fsm *protos.FiniteStateMachine) error
+	PutStateMachine(id string, fsm *protos.FiniteStateMachine) StoreErr
 
 	// GetAllInState looks up all the FSMs that are currently in the given `state` and
 	// are configured with a `Configuration` whose name matches `cfg` (regardless of the
@@ -67,12 +71,12 @@ type FiniteStateMachineStorageManager interface {
 	// (or not, as the case may be).
 	//
 	// `oldState` may be empty in the case of a new FSM being created.
-	UpdateState(cfgName string, id string, oldState string, newState string) error
+	UpdateState(cfgName string, id string, oldState string, newState string) StoreErr
 }
 
-type EventStorageManager interface {
-	GetEvent(id string, cfg string) (*protos.Event, bool)
-	PutEvent(event *protos.Event, cfg string, ttl time.Duration) error
+type EventStore interface {
+	GetEvent(id string, cfg string) (*protos.Event, StoreErr)
+	PutEvent(event *protos.Event, cfg string, ttl time.Duration) StoreErr
 
 	// AddEventOutcome adds the outcome of an event to the storage, given the `eventId` and the
 	// "type" (`Configuration.Name`) of the FSM that received the event.
@@ -80,18 +84,18 @@ type EventStorageManager interface {
 	// Optionally, it will remove the outcome after a given `ttl` (time-to-live); use
 	// `NeverExpire` to keep the outcome forever.
 	AddEventOutcome(eventId string, cfgName string, response *protos.EventOutcome,
-		ttl time.Duration) error
+		ttl time.Duration) StoreErr
 
 	// GetOutcomeForEvent returns the outcome of an event, given the `eventId` and the "type" of the
 	// FSM that received the event.
-	GetOutcomeForEvent(eventId string, cfgName string) (*protos.EventOutcome, bool)
+	GetOutcomeForEvent(eventId string, cfgName string) (*protos.EventOutcome, StoreErr)
 }
 
 type StoreManager interface {
 	log.Loggable
-	ConfigurationStorageManager
-	FiniteStateMachineStorageManager
-	EventStorageManager
+	ConfigStore
+	FSMStore
+	EventStore
 	SetTimeout(duration time.Duration)
 	GetTimeout() time.Duration
 	Health() error

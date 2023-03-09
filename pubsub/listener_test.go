@@ -10,6 +10,7 @@
 package pubsub_test
 
 import (
+	. "github.com/JiaYongfei/respect/gomega"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -111,17 +112,17 @@ var _ = Describe("A Listener", func() {
 
 			Eventually(func(g Gomega) {
 				// Now we want to test that the state machine was updated
-				fsm, ok := store.GetStateMachine(requestId, "test")
-				g.Ω(ok).ToNot(BeFalse())
+				fsm, err := store.GetStateMachine(requestId, "test")
+				g.Ω(err).To(BeNil())
 				g.Ω(fsm.State).To(Equal("end"))
 				g.Ω(len(fsm.History)).To(Equal(1))
 				g.Ω(fsm.History[0].Details).To(Equal("more details"))
 				g.Ω(fsm.History[0].Transition.Event).To(Equal("move"))
 			}).Should(Succeed())
-			Eventually(func() bool {
-				_, found := store.GetEvent(event.EventId, "test")
-				return found
-			}).Should(BeTrue())
+			Eventually(func() storage.StoreErr {
+				_, err := store.GetEvent(event.EventId, "test")
+				return err
+			}).Should(BeNil())
 		})
 		It("sends notifications for missing state-machine", func() {
 			event := protos.Event{
@@ -215,18 +216,22 @@ var _ = Describe("A Listener", func() {
 					return nil
 				}
 			}).Should(BeNil())
-			Eventually(func() *protos.Event {
-				e, _ := store.GetEvent(event.EventId, request.Config)
-				return e
-			}, 100*time.Millisecond, 20*time.Millisecond).ShouldNot(BeNil())
-			Eventually(func() protos.EventOutcome_StatusCode {
-				e, ok := store.GetOutcomeForEvent(event.EventId, request.Config)
-				if ok {
-					return e.Code
+			Eventually(func(g Gomega) {
+				evt, err := store.GetEvent(event.EventId, request.Config)
+				Ω(err).ToNot(HaveOccurred())
+				if evt != nil {
+					Ω(evt).To(Respect(&event))
 				} else {
-					return protos.EventOutcome_GenericError
+					Fail("event is nil")
 				}
-			}, 100*time.Millisecond, 20*time.Millisecond).Should(Equal(protos.EventOutcome_Ok))
+			}, 100*time.Millisecond, 20*time.Millisecond).Should(Succeed())
+			Eventually(func(g Gomega) {
+				outcome, err := store.GetOutcomeForEvent(event.EventId, request.Config)
+				Ω(err).ToNot(HaveOccurred())
+				if outcome != nil {
+					Ω(outcome.Code).To(Equal(protos.EventOutcome_Ok))
+				}
+			}, 100*time.Millisecond, 20*time.Millisecond).Should(Succeed())
 		})
 	})
 })
