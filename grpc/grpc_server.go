@@ -213,8 +213,8 @@ func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context, in *protos.G
 		return nil, status.Error(codes.InvalidArgument, "ID must always be provided when looking up statemachine")
 	}
 	s.Logger.Debug("looking up FSM [%s] (Configuration: %s)", fsmId, cfg)
-	fsm, ok := s.Store.GetStateMachine(fsmId, cfg)
-	if !ok {
+	fsm, err := s.Store.GetStateMachine(fsmId, cfg)
+	if err != nil {
 		return nil, status.Error(codes.NotFound, storage.NotFoundError(fsmId).Error())
 	}
 	return fsm, nil
@@ -240,9 +240,9 @@ func (s *grpcSubscriber) GetEventOutcome(ctx context.Context, in *protos.EventRe
 	evtId := in.GetId()
 	cfg := in.GetConfig()
 	s.Logger.Debug("looking up EventOutcome %s (%s)", evtId, cfg)
-	outcome, ok := s.Store.GetOutcomeForEvent(evtId, cfg)
-	if !ok {
-		return nil, status.Error(codes.NotFound, fmt.Sprintf("outcome for event %s not found", evtId))
+	outcome, err := s.Store.GetOutcomeForEvent(evtId, cfg)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "cannot get outcome for event %s: %v", evtId, err)
 	}
 	return &protos.EventResponse{
 		EventId: evtId,
@@ -257,9 +257,9 @@ func (s *grpcSubscriber) StreamAllInstate(in *protos.GetFsmRequest, stream State
 	}
 	cfgName := in.GetConfig()
 	for _, id := range response.GetIds() {
-		fsm, found := s.Store.GetStateMachine(id, cfgName)
-		if !found {
-			return storage.NotFoundError(id)
+		fsm, err := s.Store.GetStateMachine(id, cfgName)
+		if err != nil {
+			return err
 		}
 		if err = stream.SendMsg(&protos.PutResponse{
 			Id:             id,

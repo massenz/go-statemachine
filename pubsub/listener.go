@@ -69,8 +69,8 @@ func (listener *EventsListener) ListenForMessages() {
 				fmt.Sprintf("could not store event: %v", err)))
 			continue
 		}
-		fsm, ok := listener.store.GetStateMachine(fsmId, config)
-		if !ok {
+		fsm, err := listener.store.GetStateMachine(fsmId, config)
+		if err != nil {
 			listener.PostNotificationAndReportOutcome(makeResponse(&request,
 				protos.EventOutcome_FsmNotFound,
 				fmt.Sprintf("statemachine [%s] could not be found", fsmId)))

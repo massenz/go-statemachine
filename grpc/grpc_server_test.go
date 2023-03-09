@@ -60,8 +60,8 @@ func (m *Mockstore) GetAllVersions(name string) []string {
 	return nil
 }
 
-func (m *Mockstore) GetStateMachine(id string, cfg string) (*protos.FiniteStateMachine, bool) {
-	return nil, false
+func (m *Mockstore) GetStateMachine(id string, cfg string) (*protos.FiniteStateMachine, storage.StoreErr) {
+	return nil, NotImplemented
 }
 
 func (m *Mockstore) PutStateMachine(id string, fsm *protos.FiniteStateMachine) error {
@@ -76,8 +76,8 @@ func (m *Mockstore) UpdateState(cfgName string, id string, oldState string, newS
 	return NotImplemented
 }
 
-func (m *Mockstore) GetEvent(id string, cfg string) (*protos.Event, bool) {
-	return nil, false
+func (m *Mockstore) GetEvent(id string, cfg string) (*protos.Event, storage.StoreErr) {
+	return nil, NotImplemented
 }
 
 func (m *Mockstore) PutEvent(event *protos.Event, cfg string, ttl time.Duration) error {
@@ -88,8 +88,8 @@ func (m *Mockstore) AddEventOutcome(eventId string, cfgName string, response *pr
 	return NotImplemented
 }
 
-func (m *Mockstore) GetOutcomeForEvent(eventId string, cfgName string) (*protos.EventOutcome, bool) {
-	return nil, false
+func (m *Mockstore) GetOutcomeForEvent(eventId string, cfgName string) (*protos.EventOutcome, storage.StoreErr) {
+	return nil, NotImplemented
 }
 
 func (m *Mockstore) SetTimeout(duration time.Duration) {
