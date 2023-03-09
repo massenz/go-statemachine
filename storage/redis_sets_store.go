@@ -56,26 +56,3 @@ func (csm *RedisStore) GetAllInState(cfg string, state string) []string {
 	csm.logger.Debug(ReturningItemsFmt, len(fsms))
 	return fsms
 }
-
-func (csm *RedisStore) GetAllConfigs() []string {
-	// TODO: enable splitting results with a (cursor, count)
-	csm.logger.Debug("Looking up all configs in DB")
-	configs, err := csm.client.SMembers(context.Background(), ConfigsPrefix).Result()
-	if err != nil {
-		csm.logger.Error(NoConfigurationsFmt, err)
-		return nil
-	}
-	csm.logger.Debug(ReturningItemsFmt, len(configs))
-	return configs
-}
-
-func (csm *RedisStore) GetAllVersions(name string) []string {
-	csm.logger.Debug("Looking up all versions for Configurations `%s` in DB", name)
-	configs, err := csm.client.SMembers(context.Background(), NewKeyForConfig(name)).Result()
-	if err != nil {
-		csm.logger.Error(NoConfigurationsFmt, err)
-		return nil
-	}
-	csm.logger.Debug(ReturningItemsFmt, len(configs))
-	return configs
-}

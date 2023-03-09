@@ -157,8 +157,9 @@ func (s *grpcSubscriber) GetConfiguration(ctx context.Context, configId *wrapper
 	*protos.Configuration, error) {
 	cfgId := configId.Value
 	s.Logger.Trace("retrieving Configuration %s", cfgId)
-	cfg, found := s.Store.GetConfig(cfgId)
-	if !found {
+	cfg, err := s.Store.GetConfig(cfgId)
+	if err != nil {
+		s.Logger.Error("could not get configuration: %v", err)
 		return nil, status.Errorf(codes.NotFound, "configuration %s not found", cfgId)
 	}
 	return cfg, nil
@@ -168,8 +169,8 @@ func (s *grpcSubscriber) PutFiniteStateMachine(ctx context.Context,
 	request *protos.PutFsmRequest) (*protos.PutResponse, error) {
 	fsm := request.Fsm
 	// First check that the configuration for the FSM is valid
-	cfg, ok := s.Store.GetConfig(fsm.ConfigId)
-	if !ok {
+	cfg, err := s.Store.GetConfig(fsm.ConfigId)
+	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, storage.NotFoundError(
 			fsm.ConfigId).Error())
 	}
@@ -280,9 +281,9 @@ func (s *grpcSubscriber) StreamAllConfigurations(in *wrapperspb.StringValue, str
 		return nil
 	}
 	for _, cfgId := range response.GetIds() {
-		cfg, found := s.Store.GetConfig(cfgId)
-		if !found {
-			return storage.NotFoundError(cfgId)
+		cfg, err := s.Store.GetConfig(cfgId)
+		if err != nil {
+			return err
 		}
 		if err = stream.SendMsg(cfg); err != nil {
 			return err

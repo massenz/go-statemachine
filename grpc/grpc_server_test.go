@@ -44,11 +44,11 @@ type Mockstore struct {
 func (m *Mockstore) SetLogLevel(level slf4go.LogLevel) {
 }
 
-func (m *Mockstore) GetConfig(versionId string) (*protos.Configuration, bool) {
-	return nil, false
+func (m *Mockstore) GetConfig(versionId string) (*protos.Configuration, storage.StoreErr) {
+	return nil, nil
 }
 
-func (m *Mockstore) PutConfig(cfg *protos.Configuration) error {
+func (m *Mockstore) PutConfig(cfg *protos.Configuration) storage.StoreErr {
 	return NotImplemented
 }
 
@@ -295,14 +295,14 @@ var _ = Describe("the gRPC Server", func() {
 				}
 			})
 			It("should store valid configurations", func() {
-				_, ok := store.GetConfig(GetVersionId(cfg))
-				Ω(ok).To(BeFalse())
+				_, err := store.GetConfig(GetVersionId(cfg))
+				Ω(err).ToNot(BeNil())
 				response, err := client.PutConfiguration(bkgnd, cfg)
 				Ω(err).ToNot(HaveOccurred())
 				Ω(response).ToNot(BeNil())
 				Ω(response.Id).To(Equal(GetVersionId(cfg)))
-				found, ok := store.GetConfig(response.Id)
-				Ω(ok).Should(BeTrue())
+				found, err := store.GetConfig(response.Id)
+				Ω(err).Should(BeNil())
 				Ω(found).Should(Respect(cfg))
 			})
 			It("should fail for invalid configuration", func() {

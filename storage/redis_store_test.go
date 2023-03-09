@@ -94,15 +94,15 @@ var _ = Describe("Redis Store", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(res).To(Equal("OK"))
 
-			data, ok := store.GetConfig(id)
-			Expect(ok).To(BeTrue())
+			data, err := store.GetConfig(id)
+			Expect(err).To(BeNil())
 			Expect(data).ToNot(BeNil())
 			Expect(api.GetVersionId(data)).To(Equal(api.GetVersionId(cfg)))
 		})
 		It("will return orderly if the id does not exist", func() {
 			id := "fake"
-			data, ok := store.GetConfig(id)
-			Expect(ok).To(BeFalse())
+			data, err := store.GetConfig(id)
+			Expect(err).ToNot(BeNil())
 			Expect(data).To(BeNil())
 		})
 		It("can save configurations", func() {

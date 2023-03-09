@@ -70,8 +70,8 @@ $(dockerbin): $(srcs)
 		-ldflags "-X $(GOMOD)/api.Release=$(release)" \
 		-o $(dockerbin) cmd/main.go
 
-$(healthcheck): clients/grpc_health.go
-	GOOS=linux GOARCH=amd64 go build -o $(healthcheck) clients/grpc_health.go
+$(healthcheck): grpc_health.go
+	GOOS=linux GOARCH=amd64 go build -o $(healthcheck) grpc_health.go
 
 .PHONY: build
 build: $(bin) ## Builds the Statemachine server binary

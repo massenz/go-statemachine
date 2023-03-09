@@ -16,22 +16,26 @@ import (
 	"time"
 )
 
-func Error(msg string) func(string) error {
+type StoreErr = error
+
+func Error(msg string) func(string) StoreErr {
 	return func(key string) error {
 		return fmt.Errorf(msg, key)
 	}
 }
 
 var (
-	IllegalStoreError   = Error("error storing invalid data: %v")
 	AlreadyExistsError  = Error("key %s already exists")
+	GenericStoreError   = Error("store error: %v")
+	InvalidDataError    = Error("error storing invalid data: %v")
 	NotFoundError       = Error("key %s not found")
 	NotImplementedError = Error("functionality %s has not been implemented yet")
+	TooManyAttempts     = Error("retries exceeded")
 )
 
-type ConfigurationStorageManager interface {
-	GetConfig(versionId string) (*protos.Configuration, bool)
-	PutConfig(cfg *protos.Configuration) error
+type ConfigStore interface {
+	GetConfig(versionId string) (*protos.Configuration, StoreErr)
+	PutConfig(cfg *protos.Configuration) StoreErr
 
 	// GetAllConfigs returns all the `Configurations` that exist in the server, regardless of
 	// the version, and whether are used or not by an FSM.
@@ -42,7 +46,7 @@ type ConfigurationStorageManager interface {
 	GetAllVersions(name string) []string
 }
 
-type FiniteStateMachineStorageManager interface {
+type FSMStore interface {
 	// GetStateMachine will find the FSM with `id and that is configured via a `Configuration` whose
 	// `name` matches `cfg` (without the `version`).
 	GetStateMachine(id string, cfg string) (*protos.FiniteStateMachine, bool)
@@ -89,8 +93,8 @@ type EventStorageManager interface {
 
 type StoreManager interface {
 	log.Loggable
-	ConfigurationStorageManager
-	FiniteStateMachineStorageManager
+	ConfigStore
+	FSMStore
 	EventStorageManager
 	SetTimeout(duration time.Duration)
 	GetTimeout() time.Duration

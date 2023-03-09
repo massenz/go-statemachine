@@ -40,15 +40,54 @@ type RedisStore struct {
 	MaxRetries int
 }
 
-func (csm *RedisStore) GetConfig(id string) (*protos.Configuration, bool) {
+/////// ConfigStore implementation
+
+func (csm *RedisStore) GetConfig(id string) (*protos.Configuration, StoreErr) {
 	key := NewKeyForConfig(id)
 	var cfg protos.Configuration
 	err := csm.get(key, &cfg)
 	if err != nil {
-		csm.logger.Error("Error retrieving configuration `%s`: %s", id, err.Error())
-		return nil, false
+		csm.logger.Error("cannot retrieve configuration: %v", err)
+		return nil, err
 	}
-	return &cfg, true
+	return &cfg, nil
+}
+
+func (csm *RedisStore) PutConfig(cfg *protos.Configuration) StoreErr {
+	if cfg == nil {
+		return InvalidDataError("nil config")
+	}
+	key := NewKeyForConfig(api.GetVersionId(cfg))
+	if csm.client.Exists(context.Background(), key).Val() == 1 {
+		return AlreadyExistsError(key)
+	}
+	// TODO: Find out whether the client allows to batch requests, instead of sending multiple server requests
+	csm.client.SAdd(context.Background(), ConfigsPrefix, cfg.Name)
+	csm.client.SAdd(context.Background(), NewKeyForConfig(cfg.Name), api.GetVersionId(cfg))
+	return csm.put(key, cfg, NeverExpire)
+}
+
+func (csm *RedisStore) GetAllConfigs() []string {
+	// TODO: enable splitting results with a (cursor, count)
+	csm.logger.Debug("Looking up all configs in DB")
+	configs, err := csm.client.SMembers(context.Background(), ConfigsPrefix).Result()
+	if err != nil {
+		csm.logger.Error(NoConfigurationsFmt, err)
+		return nil
+	}
+	csm.logger.Debug(ReturningItemsFmt, len(configs))
+	return configs
+}
+
+func (csm *RedisStore) GetAllVersions(name string) []string {
+	csm.logger.Debug("Looking up all versions for Configurations `%s` in DB", name)
+	configs, err := csm.client.SMembers(context.Background(), NewKeyForConfig(name)).Result()
+	if err != nil {
+		csm.logger.Error(NoConfigurationsFmt, err)
+		return nil
+	}
+	csm.logger.Debug(ReturningItemsFmt, len(configs))
+	return configs
 }
 
 func (csm *RedisStore) GetEvent(id string, cfg string) (*protos.Event, bool) {
@@ -73,23 +112,9 @@ func (csm *RedisStore) GetStateMachine(id string, cfg string) (*protos.FiniteSta
 	return &stateMachine, true
 }
 
-func (csm *RedisStore) PutConfig(cfg *protos.Configuration) error {
-	if cfg == nil {
-		return IllegalStoreError("nil config")
-	}
-	key := NewKeyForConfig(api.GetVersionId(cfg))
-	if csm.client.Exists(context.Background(), key).Val() == 1 {
-		return AlreadyExistsError(key)
-	}
-	// TODO: Find out whether the client allows to batch requests, instead of sending multiple server requests
-	csm.client.SAdd(context.Background(), ConfigsPrefix, cfg.Name)
-	csm.client.SAdd(context.Background(), NewKeyForConfig(cfg.Name), api.GetVersionId(cfg))
-	return csm.put(key, cfg, NeverExpire)
-}
-
 func (csm *RedisStore) PutEvent(event *protos.Event, cfg string, ttl time.Duration) error {
 	if event == nil {
-		return IllegalStoreError("nil event")
+		return InvalidDataError("nil event")
 	}
 	key := NewKeyForEvent(event.EventId, cfg)
 	return csm.put(key, event, ttl)
@@ -97,7 +122,7 @@ func (csm *RedisStore) PutEvent(event *protos.Event, cfg string, ttl time.Durati
 
 func (csm *RedisStore) PutStateMachine(id string, stateMachine *protos.FiniteStateMachine) error {
 	if stateMachine == nil {
-		return IllegalStoreError("nil statemachine")
+		return InvalidDataError("nil statemachine")
 	}
 	configName := strings.Split(stateMachine.ConfigId, api.ConfigurationVersionSeparator)[0]
 	key := NewKeyForMachine(id, configName)
@@ -106,7 +131,7 @@ func (csm *RedisStore) PutStateMachine(id string, stateMachine *protos.FiniteSta
 
 func (csm *RedisStore) AddEventOutcome(id string, cfg string, response *protos.EventOutcome, ttl time.Duration) error {
 	if response == nil {
-		return IllegalStoreError("nil response")
+		return InvalidDataError("nil response")
 	}
 	key := NewKeyForOutcome(id, cfg)
 	return csm.put(key, response, ttl)
@@ -172,9 +197,9 @@ func (csm *RedisStore) SetLogLevel(level slf4go.LogLevel) {
 	csm.logger.Level = level
 }
 
-// `get` abstracts away the common functionality of looking for a key in Redis,
+// get abstracts away the common functionality of looking for a key in Redis,
 // with a given timeout and a number of retries.
-func (csm *RedisStore) get(key string, value proto.Message) error {
+func (csm *RedisStore) get(key string, value proto.Message) StoreErr {
 	attemptsLeft := csm.MaxRetries
 	csm.logger.Trace("Looking up key `%s` (Max retries: %d)", key, attemptsLeft)
 	var cancel context.CancelFunc
@@ -193,7 +218,7 @@ func (csm *RedisStore) get(key string, value proto.Message) error {
 			// The key isn't there, no point in retrying
 			csm.logger.Debug("Key `%s` not found", key)
 			cancel()
-			return err
+			return NotFoundError(key)
 		} else if err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
 				// The error here may be recoverable, so we'll keep trying until we run out of attempts
@@ -209,7 +234,7 @@ func (csm *RedisStore) get(key string, value proto.Message) error {
 				// This is a different error, we'll just return it
 				csm.logger.Error(err.Error())
 				cancel()
-				return err
+				return GenericStoreError(err.Error())
 			}
 		} else {
 			cancel()
@@ -218,7 +243,7 @@ func (csm *RedisStore) get(key string, value proto.Message) error {
 	}
 }
 
-func (csm *RedisStore) put(key string, value proto.Message, ttl time.Duration) error {
+func (csm *RedisStore) put(key string, value proto.Message, ttl time.Duration) StoreErr {
 	attemptsLeft := csm.MaxRetries
 	csm.logger.Trace("Storing key `%s` (Max retries: %d)", key, attemptsLeft)
 	var cancel context.CancelFunc
@@ -235,38 +260,36 @@ func (csm *RedisStore) put(key string, value proto.Message, ttl time.Duration) e
 		data, err := proto.Marshal(value)
 		if err != nil {
 			csm.logger.Error("cannot convert proto to bytes: %q", err)
-			return err
+			return InvalidDataError(err.Error())
 		}
 		cmd := csm.client.Set(ctx, key, data, ttl)
 		_, err = cmd.Result()
 		if err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
 				// The error here may be recoverable, so we'll keep trying until we run out of attempts
-				csm.logger.Error(err.Error())
 				if attemptsLeft == 0 {
-					csm.logger.Error("max retries reached, giving up")
-					return err
+					return TooManyAttempts("")
 				}
 				csm.logger.Debug("retrying after timeout, attempts left: %d", attemptsLeft)
 				csm.wait()
 			} else {
-				return err
+				return GenericStoreError(err.Error())
 			}
 		} else {
-			csm.logger.Debug("Stored key `%s`", key)
+			csm.logger.Debug("stored value for key `%s`", key)
 			return nil
 		}
 	}
 }
 
-func (csm *RedisStore) Health() error {
+func (csm *RedisStore) Health() StoreErr {
 	ctx, cancel := context.WithTimeout(context.Background(), csm.Timeout)
 	defer cancel()
 
 	_, err := csm.client.Ping(ctx).Result()
 	if err != nil {
 		csm.logger.Error("Error pinging redis: %s", err.Error())
-		return fmt.Errorf("redis health check failed: %w", err)
+		return GenericStoreError(err.Error())
 	}
 	return nil
 }
