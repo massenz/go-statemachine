@@ -72,6 +72,10 @@ type FSMStore interface {
 	//
 	// `oldState` may be empty in the case of a new FSM being created.
 	UpdateState(cfgName string, id string, oldState string, newState string) StoreErr
+
+	// TxProcessEvent processes an Event for the FSM in a transaction, guaranteeing that
+	// there will be no races when updating the FSM state.
+	TxProcessEvent(id, cfgName string, evt *protos.Event) StoreErr
 }
 
 type EventStore interface {

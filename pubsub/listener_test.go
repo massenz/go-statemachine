@@ -34,7 +34,7 @@ var _ = Describe("A Listener", func() {
 			eventsCh = make(chan protos.EventRequest)
 			notificationsCh = make(chan protos.EventResponse)
 			store = storage.NewRedisStoreWithDefaults(redisContainer.Address)
-			store.SetLogLevel(logging.NONE)
+			store.SetLogLevel(logging.TRACE)
 			testListener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
 				EventsChannel:        eventsCh,
 				NotificationsChannel: notificationsCh,
@@ -42,7 +42,7 @@ var _ = Describe("A Listener", func() {
 				ListenersPoolSize:    0,
 			})
 			// Set to DEBUG when diagnosing test failures
-			testListener.SetLogLevel(logging.NONE)
+			testListener.SetLogLevel(logging.DEBUG)
 		})
 		const eventId = "1234-abcdef"
 		It("can post error notifications", func() {
@@ -118,7 +118,7 @@ var _ = Describe("A Listener", func() {
 				g.Ω(len(fsm.History)).To(Equal(1))
 				g.Ω(fsm.History[0].Details).To(Equal("more details"))
 				g.Ω(fsm.History[0].Transition.Event).To(Equal("move"))
-			}).Should(Succeed())
+			}, 120*time.Millisecond, 40*time.Millisecond).Should(Succeed())
 			Eventually(func() storage.StoreErr {
 				_, err := store.GetEvent(event.EventId, "test")
 				return err
