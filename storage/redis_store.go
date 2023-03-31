@@ -290,6 +290,7 @@ func (csm *RedisStore) TxProcessEvent(id, cfgName string, evt *protos.Event) err
 		if err != nil {
 			return err
 		}
+		oldState := fsm.GetState()
 		csm.logger.Trace("Tx got CFG [%s]", api.GetVersionId(cfg))
 		if err = (&api.ConfiguredStateMachine{Config: cfg, FSM: fsm}).SendEvent(evt); err != nil {
 			return err
@@ -304,10 +305,18 @@ func (csm *RedisStore) TxProcessEvent(id, cfgName string, evt *protos.Event) err
 				return InvalidDataError(err.Error())
 			}
 			cmd := pipe.Set(ctx, NewKeyForMachine(id, cfgName), data, NeverExpire)
-			if cmd.Err() == nil {
-				csm.logger.Trace("Tx committed successfully")
+			if cmd.Err() != nil {
+				csm.logger.Error("could not update fsm [%s](Configuration: %s): %v", id, cfgName, cmd.Err())
+				return cmd.Err()
 			}
-			return cmd.Err()
+			csm.logger.Trace("Tx committed")
+			csm.logger.Trace("updating SET of FSM states")
+			err = csm.UpdateState(cfgName, id, oldState, fsm.GetState())
+			if err != nil {
+				csm.logger.Error("could not update the SET containing FSM per state: %v", err)
+				return err
+			}
+			return nil
 		})
 		return err
 	}
