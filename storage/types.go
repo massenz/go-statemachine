@@ -13,6 +13,7 @@ import (
 	"fmt"
 	log "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
+	"regexp"
 	"time"
 )
 
@@ -32,6 +33,20 @@ var (
 	NotImplementedError = Error("functionality %s has not been implemented yet")
 	TooManyAttempts     = Error("retries exceeded")
 )
+
+func IsNotFoundErr(err StoreErr) bool {
+	// Define the regular expression pattern
+	pattern := `^key\s+(\S+)\s+not\sfound$`
+
+	// Compile the regular expression pattern
+	re := regexp.MustCompile(pattern)
+
+	// Use the FindStringSubmatch function to get the matched groups
+	matches := re.FindStringSubmatch(err.Error())
+
+	// The first element of the matches slice is the whole matched string, so we skip it
+	return len(matches) > 1
+}
 
 type ConfigStore interface {
 	GetConfig(versionId string) (*protos.Configuration, StoreErr)

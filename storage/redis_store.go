@@ -276,19 +276,20 @@ func (csm *RedisStore) UpdateState(cfgName string, id string, oldState string, n
 	return nil
 }
 
-func (csm *RedisStore) TxProcessEvent(id, cfgName string, evt *protos.Event) error {
+func (csm *RedisStore) TxProcessEvent(id, cfgName string, evt *protos.Event) StoreErr {
 	ctx, _ := context.WithTimeout(context.Background(), DefaultTimeout)
 	// See Tx example at https://redis.uptrace.dev/guide/go-redis-pipelines.html#transactions
 	txf := func(tx *redis.Tx) error {
 		csm.logger.Trace("Tx starts")
 		fsm, err := csm.GetStateMachine(id, cfgName)
 		if err != nil {
-			return err
+			csm.logger.Debug("error looking up FSM %s: %v", id, err)
+			return NotFoundError(NewKeyForMachine(id, cfgName))
 		}
 		csm.logger.Trace("Tx got SM [%s]", id)
 		cfg, err := csm.GetConfig(fsm.ConfigId)
 		if err != nil {
-			return err
+			return NotFoundError(err.Error())
 		}
 		oldState := fsm.GetState()
 		csm.logger.Trace("Tx got CFG [%s]", api.GetVersionId(cfg))

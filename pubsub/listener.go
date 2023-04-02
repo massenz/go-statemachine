@@ -71,8 +71,14 @@ func (listener *EventsListener) ListenForMessages() {
 		listener.logger.Debug("preparing to send event `%s` for FSM [%s]",
 			request.Event.Transition.Event, fsmId)
 		if err := listener.store.TxProcessEvent(fsmId, cfgName, request.Event); err != nil {
+			var errCode protos.EventOutcome_StatusCode
+			if storage.IsNotFoundErr(err) {
+				errCode = protos.EventOutcome_FsmNotFound
+			} else {
+				errCode = protos.EventOutcome_InternalError
+			}
 			listener.PostNotificationAndReportOutcome(makeResponse(&request,
-				protos.EventOutcome_InternalError,
+				errCode,
 				fmt.Sprintf("could not update statemachine [%s#%s] in store: %v",
 					cfgName, fsmId, err)))
 			continue
