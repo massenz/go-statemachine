@@ -10,6 +10,7 @@
 package pubsub_test
 
 import (
+	"fmt"
 	. "github.com/JiaYongfei/respect/gomega"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -118,7 +119,7 @@ var _ = Describe("A Listener", func() {
 				g.Ω(len(fsm.History)).To(Equal(1))
 				g.Ω(fsm.History[0].Details).To(Equal("more details"))
 				g.Ω(fsm.History[0].Transition.Event).To(Equal("move"))
-			}).Should(Succeed())
+			}, 120*time.Millisecond, 40*time.Millisecond).Should(Succeed())
 			Eventually(func() storage.StoreErr {
 				_, err := store.GetEvent(event.EventId, "test")
 				return err
@@ -129,9 +130,8 @@ var _ = Describe("A Listener", func() {
 				EventId:    eventId,
 				Originator: "me",
 				Transition: &protos.Transition{
-					Event: "move",
+					Event: "fake",
 				},
-				Details: "more details",
 			}
 			request := protos.EventRequest{
 				Event:  &event,
@@ -143,14 +143,15 @@ var _ = Describe("A Listener", func() {
 			}()
 			eventsCh <- request
 			close(eventsCh)
-			Eventually(func(g Gomega) {
-				select {
-				case n := <-notificationsCh:
-					g.Ω(n.EventId).To(Equal(request.Event.EventId))
-					g.Ω(n.Outcome.Id).To(Equal(request.GetId()))
-					g.Ω(n.Outcome.Code).To(Equal(protos.EventOutcome_FsmNotFound))
-				}
-			}).Should(Succeed())
+			select {
+			case n := <-notificationsCh:
+				Ω(n.EventId).To(Equal(request.Event.EventId))
+				Ω(n.Outcome.Id).To(Equal(request.GetId()))
+				Ω(n.Outcome.Code).To(Equal(protos.EventOutcome_FsmNotFound))
+			case <-time.After(timeout):
+				Fail("timed out waiting for notification")
+			}
+			fmt.Println("3")
 		})
 		It("sends notifications for missing destinations", func() {
 			request := protos.EventRequest{
@@ -161,14 +162,14 @@ var _ = Describe("A Listener", func() {
 			go func() { testListener.ListenForMessages() }()
 			eventsCh <- request
 			close(eventsCh)
-			Eventually(func(g Gomega) {
-				select {
-				case n := <-notificationsCh:
-					Ω(n.EventId).To(Equal(request.Event.EventId))
-					Ω(n.Outcome).ToNot(BeNil())
-					Ω(n.Outcome.Code).To(Equal(protos.EventOutcome_MissingDestination))
-				}
-			}).Should(Succeed())
+			select {
+			case n := <-notificationsCh:
+				Ω(n.EventId).To(Equal(request.Event.EventId))
+				Ω(n.Outcome).ToNot(BeNil())
+				Ω(n.Outcome.Code).To(Equal(protos.EventOutcome_MissingDestination))
+			case <-time.After(timeout):
+				Fail("timed out waiting for notification")
+			}
 		})
 		It("should exit when the channel is closed", func() {
 			done := make(chan interface{})
@@ -207,7 +208,6 @@ var _ = Describe("A Listener", func() {
 			go func() { testListener.ListenForMessages() }()
 			eventsCh <- request
 			close(eventsCh)
-
 			Consistently(func() *protos.EventResponse {
 				select {
 				case n := <-notificationsCh:

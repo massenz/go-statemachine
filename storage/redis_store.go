@@ -36,7 +36,7 @@ const (
 
 type RedisStore struct {
 	logger     *slf4go.Log
-	client     redis.Cmdable
+	client     redis.UniversalClient
 	Timeout    time.Duration
 	MaxRetries int
 }
@@ -276,6 +276,67 @@ func (csm *RedisStore) UpdateState(cfgName string, id string, oldState string, n
 	return nil
 }
 
+func (csm *RedisStore) TxProcessEvent(id, cfgName string, evt *protos.Event) StoreErr {
+	ctx, _ := context.WithTimeout(context.Background(), DefaultTimeout)
+	// See Tx example at https://redis.uptrace.dev/guide/go-redis-pipelines.html#transactions
+	txf := func(tx *redis.Tx) error {
+		csm.logger.Trace("Tx starts")
+		fsm, err := csm.GetStateMachine(id, cfgName)
+		if err != nil {
+			csm.logger.Debug("error looking up FSM %s: %v", id, err)
+			return NotFoundError(NewKeyForMachine(id, cfgName))
+		}
+		csm.logger.Trace("Tx got SM [%s]", id)
+		cfg, err := csm.GetConfig(fsm.ConfigId)
+		if err != nil {
+			return NotFoundError(err.Error())
+		}
+		oldState := fsm.GetState()
+		csm.logger.Trace("Tx got CFG [%s]", api.GetVersionId(cfg))
+		if err = (&api.ConfiguredStateMachine{Config: cfg, FSM: fsm}).SendEvent(evt); err != nil {
+			return err
+		}
+		csm.logger.Trace("Tx changed SM to: %s", fsm.State)
+		// If the watched keys are unchanged, the Tx is committed
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			csm.logger.Trace("Tx committing change")
+			data, err := proto.Marshal(fsm)
+			if err != nil {
+				csm.logger.Error("cannot convert proto to bytes: %q", err)
+				return InvalidDataError(err.Error())
+			}
+			cmd := pipe.Set(ctx, NewKeyForMachine(id, cfgName), data, NeverExpire)
+			if cmd.Err() != nil {
+				csm.logger.Error("could not update fsm [%s](Configuration: %s): %v", id, cfgName, cmd.Err())
+				return cmd.Err()
+			}
+			csm.logger.Trace("Tx committed")
+			csm.logger.Trace("updating SET of FSM states")
+			err = csm.UpdateState(cfgName, id, oldState, fsm.GetState())
+			if err != nil {
+				csm.logger.Error("could not update the SET containing FSM per state: %v", err)
+				return err
+			}
+			return nil
+		})
+		return err
+	}
+	for i := 0; i < DefaultMaxRetries; i++ {
+		key := NewKeyForMachine(id, cfgName)
+		csm.logger.Trace("(%d) watching %s", i, key)
+		err := csm.client.Watch(ctx, txf, key)
+		if err == redis.TxFailedErr {
+			// We may be able to retry
+			csm.logger.Trace("(%d) Tx failed, retrying", i)
+			continue
+		}
+		// err may be nil here, in which case, success!
+		csm.logger.Trace("returning with (%v)", err)
+		return err
+	}
+	return TooManyAttempts("")
+}
+
 /////// EventStore implementation
 
 func (csm *RedisStore) GetEvent(id string, cfg string) (*protos.Event, StoreErr) {
@@ -335,7 +396,7 @@ func NewRedisStore(address string, isCluster bool, db int, timeout time.Duration
 	logger := slf4go.NewLog(fmt.Sprintf("redis://%s/%d", address, db))
 
 	var tlsConfig *tls.Config
-	var client redis.Cmdable
+	var client redis.UniversalClient
 
 	if os.Getenv("REDIS_TLS") != "" {
 		logger.Info("Using TLS for Redis connection")
