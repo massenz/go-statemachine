@@ -11,7 +11,6 @@ package pubsub
 
 import (
 	"fmt"
-	. "github.com/massenz/go-statemachine/api"
 	"github.com/massenz/go-statemachine/storage"
 	log "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
@@ -55,65 +54,37 @@ func (listener *EventsListener) ListenForMessages() {
 				fmt.Sprintf("no statemachine ID specified")))
 			continue
 		}
-		config := request.GetConfig()
-		if config == "" {
+		cfgName := request.GetConfig()
+		if cfgName == "" {
 			listener.PostNotificationAndReportOutcome(makeResponse(&request,
 				protos.EventOutcome_MissingDestination,
 				fmt.Sprintf("no Configuration name specified")))
 			continue
 		}
 		// The event is well-formed, we can store for later retrieval
-		if err := listener.store.PutEvent(request.Event, config, storage.NeverExpire); err != nil {
+		if err := listener.store.PutEvent(request.Event, cfgName, storage.NeverExpire); err != nil {
 			listener.PostNotificationAndReportOutcome(makeResponse(&request,
 				protos.EventOutcome_InternalError,
 				fmt.Sprintf("could not store event: %v", err)))
 			continue
 		}
-		fsm, err := listener.store.GetStateMachine(fsmId, config)
-		if err != nil {
+		listener.logger.Debug("preparing to send event `%s` for FSM [%s]",
+			request.Event.Transition.Event, fsmId)
+		if err := listener.store.TxProcessEvent(fsmId, cfgName, request.Event); err != nil {
+			var errCode protos.EventOutcome_StatusCode
+			if storage.IsNotFoundErr(err) {
+				errCode = protos.EventOutcome_FsmNotFound
+			} else {
+				errCode = protos.EventOutcome_InternalError
+			}
 			listener.PostNotificationAndReportOutcome(makeResponse(&request,
-				protos.EventOutcome_FsmNotFound,
-				fmt.Sprintf("statemachine [%s] could not be found", fsmId)))
-			continue
-		}
-		// TODO: cache the configuration locally: they are immutable anyway.
-		cfg, err := listener.store.GetConfig(fsm.ConfigId)
-		if err != nil {
-			listener.PostNotificationAndReportOutcome(makeResponse(&request,
-				protos.EventOutcome_ConfigurationNotFound,
-				fmt.Sprintf("configuration [%s] could not be found", fsm.ConfigId)))
-			continue
-		}
-		previousState := fsm.State
-		cfgFsm := ConfiguredStateMachine{
-			Config: cfg,
-			FSM:    fsm,
-		}
-		listener.logger.Debug("preparing to send event `%s` for FSM [%s] (current state: %s)",
-			request.Event.Transition.Event, fsmId, previousState)
-		if err := cfgFsm.SendEvent(request.Event); err != nil {
-			listener.PostNotificationAndReportOutcome(makeResponse(&request,
-				protos.EventOutcome_TransitionNotAllowed,
-				fmt.Sprintf("event [%s] could not be processed: %v",
-					request.GetEvent().GetTransition().GetEvent(), err)))
-			continue
-		}
-		if err := listener.store.PutStateMachine(fsmId, fsm); err != nil {
-			listener.PostNotificationAndReportOutcome(makeResponse(&request,
-				protos.EventOutcome_InternalError,
+				errCode,
 				fmt.Sprintf("could not update statemachine [%s#%s] in store: %v",
-					config, fsmId, err)))
+					cfgName, fsmId, err)))
 			continue
 		}
-		if err := listener.store.UpdateState(config, fsmId, previousState, fsm.State); err != nil {
-			listener.PostNotificationAndReportOutcome(makeResponse(&request,
-				protos.EventOutcome_InternalError,
-				fmt.Sprintf("could not update statemachine state set (%s#%s): %v",
-					config, fsmId, err)))
-			continue
-		}
-		listener.logger.Debug("Event `%s` transitioned FSM [%s] to state `%s` from state `%s` - updating store",
-			request.Event.Transition.Event, fsmId, fsm.State, previousState)
+		listener.logger.Debug("Event `%s` successfully changed FSM [%s] state",
+			request.Event.Transition.Event, fsmId)
 		listener.reportOutcome(makeResponse(&request, protos.EventOutcome_Ok, ""))
 	}
 }

@@ -99,9 +99,8 @@ start: ## Starts the Redis and LocalStack containers, and Creates the SQS Queues
 	@for queue in events notifications; do \
 		aws --no-cli-pager --endpoint-url=http://localhost:4566 \
 			--region us-west-2 \
- 			sqs create-queue --queue-name $$queue; done >/dev/null
- 	# We need to wait for the SQS Queues to be up before starting the server.
-	#@RELEASE=$(release) BASEDIR=$(shell pwd) docker compose -f $(compose) --project-name sm up server -d
+ 			sqs create-queue --queue-name $$queue; done
+	@RELEASE=$(release) BASEDIR=$(shell pwd) docker compose -f $(compose) --project-name sm up server
 
 .PHONY: stop
 stop: ## Stops the Redis and LocalStack containers
