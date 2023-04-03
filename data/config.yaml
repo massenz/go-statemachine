@@ -1,0 +1,31 @@
+# YAML example for CLI configuration
+
+apiVersion: v1alpha
+kind: Configuration
+
+spec:
+  name: orders
+  version: v2
+
+  states:
+    - start
+    - pending
+    - shipped
+    - end
+  startingstate: start
+  transitions:
+    - from: start
+      to: pending
+      event: accept
+    - from: pending
+      to: shipped
+      event: process
+    - from: pending
+      to: start
+      event: review
+    - from: start
+      to: end
+      event: cancel
+    - from: shipped
+      to: end
+      event: fulfill

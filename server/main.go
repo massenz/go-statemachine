@@ -38,7 +38,7 @@ func SetLogLevel(services []log.Loggable, level log.LogLevel) {
 }
 
 var (
-	logger = log.NewLog("sm-server")
+	logger = log.NewLog("server")
 
 	listener *pubsub.EventsListener
 	pub      *pubsub.SqsPublisher = nil

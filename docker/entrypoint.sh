@@ -40,7 +40,10 @@ then
   retries="-max-retries ${RETRIES}"
 fi
 
-cmd="./sm-server -grpc-port ${GRPC_PORT} -redis ${REDIS:-} ${DEBUG:-} ${INSECURE:-}
+pwd
+ls -lA
+
+cmd="./fsm-server -grpc-port ${GRPC_PORT} -redis ${REDIS:-} ${DEBUG:-} ${INSECURE:-}
 ${endpoint} ${timeout} ${retries} ${events} ${notifications} $@"
 
 echo $cmd

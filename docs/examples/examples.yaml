@@ -1,0 +1,73 @@
+# YAML examples for statemachine CLI
+
+---
+apiVersion: v1alpha
+kind: Configuration
+
+spec:
+  name: orders
+  version: v1
+  states:
+    - start
+    - next
+    - another
+    - end
+  startingState: start
+  transitions:
+    - from: start
+      to: next
+      event: accept
+    - from: next
+      to: another
+      event: process
+    - from: next
+      to: start
+      event: review
+    - from: start
+      to: end
+      event: cancel
+    - from: another
+      to: end
+      event: fulfil
+
+---
+apiVersion: v1alpha
+kind: FiniteStateMachine
+metadata:
+  # Not used currently, but could be added later
+  labels: []
+
+# Optional, if unset, a random UUID will be allocated
+id: 1234-abcde-678
+spec:
+  # The only required field
+  configid: orders:v1
+
+  # Optional, if unset, the Configuration.startingState is used
+  state: start
+
+
+---
+apiVersion: v1alpha
+kind: EventRequest
+metadata:
+  # Not used currently, but could be added later
+  labels: []
+
+# Optional, if unset, a random UUID will be allocated
+id: deef-abcde-9876
+spec:
+  config: orders
+  # FSM ID to send the event to
+  id: 1234-abcde-678
+  event:
+    transition: {
+      event: accept
+    }
+    # Optional, will be stored verbatim
+    details: |
+      This event accepts an order
+      Order: 1234-abcde-678
+      Customer ID: someone@gmail.com
+      Date: 2023-03-23
+      Amount: $44.55

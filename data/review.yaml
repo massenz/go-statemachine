@@ -1,0 +1,17 @@
+apiVersion: v1alpha
+kind: EventRequest
+metadata:
+  # Not used currently, but could be added later
+  labels: []
+
+spec:
+  config: orders
+  # FSM ID to send the event to
+  id: 1234-abcde-678
+  event:
+    transition: {
+      event: review
+    }
+    # Optional, will be stored verbatim
+    details: |
+      Possible fraud flagged

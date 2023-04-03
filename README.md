@@ -26,9 +26,9 @@ The overall architecture is shown below:
 
 The gRPC API is described [here](#api), the Protobuf messages and gRPC methods are described in [their respective repository](https://github.com/massenz/statemachine-proto), and how [to run the server](#running-the-server) is further below.
 
-The general design approach here optimizes for simplicity and efficiency: we would expect a single instance of the `sm-server` and a relatively low-scale Redis cluster to be able to handle millions of "statemachines" and several thousand events per second.
+The general design approach here optimizes for simplicity and efficiency: we would expect a single instance of the `fsm-server` and a relatively low-scale Redis cluster to be able to handle millions of "statemachines" and several thousand events per second.
 
-A "statemachine" is any business entity (uniquely identified by its `id`) whose `state` we need to track across `transitions`, where each transition is driven by an `event` - both states and events are simply described by (possibly, opaque) strings, to which the `sm-server` attaches no meaning (other than what a `configuration` defines).
+A "statemachine" is any business entity (uniquely identified by its `id`) whose `state` we need to track across `transitions`, where each transition is driven by an `event` - both states and events are simply described by (possibly, opaque) strings, to which the `fsm-server` attaches no meaning (other than what a `configuration` defines).
 
 A `configuration` is an immutable, versioned declaration of the `states` an FSM will subsequently traverse, along with the respective `transitions`, the latter defined as a tuple of:
 
@@ -55,7 +55,7 @@ See [Sending Events](#sending-events) below for details on how to encode an SQS 
 
 ## Data Model
 
-A StateMachine Server (`sm-server`) can track any number of different business entities, from a handful to tens to hundreds of different types of state machines: `users` or `orders` or `devices`, or whatever the actual underlying business needs require to keep track the state of.
+A StateMachine Server (`fsm-server`) can track any number of different business entities, from a handful to tens to hundreds of different types of state machines: `users` or `orders` or `devices`, or whatever the actual underlying business needs require to keep track the state of.
 
 Each "type" of business entity (e.g., `orders`) is defined by a `Configuration` that defines the `Transitions` the entity may go through, driven by external `Events`.
 
@@ -88,7 +88,7 @@ The server allows to retrieve all configurations names, and, for each name, all 
 
 ### State Machines
 
-[`FiniteStateMachines` (FSMs)](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L96-L110) are the core entities managed by `sm-server` and represent business entities which can be modeled as being in a given state, and transitioning to different ones upon receiving `events`.
+[`FiniteStateMachines` (FSMs)](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L96-L110) are the core entities managed by `fsm-server` and represent business entities which can be modeled as being in a given state, and transitioning to different ones upon receiving `events`.
 
 They are configured via a uniquely versioned `Configuration` (`config_id`) and additionally carry the `history` of `Events` that have been received by the FSM.
 
@@ -106,17 +106,17 @@ The FSM ID is **not** carried within the body (Protobuf) of the FSM itself.
 
 ### Events
 
-An [`Event`](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L40-L61) is, together with a `FiniteStateMachine`, the central entity of an `sm-server`: it will cause an FSM to `Transition` from one `state` to the next, if allowed by the `Configuration`.
+An [`Event`](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L40-L61) is, together with a `FiniteStateMachine`, the central entity of an `fsm-server`: it will cause an FSM to `Transition` from one `state` to the next, if allowed by the `Configuration`.
 
 An event is uniquely identified by its `event_id` and has a `timestamp` for when it was generated/sent - if not set by the client sending them to the server, they will be set when processing the event.
 
-Optionally, an Event can have an `Originator` (for example, a URI identifying the system that generated the event) and `Details` that further describe it (this could be a JSON-encoded body, or a string-encoded Protocol Buffer): see an example in [the gRPC Client](clients/grpc_client.go).
+Optionally, an Event can have an `Originator` (for example, a URI identifying the system that generated the event) and `Details` that further describe it (this could be a JSON-encoded body, or a string-encoded Protocol Buffer): see an example in [the gRPC Client](client/grpc_client.go).
 
 Events have [outcomes](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L141-L164) which can be retrieved individually (see below in the [gRPC API](#grpc-api)): these describe whether the event caused a successful transition (with an `Ok` `code`) or there was an error (and if so, further `details`).
 
 It is important to realize that events are processed **asynchronously** and thus their outcome (essentially, whether they resulted in a successful `Transition`) will never be returned after the invocation (and, rather obviously, cannot even be expected when Publishing the event to a topic): they should be retrieved at a later time and/or [error `notifications`](#sqs-notifications) should be consumed by a dedicated client.
 
-The `event_id` can be used for such reconciliation: it is either provided by the client when sending events to `sm-server` or it is auto-generated by the server (as a random UUID) and returned in the `EventResponse`.
+The `event_id` can be used for such reconciliation: it is either provided by the client when sending events to `fsm-server` or it is auto-generated by the server (as a random UUID) and returned in the `EventResponse`.
 
 > **NOTE**
 >
@@ -128,7 +128,7 @@ For a full description and documentation of the gRPC API, please see the [Protoc
 
 The [gRPC API and examples](https://github.com/massenz/statemachine-proto) are described there too.
 
-An example usage in Go is in the [gRPC Client](clients/grpc_client.go).
+An example usage in Go is in the [gRPC Client](client/grpc_client.go).
 
 
 ## Events Listener
@@ -141,7 +141,7 @@ We currently listen for events from an [AWS SQS queue](https://aws.amazon.com/sq
 
 #### EventRequest
 
-To send an Event to an FSM via an SQS Message we use the [following code](clients/sqs_client.go):
+To send an Event to an FSM via an SQS Message we use the [following code](client/sqs_client.go):
 
 ```
 // This is the object you want to send across as Event's metadata.
@@ -182,7 +182,7 @@ This will cause a `backorder` event to be sent to our FSM whose `id` matches the
 
 See [`EventRequest` in `statemachine-proto`](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L86) for details on the event being sent.
 
-See the example in the [`SQS Client`](clients/sqs_client.go).
+See the example in the [`SQS Client`](client/sqs_client.go).
 
 
 #### SQS Notifications
@@ -242,12 +242,12 @@ To install the CLI run this:
 They are kept in the [statemachine-proto](https://github.com/massenz/statemachine-proto) repository; nothing specific is needed to use them; however, if you want to review the messages and services definitions, you can see them there.
 
 **Supporting services**<br/>
-The `sm-server` requires a running [Redis](#) server and [AWS Simple Queue Service (SQS)](#); they can be both run locally in containers: see [the Docker Compose](docker/compose.yaml) configuration and [Container Build & Run](#container-build--run).
+The `fsm-server` requires a running [Redis](#) server and [AWS Simple Queue Service (SQS)](#); they can be both run locally in containers: see [the Docker Compose](docker/compose.yaml) configuration and [Container Build & Run](#container-build--run).
 
 
 ## Build & Test
 
-The `sm-server` is built with
+The `fsm-server` is built with
 
     make build
 
@@ -255,7 +255,7 @@ and the tests are run with `make test`.
 
 The binary is in `build/bin` and to see all the available configuration options use:
 
-        build/bin/sm-server -h
+        build/bin/fsm-server -h
 
 Prior to running the server, if you want to use the local running stack, use:
 
@@ -265,16 +265,16 @@ To create the necessary SQS Queues in AWS, please see the `aws` CLI command in `
 
 ## Running the Server
 
-The `sm-server` accepts a number of configuration options (some of them are **required**); please use the `-help` option to view the most up-to-date definitions.
+The `fsm-server` accepts a number of configuration options (some of them are **required**); please use the `-help` option to view the most up-to-date definitions.
 
 ```
-└─( build/bin/sm-server -help
+└─( build/bin/fsm-server -help
 ```
 
 The easiest way is to run it [as a container](#container-build--run) (see also **Supporting Services** in [Prerequisites]](#prerequisites)):
 
 ```
-make container && docker run --rm -d -p 7398:7398 --name sm-server \
+make container && docker run --rm -d -p 7398:7398 --name fsm-server \
     --env AWS_ENDPOINT=http://awslocal:4566 --env TIMEOUT=200ms \
     --env DEBUG=-debug --network sm_sm-net  \
       massenz/statemachine:$(./get-tag)
@@ -284,11 +284,11 @@ make container && docker run --rm -d -p 7398:7398 --name sm-server \
 
 If you want to connect it to an actual AWS account, configure your AWS credentials appropriately, and use `AWS_PROFILE` if not using the `default` account:
 
-`AWS_PROFILE=my-profile AWS_REGION=us-west-2 build/bin/sm-server -debug -events events`
+`AWS_PROFILE=my-profile AWS_REGION=us-west-2 build/bin/fsm-server -debug -events events`
 
 will try and connect to an SQS queue named `events` in the `us-west-2` region.
 
-For an example of how to send events either to an SQS queue or via a gRPC call, see example clients in the [`clients`](clients) folder.
+For an example of how to send events either to an SQS queue or via a gRPC call, see example clients in the [`clients`](client) folder.
 
 Logs are sent to `stdout` by default, but this can be changed using the [`slf4go`](https://github.com/massenz/slf4go) configuration methods.
 

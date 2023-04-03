@@ -1,0 +1,21 @@
+apiVersion: v1alpha
+kind: EventRequest
+metadata:
+  # Not used currently, but could be added later
+  labels: []
+
+spec:
+  config: orders
+  # FSM ID to send the event to
+  id: 1234-abcde-678
+  event:
+    transition: {
+      event: accept
+    }
+    # Optional, will be stored verbatim
+    details: |
+      This event accepts an order
+      Order: 1234-abcde-678
+      Customer ID: someone@gmail.com
+      Date: 2023-03-23
+      Amount: $44.55
