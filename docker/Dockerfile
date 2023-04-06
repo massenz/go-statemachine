@@ -5,6 +5,7 @@ FROM golang:1.19 as builder
 
 WORKDIR /server
 COPY . .
+RUN rm -rf certs data
 RUN CGO_ENABLED=0 make build
 RUN CGO_ENABLED=0 go build -o out/bin/hc docker/grpc_health.go
 
@@ -18,7 +19,7 @@ LABEL org.opencontainers.image.source=https://github.com/massenz/go-statemachine
 LABEL org.opencontainers.image.description="Statemachine gRPC Server"
 LABEL org.opencontainers.image.licenses=Apache-2.0
 
-#RUN apt-get update && apt-get install ca-certificates -y
+RUN apt-get update && apt-get install ca-certificates -y
 RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
 
 # Sensible defaults for the server, for reference
