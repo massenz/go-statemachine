@@ -72,7 +72,7 @@ client: client/fsm-cli.go client/types.go ## Builds the CLI client used to conne
 	@mkdir -p $(shell dirname $(client))
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		-ldflags "-X main.Release=$(version)" \
-		-o $(client) client/fsm-cli.go client/types.go
+		-o $(client) client/fsm-cli.go client/types.go client/handlers.go
 
 
 test: $(srcs) $(test_srcs)  ## Runs all tests

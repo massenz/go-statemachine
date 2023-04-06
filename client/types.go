@@ -24,6 +24,8 @@ const (
 
 	CmdSend = "send"
 	CmdGet  = "get"
+
+	StdinFlag = "--"
 )
 
 // A GenericEntity is the "wrapper" type that is sent to the CLI and wraps the entity
@@ -37,18 +39,18 @@ type GenericEntity struct {
 }
 
 type ConfigEntity struct {
-	GenericEntity
-	Spec *protos.Configuration `yaml:"spec"`
+	GenericEntity `yaml:",inline"`
+	Spec          *protos.Configuration `yaml:"spec"`
 }
 
 type FsmEntity struct {
-	GenericEntity
-	Spec *protos.FiniteStateMachine `yaml:"spec"`
+	GenericEntity `yaml:",inline"`
+	Spec          *protos.FiniteStateMachine `yaml:"spec"`
 }
 
 type EventRequestEntity struct {
-	GenericEntity
-	Spec *protos.EventRequest `yaml:"spec"`
+	GenericEntity `yaml:",inline"`
+	Spec          *protos.EventRequest `yaml:"spec"`
 }
 
 func getStatusCode(response interface{}) codes.Code {
