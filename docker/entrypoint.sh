@@ -40,9 +40,6 @@ then
   retries="-max-retries ${RETRIES}"
 fi
 
-pwd
-ls -lA
-
 cmd="./fsm-server -grpc-port ${GRPC_PORT} -redis ${REDIS:-} ${DEBUG:-} ${INSECURE:-}
 ${endpoint} ${timeout} ${retries} ${events} ${notifications} $@"
 

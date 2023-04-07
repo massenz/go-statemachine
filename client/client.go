@@ -25,6 +25,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"time"
 )
@@ -46,7 +47,7 @@ func NewClient(address string, hasTls bool) *CliClient {
 		creds = insecure.NewCredentials()
 	} else {
 		clientTlsConfig := &tls.Config{}
-		ca, err := grpc.ParseCAFile("certs/ca.pem")
+		ca, err := grpc.ParseCAFile(path.Join(CertsDir, CaCert))
 		if err != nil {
 			panic(err)
 		}

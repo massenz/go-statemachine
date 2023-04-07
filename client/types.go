@@ -13,6 +13,8 @@ import (
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"os"
+	"path"
 )
 
 const (
@@ -26,6 +28,17 @@ const (
 	CmdGet  = "get"
 
 	StdinFlag = "--"
+)
+
+var (
+	// ConfigDefaultDir points to the directory in the user's HOME folder where configuration and Certificates are kept
+	ConfigDefaultDir = path.Join(os.Getenv("HOME"), ".fsm")
+
+	// CertsDir is the folder holding the X.509 Certificates and, optionally, the root CA Cert
+	CertsDir = path.Join(ConfigDefaultDir, "certs")
+
+	// CaCert is the name of the root CA X.509 Certificate for TLS Auth
+	CaCert = "ca.pem"
 )
 
 // A GenericEntity is the "wrapper" type that is sent to the CLI and wraps the entity

@@ -1,6 +1,6 @@
 # Copyright AlertAvert Inc. (c) 2022. All rights reserved.
 #
-# Docker Compose for Statemachine local development ONLY.
+# Docker Compose for CLI Client tests.
 
 version: '3.2'
 services:
@@ -10,11 +10,11 @@ services:
     hostname: redis
     command: "redis-server --save 60 1 --loglevel warning"
     volumes:
-      - "${TMPDIR:-/tmp}/redis:/data"
+      - "/tmp/test-redis:/data"
     ports:
       - "6379:6379"
     networks:
-      - sm-net
+      - test-net
 
   localstack:
     container_name: "awslocal"
@@ -22,7 +22,7 @@ services:
     hostname: awslocal
     environment:
       - AWS_REGION=us-west-2
-      - EDGE_PORT=4566
+      - EDGE_PORT=4599
       - SERVICES=sqs
     ports:
       - '4566:4566'
@@ -30,34 +30,28 @@ services:
       - "${TMPDIR:-/tmp}/localstack:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
-      - sm-net
+      - test-net
   server:
     depends_on:
       - localstack
       - redis
     networks:
-      - sm-net
+      - test-net
     ports:
       - '7398:7398'
     image: "massenz/statemachine:${RELEASE}"
     environment:
-      AWS_ENDPOINT: "http://awslocal:4566"
+      AWS_ENDPOINT: "http://awslocal:4599"
       AWS_REGION: us-west-2
       AWS_PROFILE: sm-bot
       TIMEOUT: 200ms
       DEBUG: -debug
-      EVENTS_Q: ""
-      NOTIFICATIONS_Q: ""
     volumes:
       - ${BASEDIR}/docker/aws-credentials:/home/sm-bot/.aws/credentials
       - ${BASEDIR}/certs:/etc/statemachine/certs
 
-# To connect to the servers in this stack, from a docker run
-# via Docker, use `--network statemachine_backend`.
-# The hosts listed above will then be reachable at the given names,
-# on whatever ports are exposed.
 networks:
-  sm-net:
+  test-net:
     ipam:
       config:
-      - subnet: 172.1.1.0/24
+      - subnet: 172.2.0.0/24

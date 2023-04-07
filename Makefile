@@ -9,8 +9,9 @@ GOMOD := $(shell go list -m)
 version := v0.12.0
 release := $(version)-g$(shell git rev-parse --short HEAD)
 prog := fsm-server
+cli := fsm-cli
 bin := out/bin/$(prog)-$(version)_$(GOOS)-$(GOARCH)
-client := out/bin/fsm-$(version)_$(GOOS)-$(GOARCH)
+cli := out/bin/$(cli)-$(version)_$(GOOS)-$(GOARCH)
 
 image := massenz/statemachine
 compose := docker/compose.yaml
@@ -25,6 +26,7 @@ pkgs := ./api ./grpc ./pubsub ./storage
 all_go := $(shell for d in $(pkgs); do find $$d -name "*.go"; done)
 test_srcs := $(shell for d in $(pkgs); do find $$d -name "*_test.go"; done)
 srcs := $(filter-out $(test_srcs),$(all_go))
+cli_config := ${HOME}/.fsm/
 
 ##@ General
 
@@ -67,23 +69,26 @@ $(bin): server/main.go $(srcs)
 .PHONY: build
 build: $(bin) ## Builds the Statemachine server binary
 
-.PHONY: client
-client: cli/fsm-cli.go  ## Builds the CLI client used to connect to the server
-	@mkdir -p $(shell dirname $(client))
+.PHONY: cli
+cli: cli/fsm-cli.go  ## Builds the CLI client used to connect to the server
+	@mkdir -p $(shell dirname $(cli))
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		-ldflags "-X main.Release=$(version)" \
-		-o $(client) cli/fsm-cli.go
+		-o $(cli) cli/fsm-cli.go
 
-.PHONY: cli_tests ## Run tests for the CLI Client
-cli_tests:
-	go test ./client
+.PHONY: cli_tests
+cli-test: client/handlers_test.go ## Run tests for the CLI Client
+	@mkdir -p $(cli_config)/certs
+	@cp certs/ca.pem $(cli_config)/certs
+	@RELEASE=$(release) BASEDIR=$(shell pwd) ginkgo ./client
 
 test: $(srcs) $(test_srcs)  ## Runs all tests
 	ginkgo $(pkgs)
 
-cov: $(srcs) $(test_srcs)  ## Runs the Test Coverage target and opens a browser window with the coverage report
-	@go test -coverprofile=/tmp/cov.out $(pkgs)
-	@go tool cover -html=/tmp/cov.out
+cov: $(srcs) $(test_srcs)  ## Runs the Test Coverage and saves the coverage report to out/reports/cov.out
+	@mkdir -p out/reports
+	@go test -coverprofile=out/reports/cov.out $(pkgs)
+	@echo "Coverage report at out/reports/cov.out"
 
 ##@ Container Management
 # Convenience targets to run locally containers and
