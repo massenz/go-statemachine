@@ -7,7 +7,7 @@
  * Author: Marco Massenzio (marco@alertavert.com)
  */
 
-package main
+package client
 
 import (
 	"context"
@@ -15,32 +15,32 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type HandlersMap = map[string]func(data []byte) (resp interface{}, grpcErr error)
+type HandlersMap = map[string]func(*CliClient, []byte) (resp interface{}, grpcErr error)
 
 var SendHandlers = HandlersMap{
-	KindConfiguration: func(data []byte) (resp interface{}, grpcErr error) {
+	KindConfiguration: func(clt *CliClient, data []byte) (resp interface{}, grpcErr error) {
 		var c ConfigEntity
 		err := yaml.Unmarshal(data, &c)
 		if err != nil {
 			return nil, err
 		}
-		return client.PutConfiguration(context.Background(), c.Spec)
+		return clt.PutConfiguration(context.Background(), c.Spec)
 	},
-	KindFiniteStateMachine: func(data []byte) (resp interface{}, grpcErr error) {
+	KindFiniteStateMachine: func(clt *CliClient, data []byte) (resp interface{}, grpcErr error) {
 		var fsm FsmEntity
 		err := yaml.Unmarshal(data, &fsm)
 		if err != nil {
 			return nil, err
 		}
 		request := &protos.PutFsmRequest{Id: fsm.Id, Fsm: fsm.Spec}
-		return client.PutFiniteStateMachine(context.Background(), request)
+		return clt.PutFiniteStateMachine(context.Background(), request)
 	},
-	KindEvent: func(data []byte) (resp interface{}, grpcErr error) {
+	KindEvent: func(clt *CliClient, data []byte) (resp interface{}, grpcErr error) {
 		var evt EventRequestEntity
 		err := yaml.Unmarshal(data, &evt)
 		if err != nil {
 			return nil, err
 		}
-		return SendEvent(evt.Spec)
+		return clt.sendEvent(evt.Spec)
 	},
 }

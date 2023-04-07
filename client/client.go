@@ -7,12 +7,11 @@
  * Author: Marco Massenzio (marco@alertavert.com)
  */
 
-package main
+package client
 
 import (
 	"context"
 	"crypto/tls"
-	"flag"
 	"fmt"
 	"github.com/massenz/go-statemachine/api"
 	"github.com/massenz/go-statemachine/grpc"
@@ -23,7 +22,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
@@ -36,18 +34,11 @@ const (
 	IntervalBetweenRetries = 200 * time.Millisecond
 )
 
-
-var (
-	client protos.StatemachineServiceClient
-	// Release is set by the Makefile at build time
-	Release string
-)
-
 func titleCase(s string) string {
 	return cases.Title(language.English).String(s)
 }
 
-func NewClient(address string, hasTls bool) protos.StatemachineServiceClient {
+func NewClient(address string, hasTls bool) *CliClient {
 	addr := strings.Split(address, ":")
 	var creds credentials.TransportCredentials
 	if !hasTls {
@@ -64,12 +55,14 @@ func NewClient(address string, hasTls bool) protos.StatemachineServiceClient {
 		creds = credentials.NewTLS(clientTlsConfig)
 	}
 	cc, _ := g.Dial(address, g.WithTransportCredentials(creds))
-	return protos.NewStatemachineServiceClient(cc)
+	return &CliClient{protos.NewStatemachineServiceClient(cc)}
 }
 
-func SendEvent(request *protos.EventRequest) (*protos.EventResponse, error) {
+// sendEvent is an internal method that encapsulates sending the Event to the server,
+// and wraps the StatemachineServiceClient.SendEvent function
+func (c *CliClient) sendEvent(request *protos.EventRequest) (*protos.EventResponse, error) {
 	api.UpdateEvent(request.Event)
-	response, err := client.SendEvent(context.Background(), request)
+	response, err := c.SendEvent(context.Background(), request)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +71,7 @@ func SendEvent(request *protos.EventRequest) (*protos.EventResponse, error) {
 
 	var outcome *protos.EventResponse
 	for remain := MaxRetries; remain > 0; remain-- {
-		outcome, err = client.GetEventOutcome(context.Background(), &protos.EventRequest{
+		outcome, err = c.GetEventOutcome(context.Background(), &protos.EventRequest{
 			Config: request.Config,
 			Id:     evtId,
 		})
@@ -92,11 +85,10 @@ func SendEvent(request *protos.EventRequest) (*protos.EventResponse, error) {
 	return outcome, nil
 }
 
-
 // Send processes CLI commands of the form `send config.yaml` by
 // parsing the YAML according to its contents, dynamically adjusting the types.
 // It only takes one argument, the path to the YAML file or `--` to use stdin
-func Send(path string) error {
+func (c *CliClient) Send(path string) error {
 	var entity GenericEntity
 	var f *os.File
 	var err error
@@ -122,7 +114,7 @@ func Send(path string) error {
 	if !ok {
 		return fmt.Errorf("unknown Kind: %s", entity.Kind)
 	}
-	resp, grpcErr := handler(data)
+	resp, grpcErr := handler(c, data)
 	if grpcErr != nil {
 		code := getStatusCode(grpcErr)
 		if code == codes.AlreadyExists {
@@ -146,37 +138,6 @@ func Send(path string) error {
 // YAML representation accordingly.
 // It takes two arguments, the kind and the id of the entity, and prints the
 // contents returned by the server to stdout (or returns an error if not found)
-func Get(kind, id string) error {
+func (c *CliClient) Get(kind, id string) error {
 	return nil
-}
-
-func main() {
-	var insecure = flag.Bool("insecure", false, "If set, TLS will be disabled (NOT recommended)")
-	var serverAddr = flag.String("addr", "localhost:7398", "The address (host:port) for the GRPC server")
-
-	flag.Parse()
-	client = NewClient(*serverAddr, !*insecure)
-	r, err := client.Health(context.Background(), &emptypb.Empty{})
-	if err != nil {
-		fmt.Println("unhealthy server:", err)
-		os.Exit(1)
-	}
-	fmt.Printf("Client %s connected to Server: %s at %s (%s)\n", Release, r.Release, *serverAddr, r.State)
-	cmd := strings.ToLower(flag.Arg(0))
-	if cmd == "" {
-		fmt.Println("nothing to do, exit")
-		os.Exit(0)
-	}
-	start := time.Now()
-
-	switch cmd {
-	case CmdSend:
-		err = Send(flag.Arg(1))
-	case CmdGet:
-		err = Get(flag.Arg(1), flag.Arg(2))
-	}
-	if err != nil {
-		fmt.Println("error:", err)
-	}
-	fmt.Printf("It took %v\n", time.Since(start))
 }

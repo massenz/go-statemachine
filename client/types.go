@@ -7,7 +7,7 @@
  * Author: Marco Massenzio (marco@alertavert.com)
  */
 
-package main
+package client
 
 import (
 	protos "github.com/massenz/statemachine-proto/golang/api"
@@ -61,4 +61,8 @@ func getStatusCode(response interface{}) codes.Code {
 	}
 	// Return the status code
 	return s.Code()
+}
+
+type CliClient struct {
+	protos.StatemachineServiceClient
 }

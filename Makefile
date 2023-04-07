@@ -68,12 +68,15 @@ $(bin): server/main.go $(srcs)
 build: $(bin) ## Builds the Statemachine server binary
 
 .PHONY: client
-client: client/fsm-cli.go client/types.go ## Builds the CLI client used to connect to the server
+client: cli/fsm-cli.go  ## Builds the CLI client used to connect to the server
 	@mkdir -p $(shell dirname $(client))
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		-ldflags "-X main.Release=$(version)" \
-		-o $(client) client/fsm-cli.go client/types.go client/handlers.go
+		-o $(client) cli/fsm-cli.go
 
+.PHONY: cli_tests ## Run tests for the CLI Client
+cli_tests:
+	go test ./client
 
 test: $(srcs) $(test_srcs)  ## Runs all tests
 	ginkgo $(pkgs)
