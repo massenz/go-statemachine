@@ -1,6 +1,9 @@
-# Copyright AlertAvert Inc. (c) 2022. All rights reserved.
+# Copyright AlertAvert Inc. (c) 2023. All rights reserved.
 #
 # Docker Compose for Statemachine local development ONLY.
+# As this expects a couple of Env Vars to be set, and SQS queues to
+# be created in Localstack, use with `make start` instead of
+# invoking directly.
 
 version: '3.2'
 services:
@@ -46,14 +49,14 @@ services:
       AWS_PROFILE: sm-bot
       TIMEOUT: 200ms
       DEBUG: -debug
-      EVENTS_Q: ""
-      NOTIFICATIONS_Q: ""
+      EVENTS_Q: "events"
+      NOTIFICATIONS_Q: "notifications"
     volumes:
       - ${BASEDIR}/docker/aws-credentials:/home/sm-bot/.aws/credentials
       - ${BASEDIR}/certs:/etc/statemachine/certs
 
 # To connect to the servers in this stack, from a docker run
-# via Docker, use `--network statemachine_backend`.
+# via Docker, use `--network sm_sm-net`.
 # The hosts listed above will then be reachable at the given names,
 # on whatever ports are exposed.
 networks:

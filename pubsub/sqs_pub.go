@@ -37,10 +37,6 @@ func NewSqsPublisher(channel <-chan protos.EventResponse, awsUrl *string) *SqsPu
 
 // SetLogLevel allows the SqsSubscriber to implement the log.Loggable interface
 func (s *SqsPublisher) SetLogLevel(level slf4go.LogLevel) {
-	if s == nil {
-		slf4go.RootLog.Warn("attempting to set log level on nil Publisher, ignoring")
-		return
-	}
 	s.logger.Level = level
 }
 

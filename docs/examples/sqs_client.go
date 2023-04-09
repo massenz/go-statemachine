@@ -87,7 +87,7 @@ func NewSqs(endpoint *string) *sqs.SQS {
 
 // main simulates a Client sending an SQS event message for an Order entity
 // whose status is being tracked by `fsm-server`.
-func main2() {
+func main() {
 	endpoint := flag.String("endpoint", "", "Use http://localhost:4566 to use LocalStack")
 	q := flag.String("q", "", "The SQS Queue to send an Event to")
 	cfg := flag.String("config", "", "The type of FSM (Configuration name)")
