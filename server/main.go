@@ -40,9 +40,9 @@ func SetLogLevel(services []log.Loggable, level log.LogLevel) {
 var (
 	logger = log.NewLog("server")
 
-	listener *pubsub.EventsListener
-	pub      *pubsub.SqsPublisher = nil
-	sub      *pubsub.SqsSubscriber
+	listener *pubsub.EventsListener = nil
+	pub      *pubsub.SqsPublisher   = nil
+	sub      *pubsub.SqsSubscriber  = nil
 	store    storage.StoreManager
 	wg       sync.WaitGroup
 

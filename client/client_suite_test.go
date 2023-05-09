@@ -17,6 +17,7 @@ var (
 	svc *client.CliClient
 	stack tc.ComposeStack
 )
+
 func TestClient(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "CLI Client Suite")
@@ -27,6 +28,10 @@ func StartServices() {
 	ctx := context.Background()
 
 	// Define the Docker Compose setup
+	//
+	// If the tests fail because the test server is not coming up, you can
+	// debug (and see logs) using this command:
+	//   RELEASE=$(make version) BASEDIR=$(pwd) docker compose -f docker/cli-test-compose.yaml up
 	compose, err := tc.NewDockerCompose("../docker/cli-test-compose.yaml")
 	Expect(err).ToNot(HaveOccurred())
 	stack = compose.WithOsEnv()
@@ -37,19 +42,17 @@ func StartServices() {
 	// Get the container IP address and port
 	smServer, err := stack.ServiceContainer(ctx, "server")
 	Expect(err).ToNot(HaveOccurred())
-	ip, err := smServer.ContainerIP(ctx)
-	Expect(err).ToNot(HaveOccurred())
 	port, err := smServer.MappedPort(ctx, "7398")
 	Expect(err).ToNot(HaveOccurred())
 
-	svc = client.NewClient(fmt.Sprintf("%s:%s", ip, port.Port()), true)
+	// It is *important* to use `localhost` here, as Certs are issued with that hostname
+	svc = client.NewClient(fmt.Sprintf("localhost:%s", port.Port()), true)
 }
 
 var _ = BeforeSuite(func() {
 	StartServices()
-	svc = client.NewClient(":7398", true)
 	_, err := svc.Health(context.Background(), &emptypb.Empty{})
-	Expect(err).Should(Succeed(), "Is the SM Server running? Use 'make start' to start it")
+	Expect(err).Should(Succeed())
 })
 
 var _ = AfterSuite(func() {

@@ -5,47 +5,29 @@
 version: '3.2'
 services:
   redis:
-    container_name: "redis"
     image: "redis:6.2-alpine"
     hostname: redis
+    expose:
+      - "6379"
     command: "redis-server --save 60 1 --loglevel warning"
-    volumes:
-      - "/tmp/test-redis:/data"
-    ports:
-      - "6379:6379"
     networks:
       - test-net
 
-  localstack:
-    container_name: "awslocal"
-    image: "localstack/localstack:1.3"
-    hostname: awslocal
-    environment:
-      - AWS_REGION=us-west-2
-      - EDGE_PORT=4599
-      - SERVICES=sqs
-    ports:
-      - '4566:4566'
-    volumes:
-      - "${TMPDIR:-/tmp}/localstack:/var/lib/localstack"
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    networks:
-      - test-net
   server:
     depends_on:
-      - localstack
+#      - localstack
       - redis
     networks:
       - test-net
     ports:
-      - '7398:7398'
+      - "7398"
     image: "massenz/statemachine:${RELEASE}"
     environment:
-      AWS_ENDPOINT: "http://awslocal:4599"
-      AWS_REGION: us-west-2
-      AWS_PROFILE: sm-bot
       TIMEOUT: 200ms
       DEBUG: -debug
+      EVENTS_Q: ""
+      NOTIFICATIONS_Q: ""
+
     volumes:
       - ${BASEDIR}/docker/aws-credentials:/home/sm-bot/.aws/credentials
       - ${BASEDIR}/certs:/etc/statemachine/certs

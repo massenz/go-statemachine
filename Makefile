@@ -80,7 +80,7 @@ cli: cli/fsm-cli.go  ## Builds the CLI client used to connect to the server
 cli-test: client/handlers_test.go ## Run tests for the CLI Client
 	@mkdir -p $(cli_config)/certs
 	@cp certs/ca.pem $(cli_config)/certs
-	@RELEASE=$(release) BASEDIR=$(shell pwd) ginkgo ./client
+	@RELEASE=$(release) BASEDIR=$(shell pwd) go test ./client
 
 test: $(srcs) $(test_srcs)  ## Runs all tests
 	ginkgo $(pkgs)
