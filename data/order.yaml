@@ -5,7 +5,7 @@ metadata:
   labels: []
 
 # Optional, if unset, a random UUID will be allocated
-id: 1234-abcde-999
+#id: 1234-abcde-999
 spec:
   # The only required field
   configid: orders:v3

@@ -24,8 +24,9 @@ const (
 	KindFiniteStateMachine = "FiniteStateMachine"
 	KindEvent              = "EventRequest"
 
-	CmdSend = "send"
-	CmdGet  = "get"
+	CmdGet     = "get"
+	CmdSend    = "send"
+	CmdVersion = "version"
 
 	StdinFlag = "--"
 )

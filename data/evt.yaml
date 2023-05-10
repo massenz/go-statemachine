@@ -7,7 +7,7 @@ metadata:
 spec:
   config: orders
   # FSM ID to send the event to
-  id: 1234-abcde-678
+  id: 6813f516-bb83-44f3-9d53-57b07e8611a8
   event:
     transition: {
       event: accept

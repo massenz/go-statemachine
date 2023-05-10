@@ -13,6 +13,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/massenz/go-statemachine/api"
 	"github.com/massenz/go-statemachine/grpc"
 	protos "github.com/massenz/statemachine-proto/golang/api"
@@ -140,5 +141,39 @@ func (c *CliClient) Send(path string) error {
 // It takes two arguments, the kind and the id of the entity, and prints the
 // contents returned by the server to stdout (or returns an error if not found)
 func (c *CliClient) Get(kind, id string) error {
+
+	switch kind {
+	case KindConfiguration:
+		cfg, err := c.GetConfiguration(context.Background(), &wrappers.StringValue{Value: id})
+		if err != nil {
+			return err
+		}
+		data, err := yaml.Marshal(cfg)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(data))
+	case KindFiniteStateMachine:
+		parts := strings.Split(id, string(os.PathSeparator))
+		if len(parts) != 2 {
+			return fmt.Errorf("expected an FSM ID of the form `config-name/fsm-id`, got instead %s", id)
+		}
+		fsm, err := c.GetFiniteStateMachine(context.Background(), &protos.GetFsmRequest{
+			Config: parts[0],
+			Query:  &protos.GetFsmRequest_Id{Id: parts[1]},
+		})
+		if err != nil {
+			return err
+		}
+		data, err := yaml.Marshal(fsm)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(data))
+	default:
+		return fmt.Errorf("kind `%s` unknown, please note they are case-sensitive (did you mean %s?)", kind,
+			strings.Title(kind))
+	}
+
 	return nil
 }

@@ -17,7 +17,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"os"
 	"strings"
-	"time"
 )
 
 
@@ -32,29 +31,30 @@ func main() {
 
 	flag.Parse()
 	cmd := strings.ToLower(flag.Arg(0))
-	if cmd == "" {
-		// Nothing to do, print the version and exit
-		fmt.Println("FSM CLI Client Rel.", Release)
-		os.Exit(0)
-	}
 
 	c := NewClient(*serverAddr, !*insecure)
 	r, err := c.Health(context.Background(), &emptypb.Empty{})
 	if err != nil {
-		fmt.Println("unhealthy server:", err)
+		fmt.Println("cannot connect to server", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Client %s connected to Server: %s at %s (%s)\n", Release, r.Release, *serverAddr, r.State)
-	start := time.Now()
 
 	switch cmd {
 	case CmdSend:
 		err = c.Send(flag.Arg(1))
 	case CmdGet:
 		err = c.Get(flag.Arg(1), flag.Arg(2))
+	case CmdVersion:
+		fmt.Println("FSM CLI Client Rel.", Release)
+		fmt.Printf("Connected to Server: %s at %s (%s)\n", r.Release, *serverAddr, r.State)
+		// Nothing else to do, just exit
+		os.Exit(0)
+	default:
+		fmt.Printf("unknown or missing command `%s`\n", cmd)
+		os.Exit(1)
 	}
 	if err != nil {
 		fmt.Println("error:", err)
+		os.Exit(1)
 	}
-	fmt.Printf("It took %v\n", time.Since(start))
 }
