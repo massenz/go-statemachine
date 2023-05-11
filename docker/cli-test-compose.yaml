@@ -1,0 +1,38 @@
+# Copyright AlertAvert Inc. (c) 2022. All rights reserved.
+#
+# Docker Compose for CLI Client tests.
+
+version: '3.2'
+services:
+  redis:
+    image: "redis:6.2-alpine"
+    hostname: redis
+    expose:
+      - "6379"
+    command: "redis-server --save 60 1 --loglevel warning"
+    networks:
+      - test-net
+
+  server:
+    depends_on:
+#      - localstack
+      - redis
+    networks:
+      - test-net
+    ports:
+      - "7398"
+    image: "massenz/statemachine:${RELEASE}"
+    environment:
+      DEBUG: -debug
+      EVENTS_Q: ""
+      NOTIFICATIONS_Q: ""
+      TIMEOUT: 200ms
+    volumes:
+      - ${BASEDIR}/docker/aws-credentials:/home/sm-bot/.aws/credentials
+      - ${BASEDIR}/certs:/etc/statemachine/certs
+
+networks:
+  test-net:
+    ipam:
+      config:
+      - subnet: 172.2.0.0/24

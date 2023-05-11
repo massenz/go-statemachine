@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 AlertAvert.com.  All rights reserved.
+ * Copyright (c) 2023 AlertAvert.com.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0
  * http://www.apache.org/licenses/LICENSE-2.0
@@ -7,24 +7,65 @@
  * Author: Marco Massenzio (marco@alertavert.com)
  */
 
-package main
+package examples
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
-	"github.com/massenz/go-statemachine/clients/common"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
+
+type OrderDetails struct {
+	OrderId    string
+	CustomerId string
+	OrderDate  time.Time
+	OrderTotal float64
+}
+
+func NewOrderDetails(orderId, customerId string, orderTotal float64) *OrderDetails {
+	return &OrderDetails{
+		OrderId:    orderId,
+		CustomerId: customerId,
+		OrderDate:  time.Now(),
+		OrderTotal: orderTotal,
+	}
+}
+
+func (o *OrderDetails) String() string {
+	res, error := json.Marshal(o)
+	if error != nil {
+		panic(error)
+	}
+	return string(res)
+}
+
+func ReadConfig(filePath string, config *protos.Configuration) error {
+	// Open the file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Decode the file into the struct
+	err = json.NewDecoder(file).Decode(config)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 var CTX = context.TODO()
 
@@ -45,8 +86,8 @@ func NewSqs(endpoint *string) *sqs.SQS {
 }
 
 // main simulates a Client sending an SQS event message for an Order entity
-// whose status is being tracked by `sm-server`.
-func main2() {
+// whose status is being tracked by `fsm-server`.
+func main() {
 	endpoint := flag.String("endpoint", "", "Use http://localhost:4566 to use LocalStack")
 	q := flag.String("q", "", "The SQS Queue to send an Event to")
 	cfg := flag.String("config", "", "The type of FSM (Configuration name)")
@@ -68,7 +109,7 @@ func main2() {
 	fmt.Printf("Publishing Event `%s` for FSM `%s` to SQS Topic: [%s]\n", *event, *fsmId, *q)
 
 	// This is the object you want to send across as Event's metadata.
-	order := common.NewOrderDetails(uuid.NewString(), "sqs-cust-1234", 99.99)
+	order := NewOrderDetails(uuid.NewString(), "sqs-cust-1234", 99.99)
 
 	msg := &protos.EventRequest{
 		Event: &protos.Event{
