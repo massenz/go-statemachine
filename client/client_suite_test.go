@@ -46,7 +46,7 @@ func StartServices() {
 	Expect(err).ToNot(HaveOccurred())
 
 	// It is *important* to use `localhost` here, as Certs are issued with that hostname
-	svc = client.NewClient(fmt.Sprintf("localhost:%s", port.Port()), false)
+	svc = client.NewClient(fmt.Sprintf("localhost:%s", port.Port()), true)
 }
 
 var _ = BeforeSuite(func() {

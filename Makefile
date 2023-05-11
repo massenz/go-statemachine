@@ -9,9 +9,11 @@ GOMOD := $(shell go list -m)
 version := v0.12.0
 release := $(version)-g$(shell git rev-parse --short HEAD)
 prog := fsm-server
-cli := fsm-cli
 bin := out/bin/$(prog)-$(version)_$(GOOS)-$(GOARCH)
-cli := out/bin/$(cli)-$(version)_$(GOOS)-$(GOARCH)
+
+# CLI Configuration
+cli := out/bin/fsm-cli-$(version)_$(GOOS)-$(GOARCH)
+cli_config := ${HOME}/.fsm
 
 image := massenz/statemachine
 compose := docker/compose.yaml
@@ -26,7 +28,6 @@ pkgs := ./api ./grpc ./pubsub ./storage
 all_go := $(shell for d in $(pkgs); do find $$d -name "*.go"; done)
 test_srcs := $(shell for d in $(pkgs); do find $$d -name "*_test.go"; done)
 srcs := $(filter-out $(test_srcs),$(all_go))
-cli_config := ${HOME}/.fsm/
 
 ##@ General
 
@@ -80,7 +81,7 @@ cli: cli/fsm-cli.go  ## Builds the CLI client used to connect to the server
 cli-test: client/handlers_test.go ## Run tests for the CLI Client
 	@mkdir -p $(cli_config)/certs
 	@cp certs/ca.pem $(cli_config)/certs
-	@RELEASE=$(release) BASEDIR=$(shell pwd) go test ./client
+	RELEASE=$(release) BASEDIR=$(shell pwd) ginkgo test ./client
 
 test: $(srcs) $(test_srcs)  ## Runs all tests
 	ginkgo $(pkgs)

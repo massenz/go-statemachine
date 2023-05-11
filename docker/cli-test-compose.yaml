@@ -25,7 +25,6 @@ services:
     environment:
       DEBUG: -debug
       EVENTS_Q: ""
-      INSECURE: "-insecure"
       NOTIFICATIONS_Q: ""
       TIMEOUT: 200ms
     volumes:
