@@ -34,5 +34,6 @@ jobs:
         mkdir -p ${HOME}/.fsm/certs && cp certs/ca.pem ${HOME}/.fsm/certs/
         export BASEDIR=$(pwd)
         export RELEASE=$(make version)
+        ls -la certs
         make container
         go test ./client
