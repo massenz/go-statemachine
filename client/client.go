@@ -56,7 +56,10 @@ func NewClient(address string, hasTls bool) *CliClient {
 		clientTlsConfig.ServerName = addr[0]
 		creds = credentials.NewTLS(clientTlsConfig)
 	}
-	cc, _ := g.Dial(address, g.WithTransportCredentials(creds))
+	cc, err := g.Dial(address, g.WithTransportCredentials(creds))
+	if err != nil {
+		return nil
+	}
 	return &CliClient{protos.NewStatemachineServiceClient(cc)}
 }
 
@@ -64,7 +67,9 @@ func NewClient(address string, hasTls bool) *CliClient {
 // and wraps the StatemachineServiceClient.SendEvent function
 func (c *CliClient) sendEvent(request *protos.EventRequest) (*protos.EventResponse, error) {
 	api.UpdateEvent(request.Event)
-	response, err := c.SendEvent(context.Background(), request)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	response, err := c.SendEvent(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +78,7 @@ func (c *CliClient) sendEvent(request *protos.EventRequest) (*protos.EventRespon
 
 	var outcome *protos.EventResponse
 	for remain := MaxRetries; remain > 0; remain-- {
-		outcome, err = c.GetEventOutcome(context.Background(), &protos.EventRequest{
+		outcome, err = c.GetEventOutcome(ctx, &protos.EventRequest{
 			Config: request.Config,
 			Id:     evtId,
 		})
@@ -103,7 +108,11 @@ func (c *CliClient) Send(path string) error {
 			return fmt.Errorf("cannot open %s: %v", path, err)
 		}
 	}
-	data, _ := io.ReadAll(f)
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+
 	err = yaml.Unmarshal(data, &entity)
 	if err != nil {
 		return err
@@ -142,9 +151,12 @@ func (c *CliClient) Send(path string) error {
 // contents returned by the server to stdout (or returns an error if not found)
 func (c *CliClient) Get(kind, id string) error {
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	switch kind {
 	case KindConfiguration:
-		cfg, err := c.GetConfiguration(context.Background(), &wrappers.StringValue{Value: id})
+		cfg, err := c.GetConfiguration(ctx, &wrappers.StringValue{Value: id})
 		if err != nil {
 			return err
 		}
@@ -158,7 +170,7 @@ func (c *CliClient) Get(kind, id string) error {
 		if len(parts) != 2 {
 			return fmt.Errorf("expected an FSM ID of the form `config-name/fsm-id`, got instead %s", id)
 		}
-		fsm, err := c.GetFiniteStateMachine(context.Background(), &protos.GetFsmRequest{
+		fsm, err := c.GetFiniteStateMachine(ctx, &protos.GetFsmRequest{
 			Config: parts[0],
 			Query:  &protos.GetFsmRequest_Id{Id: parts[1]},
 		})
@@ -172,7 +184,7 @@ func (c *CliClient) Get(kind, id string) error {
 		fmt.Println(string(data))
 	default:
 		return fmt.Errorf("kind `%s` unknown, please note they are case-sensitive (did you mean %s?)", kind,
-			strings.Title(kind))
+			titleCase(kind))
 	}
 
 	return nil

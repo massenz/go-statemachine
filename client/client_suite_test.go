@@ -47,6 +47,7 @@ func StartServices() {
 
 	// It is *important* to use `localhost` here, as Certs are issued with that hostname
 	svc = client.NewClient(fmt.Sprintf("localhost:%s", port.Port()), true)
+	Expect(svc).ToNot(BeNil())
 }
 
 var _ = BeforeSuite(func() {

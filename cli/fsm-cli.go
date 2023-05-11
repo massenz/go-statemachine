@@ -33,6 +33,10 @@ func main() {
 	cmd := strings.ToLower(flag.Arg(0))
 
 	c := NewClient(*serverAddr, !*insecure)
+	if c == nil {
+		fmt.Printf("cannot connect to server at %s", *serverAddr)
+		os.Exit(1)
+	}
 	r, err := c.Health(context.Background(), &emptypb.Empty{})
 	if err != nil {
 		fmt.Println("cannot connect to server", err)
