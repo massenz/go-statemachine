@@ -292,6 +292,11 @@ For an example of how to send events either to an SQS queue or via a gRPC call, 
 
 Logs are sent to `stdout` by default, but this can be changed using the [`slf4go`](https://github.com/massenz/slf4go) configuration methods.
 
+## Running the CLI Client
+
+To test the server functionality, you can use the [CLI client](cli/fsm-cli.go).  
+See [the User Guide](docs/cli.md) for details.
+
 
 ## Container Build & Run
 

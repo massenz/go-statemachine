@@ -23,11 +23,11 @@ services:
       - "7398"
     image: "massenz/statemachine:${RELEASE}"
     environment:
-      TIMEOUT: 200ms
       DEBUG: -debug
       EVENTS_Q: ""
+      INSECURE: "-insecure"
       NOTIFICATIONS_Q: ""
-
+      TIMEOUT: 200ms
     volumes:
       - ${BASEDIR}/docker/aws-credentials:/home/sm-bot/.aws/credentials
       - ${BASEDIR}/certs:/etc/statemachine/certs
