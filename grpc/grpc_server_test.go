@@ -76,6 +76,10 @@ func (m *Mockstore) UpdateState(cfgName string, id string, oldState string, newS
 	return NotImplemented
 }
 
+func (csm *Mockstore) TxProcessEvent(id, cfgName string, evt *protos.Event) error {
+	return NotImplemented
+}
+
 func (m *Mockstore) GetEvent(id string, cfg string) (*protos.Event, storage.StoreErr) {
 	return nil, NotImplemented
 }

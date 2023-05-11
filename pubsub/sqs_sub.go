@@ -69,6 +69,10 @@ func NewSqsSubscriber(eventsChannel chan<- protos.EventRequest, sqsUrl *string) 
 
 // SetLogLevel allows the SqsSubscriber to implement the log.Loggable interface
 func (s *SqsSubscriber) SetLogLevel(level log.LogLevel) {
+	if s == nil || s.logger == nil {
+		fmt.Println("WARN: attempt to set Log level on a nil SqsSubscriber")
+		return
+	}
 	s.logger.Level = level
 }
 

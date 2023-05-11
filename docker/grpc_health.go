@@ -31,8 +31,7 @@ func main() {
 		"The address (host:port) for the GRPC server")
 	var timeout = flag.Duration("timeout", 200*time.Millisecond,
 		"timeout expressed as a duration string (e.g., 200ms, 1s, etc.)")
-	var noTLS = flag.Bool("insecure", false,
-		"timeout expressed as a duration string (e.g., 200ms, 1s, etc.)")
+	var noTLS = flag.Bool("insecure", false, "disables TLS")
 	flag.Parse()
 
 	var creds credentials.TransportCredentials

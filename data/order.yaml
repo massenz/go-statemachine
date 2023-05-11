@@ -1,0 +1,11 @@
+apiVersion: v1alpha
+kind: FiniteStateMachine
+metadata:
+  # Not used currently, but could be added later
+  labels: []
+
+# Optional, if unset, a random UUID will be allocated
+#id: 1234-abcde-999
+spec:
+  # The only required field
+  configid: orders:v3
