@@ -227,6 +227,10 @@ The possible error codes are (see the `.proto` definition for the up-to-date val
 
 ## Prerequisites
 
+**TLS Certificates**<br/>
+To run tests locally, TLS certs need to be generated: see [here](docs/tls.md) for details.
+
+
 **Ginkgo testing framework**<br/>
 We are using [Ginkgo](https://onsi.github.io/ginkgo/) at **v1** (`v1.16.5`).
 

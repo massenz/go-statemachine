@@ -8,11 +8,12 @@
 
 # Overview
 
-We are using [Cloudflare CFSSL](https://github.com/cloudflare/cfssl), the installation and running is kept in the [`ssl/enable-ssl.sh`](ssl/enable-ssl.sh) script.
+We are using [Cloudflare CFSSL](https://github.com/cloudflare/cfssl): 
+the installation and running is kept in the [`ssl-config/enable-ssl.sh`](ssl/enable-ssl.sh) script.
 
 # Generating Server and CA Certs
 
-Use the `gencert` Makefile action, the resulting secrets are generated in the `certs/` folder:
+Using the `gencert` Makefile action, the resulting secrets are generated in the `certs/` folder:
 
     make gencert
 

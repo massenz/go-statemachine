@@ -21,3 +21,4 @@ tmp/
 *.pb.go
 certs/
 scratch.go
+**/*fakes

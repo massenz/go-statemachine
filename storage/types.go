@@ -48,6 +48,8 @@ func IsNotFoundErr(err StoreErr) bool {
 	return len(matches) > 1
 }
 
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -generate
+
 type ConfigStore interface {
 	GetConfig(versionId string) (*protos.Configuration, StoreErr)
 	PutConfig(cfg *protos.Configuration) StoreErr
@@ -110,6 +112,7 @@ type EventStore interface {
 	GetOutcomeForEvent(eventId string, cfgName string) (*protos.EventOutcome, StoreErr)
 }
 
+//counterfeiter:generate . StoreManager
 type StoreManager interface {
 	log.Loggable
 	ConfigStore

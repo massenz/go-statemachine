@@ -48,10 +48,9 @@ help: ## Display this help.
 
 .PHONY: clean
 img=$(shell docker images -q --filter=reference=$(image))
-clean: ## Cleans up the binary, container image and other data
+clean: clean-certs  ## Cleans up the binary, container image and other data
 	@rm -f $(bin)
 	@[ ! -z $(img) ] && docker rmi $(img) || true
-	@rm -rf certs
 
 version: ## Displays the current version tag (release)
 	@echo $(release)
@@ -82,6 +81,10 @@ cli-test: client/handlers_test.go ## Run tests for the CLI Client
 	@mkdir -p $(cli_config)/certs
 	@cp certs/ca.pem $(cli_config)/certs
 	RELEASE=$(release) BASEDIR=$(shell pwd) ginkgo test ./client
+
+generate: $(srcs)  ## Generates mocks and other auto-generated code
+	go generate $(pkgs)
+
 
 test: $(srcs) $(test_srcs)  ## Runs all tests
 	ginkgo $(pkgs)
@@ -141,5 +144,5 @@ gencert: $(ca-csr) $(config) $(server-csr) ## Generates all certificates in the 
 	@echo "Certificates generated in $(shell pwd)/certs"
 
 .PHONY: clean-cert
-clean-cert:
+clean-certs:
 	@rm -rf certs

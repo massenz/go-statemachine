@@ -12,6 +12,7 @@ package pubsub_test
 import (
 	"fmt"
 	. "github.com/JiaYongfei/respect/gomega"
+	"github.com/massenz/go-statemachine/storage/storagefakes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -234,4 +235,70 @@ var _ = Describe("A Listener", func() {
 			}, 100*time.Millisecond, 20*time.Millisecond).Should(Succeed())
 		})
 	})
+})
+
+var _ = Describe("A Listener with a Mock store", func() {
+	Context(
+		"when storing configs", func() {
+			var (
+				testListener    *pubsub.EventsListener
+				eventsCh        chan protos.EventRequest
+				notificationsCh chan protos.EventResponse
+				store           *storagefakes.FakeStoreManager
+			)
+			BeforeEach(
+				func() {
+					eventsCh = make(chan protos.EventRequest)
+					notificationsCh = make(chan protos.EventResponse)
+					store = &storagefakes.FakeStoreManager{}
+					testListener = pubsub.NewEventsListener(
+						&pubsub.ListenerOptions{
+							EventsChannel:        eventsCh,
+							NotificationsChannel: notificationsCh,
+							StatemachinesStore:   store,
+							ListenersPoolSize:    0,
+						})
+					// Set to DEBUG when diagnosing test failures
+					testListener.SetLogLevel(logging.NONE)
+				})
+			const eventId = "1234-abcdef"
+			It("can process well-formed events", func() {
+					event := protos.Event{
+						EventId:    eventId,
+						Originator: "me",
+						Transition: &protos.Transition{
+							Event: "move",
+						},
+						Details: "more details",
+					}
+					const requestId = "12345-faa44"
+					request := protos.EventRequest{
+						Event:  &event,
+						Config: "test",
+						Id:     requestId,
+					}
+
+					go func() {
+						testListener.ListenForMessages()
+					}()
+					eventsCh <- request
+					close(eventsCh)
+
+					Eventually(
+						func(g Gomega) {
+							// Now we want to test that the state machine was updated
+							fsm, err := store.GetStateMachine(requestId, "test")
+							g.Ω(err).To(BeNil())
+							g.Ω(fsm.State).To(Equal("end"))
+							g.Ω(len(fsm.History)).To(Equal(1))
+							g.Ω(fsm.History[0].Details).To(Equal("more details"))
+							g.Ω(fsm.History[0].Transition.Event).To(Equal("move"))
+						}, 120*time.Millisecond, 40*time.Millisecond).Should(Succeed())
+					Eventually(
+						func() storage.StoreErr {
+							_, err := store.GetEvent(event.EventId, "test")
+							return err
+						}).Should(BeNil())
+				})
+		})
 })
