@@ -2,7 +2,7 @@ apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: statemachine
-  # This is an extra long description with Markdown
+  title: 'Statemachine Server (gRPC)'
   description: |
     [The Statemachine Server](http://github.com/massenz/go-statemachine)
     exposes a gRPC API to manage statemachines and relative configurations,
@@ -11,10 +11,14 @@ metadata:
     - url: https://github.com/massenz/go-statemachine
       title: GitHub Repo
       icon: github
+    - url: https://github.com/massenz/go-statemachine/releases
+      title: Releases
+      icon: settings
 spec:
   type: service
   lifecycle: beta
-  owner: Marco Massenzio
+  owner: marco@alertavert.com
+  team: Backend
   providesApis:
     - statemachines
     - configurations
