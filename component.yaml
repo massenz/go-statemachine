@@ -1,6 +1,10 @@
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
+  annotations:
+    crashoverride.com/artifact: "statemachine-9865-adef"
+    crashoverride.com/origin: "massenz/go-statemachine"
+
   name: statemachine
   title: 'Statemachine Server (gRPC)'
   description: |
@@ -16,8 +20,8 @@ metadata:
       icon: settings
 spec:
   type: service
-  lifecycle: beta
-  owner: marco@alertavert.com
+  lifecycle: experimental
+  owner: user:marco
   team: Backend
   providesApis:
     - statemachines
