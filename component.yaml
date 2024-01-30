@@ -2,8 +2,8 @@ apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   annotations:
-    crashoverride.com/artifact: "statemachine-9865-adef"
-    crashoverride.com/origin: "massenz/go-statemachine"
+    crashoverride.com/artifact: "fsm-server"
+    crashoverride.com/origin: "git@github.com:massenz/go-statemachine.git"
 
   name: statemachine
   title: 'Statemachine Server (gRPC)'
