@@ -3,7 +3,7 @@ kind: Component
 metadata:
   annotations:
     crashoverride.com/artifact: "fsm-server"
-    crashoverride.com/origin: "git@github.com:massenz/go-statemachine.git"
+    crashoverride.com/origin: "go-statemachine"
 
   name: statemachine
   title: 'Statemachine Server (gRPC)'
