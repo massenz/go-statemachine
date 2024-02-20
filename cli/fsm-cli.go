@@ -19,7 +19,6 @@ import (
 	"strings"
 )
 
-
 var (
 	// Release is set by the Makefile at build time
 	Release string
@@ -34,13 +33,13 @@ func main() {
 
 	c := NewClient(*serverAddr, !*insecure)
 	if c == nil {
-		fmt.Printf("cannot connect to server at %s", *serverAddr)
+		fmt.Printf("cannot connect to server at %s\n", *serverAddr)
 		os.Exit(1)
 	}
 	r, err := c.Health(context.Background(), &emptypb.Empty{})
 	if err != nil {
-		fmt.Println("cannot connect to server", err)
-		os.Exit(1)
+		fmt.Printf("server at %s is in an unhealthy state: %v\n", *serverAddr, err)
+		os.Exit(2)
 	}
 
 	switch cmd {
@@ -55,10 +54,10 @@ func main() {
 		os.Exit(0)
 	default:
 		fmt.Printf("unknown or missing command `%s`\n", cmd)
-		os.Exit(1)
+		os.Exit(3)
 	}
 	if err != nil {
-		fmt.Println("error:", err)
+		fmt.Printf("cannot execute command `%s`: %v\n", cmd, err)
 		os.Exit(1)
 	}
 }
