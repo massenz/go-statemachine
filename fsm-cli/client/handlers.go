@@ -15,7 +15,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type HandlersMap = map[string]func(*CliClient, []byte) (resp interface{}, grpcErr error)
+type HandlerFunc = func(*CliClient, []byte) (interface{}, error)
+type HandlersMap = map[string]HandlerFunc
 
 var SendHandlers = HandlersMap{
 	KindConfiguration: func(clt *CliClient, data []byte) (resp interface{}, grpcErr error) {
