@@ -37,7 +37,7 @@ func SetLogLevel(services []log.Loggable, level log.LogLevel) {
 }
 
 var (
-	logger = log.NewLog("cmd")
+	logger = log.NewLog("fsmsrv")
 
 	listener *pubsub.EventsListener
 	pub      *pubsub.SqsPublisher
@@ -56,7 +56,7 @@ var (
 	notificationsCh chan protos.EventResponse = nil
 
 	// eventsCh is the channel over which the Listener receive Events to process.
-	// Both the gRPC cmd and the PubSub Subscriber (if configured) will produce
+	// Both the gRPC Server and the PubSub Subscriber (if configured) will produce
 	// events for this channel.
 	//
 	// Currently, this is a blocking channel (capacity for one item), but once we
@@ -74,7 +74,7 @@ func main() {
 	var debug = flag.Bool("debug", false,
 		"Verbose logs; better to avoid on Production services")
 	var eventsTopic = flag.String("events", "", "Topic name to receive events from")
-	var grpcPort = flag.Int("grpc-port", 7398, "The port for the gRPC cmd")
+	var grpcPort = flag.Int("grpc-port", 7398, "The port for the gRPC Server")
 	var noTls = flag.Bool("insecure", false, "If set, TLS will be disabled (NOT recommended)")
 	var maxRetries = flag.Int("max-retries", storage.DefaultMaxRetries,
 		"Max number of attempts for a recoverable error to be retried against the Redis cluster")
@@ -94,9 +94,9 @@ func main() {
 	logger.Info("starting State Machine Server - Rel. %s", api.Release)
 
 	if *redisUrl == "" {
-		logger.Fatal(errors.New("in-memory store deprecated, a Redis cmd must be configured"))
+		logger.Fatal(errors.New("in-memory store deprecated, a Redis server must be configured"))
 	} else {
-		logger.Info("connecting to Redis cmd at %s", *redisUrl)
+		logger.Info("connecting to Redis server at %s", *redisUrl)
 		logger.Info("with timeout: %s, max-retries: %d", *timeout, *maxRetries)
 		store = storage.NewRedisStore(*redisUrl, *cluster, 1, *timeout, *maxRetries)
 	}
@@ -140,12 +140,12 @@ func main() {
 		listener.ListenForMessages()
 	}()
 
-	logger.Info("gRPC cmd running at tcp://:%d", *grpcPort)
+	logger.Info("gRPC Server running at tcp://:%d", *grpcPort)
 	svr := startGrpcServer(*grpcPort, *noTls, eventsCh)
 
 	// This should not be invoked until we have initialized all the services.
 	setLogLevel(*debug, *trace)
-	logger.Info("statemachine cmd ready for processing events...")
+	logger.Info("statemachine server ready for processing events...")
 	RunUntilStopped(done, svr)
 	logger.Info("...done. Goodbye.")
 }
@@ -181,7 +181,7 @@ func setLogLevel(debug bool, trace bool) {
 	SetLogLevel([]log.Loggable{store, pub, sub, listener}, logLevel)
 }
 
-// startGrpcServer will start a new gRPC cmd, bound to
+// startGrpcServer will start a new gRPC server, bound to
 // the local `port` and will send any incoming
 // `EventRequest` to the receiving channel.
 // This MUST be run as a go-routine, which never returns
@@ -207,7 +207,7 @@ func startGrpcServer(port int, disableTls bool, events chan<- protos.EventReques
 		if err != nil {
 			logger.Fatal(err)
 		}
-		logger.Info("gRPC cmd exited")
+		logger.Info("gRPC Server exited")
 	}()
 	return grpcServer
 }

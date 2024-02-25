@@ -10,14 +10,14 @@
 package pubsub_test
 
 import (
-	"fmt"
+	"github.com/massenz/go-statemachine/pkg/pubsub"
+	"github.com/massenz/go-statemachine/pkg/storage"
+	"github.com/massenz/slf4go/logging"
+
 	. "github.com/JiaYongfei/respect/gomega"
-	pubsub2 "github.com/massenz/go-statemachine/pkg/pubsub"
-	storage2 "github.com/massenz/go-statemachine/pkg/storage"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/massenz/slf4go/logging"
 	"time"
 
 	protos "github.com/massenz/statemachine-proto/golang/api"
@@ -26,17 +26,17 @@ import (
 var _ = Describe("A Listener", func() {
 	Context("when store-backed", func() {
 		var (
-			testListener    *pubsub2.EventsListener
+			testListener    *pubsub.EventsListener
 			eventsCh        chan protos.EventRequest
 			notificationsCh chan protos.EventResponse
-			store           storage2.StoreManager
+			store           storage.StoreManager
 		)
 		BeforeEach(func() {
 			eventsCh = make(chan protos.EventRequest)
 			notificationsCh = make(chan protos.EventResponse)
-			store = storage2.NewRedisStoreWithDefaults(redisContainer.Address)
+			store = storage.NewRedisStoreWithDefaults(redisContainer.Address)
 			store.SetLogLevel(logging.NONE)
-			testListener = pubsub2.NewEventsListener(&pubsub2.ListenerOptions{
+			testListener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
 				EventsChannel:        eventsCh,
 				NotificationsChannel: notificationsCh,
 				StatemachinesStore:   store,
@@ -120,7 +120,7 @@ var _ = Describe("A Listener", func() {
 				g.Ω(fsm.History[0].Details).To(Equal("more details"))
 				g.Ω(fsm.History[0].Transition.Event).To(Equal("move"))
 			}, 120*time.Millisecond, 40*time.Millisecond).Should(Succeed())
-			Eventually(func() storage2.StoreErr {
+			Eventually(func() storage.StoreErr {
 				_, err := store.GetEvent(event.EventId, "test")
 				return err
 			}).Should(BeNil())
@@ -151,7 +151,6 @@ var _ = Describe("A Listener", func() {
 			case <-time.After(timeout):
 				Fail("timed out waiting for notification")
 			}
-			fmt.Println("3")
 		})
 		It("sends notifications for missing destinations", func() {
 			request := protos.EventRequest{
