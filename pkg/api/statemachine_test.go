@@ -11,12 +11,12 @@ package api_test
 
 import (
 	"github.com/golang/protobuf/jsonpb"
+	. "github.com/massenz/go-statemachine/pkg/api"
 	log "github.com/massenz/slf4go/logging"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"io/ioutil"
+	"os"
 
-	. "github.com/massenz/go-statemachine/api"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
@@ -187,7 +187,7 @@ var _ = Describe("FSM Protocol Buffers", func() {
 			)
 			BeforeEach(func() {
 				var err error
-				configJson, err = ioutil.ReadFile("../data/orders.json")
+				configJson, err = os.ReadFile("../../data/orders.json")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(jsonpb.UnmarshalString(string(configJson), &orders)).ToNot(HaveOccurred())
 			})

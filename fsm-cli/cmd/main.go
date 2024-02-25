@@ -19,7 +19,6 @@ import (
 	"strings"
 )
 
-
 var (
 	// Release is set by the Makefile at build time
 	Release string
@@ -27,19 +26,19 @@ var (
 
 func main() {
 	var insecure = flag.Bool("insecure", false, "If set, TLS will be disabled (NOT recommended)")
-	var serverAddr = flag.String("addr", "localhost:7398", "The address (host:port) for the GRPC server")
+	var serverAddr = flag.String("addr", "localhost:7398", "The address (host:port) for the GRPC cmd")
 
 	flag.Parse()
 	cmd := strings.ToLower(flag.Arg(0))
 
 	c := NewClient(*serverAddr, !*insecure)
 	if c == nil {
-		fmt.Printf("cannot connect to server at %s", *serverAddr)
+		fmt.Printf("cannot connect to cmd at %s", *serverAddr)
 		os.Exit(1)
 	}
 	r, err := c.Health(context.Background(), &emptypb.Empty{})
 	if err != nil {
-		fmt.Println("cannot connect to server", err)
+		fmt.Println("cannot connect to cmd", err)
 		os.Exit(1)
 	}
 

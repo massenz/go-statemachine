@@ -1,7 +1,7 @@
 package storage_test
 
 import (
-	"github.com/massenz/go-statemachine/storage"
+	"github.com/massenz/go-statemachine/pkg/storage"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

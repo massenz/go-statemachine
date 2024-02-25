@@ -12,7 +12,8 @@ package grpc_test
 import (
 	"context"
 	"fmt"
-	"github.com/massenz/go-statemachine/storage"
+	"github.com/massenz/go-statemachine/pkg/grpc"
+	"github.com/massenz/go-statemachine/pkg/storage"
 	slf4go "github.com/massenz/slf4go/logging"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -23,7 +24,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/massenz/go-statemachine/grpc"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
@@ -51,7 +51,7 @@ var _ = Describe("gRPC Server with TLS", func() {
 				ServerAddress: addr,
 				Store:         storage.NewRedisStoreWithDefaults(redisContainer.Address),
 				TlsEnabled:    true,
-				TlsCerts:      "../certs",
+				TlsCerts:      "../../certs",
 				// TODO: add mTLS tests
 				TlsMutual: false,
 			})

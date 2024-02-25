@@ -34,7 +34,7 @@ func StartServices() {
 
 	// Define the Docker Compose setup
 	//
-	// If the tests fail because the test server is not coming up, you can
+	// If the tests fail because the test cmd is not coming up, you can
 	// debug (and see logs) using this command:
 	//   RELEASE=$(make version) BASEDIR=$(pwd) docker compose -f docker/cli-test-compose.yaml up
 	compose, err := tc.NewDockerCompose(composeYaml)
@@ -45,7 +45,7 @@ func StartServices() {
 	Ω(stack.Up(ctx)).To(Succeed())
 
 	// Get the container IP address and port
-	smServer, err := stack.ServiceContainer(ctx, "server")
+	smServer, err := stack.ServiceContainer(ctx, "cmd")
 	Ω(err).ToNot(HaveOccurred())
 	port, err := smServer.MappedPort(ctx, "7398")
 	Ω(err).ToNot(HaveOccurred())

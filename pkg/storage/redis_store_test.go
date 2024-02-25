@@ -16,8 +16,8 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
-	"github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/storage"
+	"github.com/massenz/go-statemachine/pkg/api"
+	storage2 "github.com/massenz/go-statemachine/pkg/storage"
 	slf4go "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	. "github.com/onsi/ginkgo"
@@ -33,8 +33,8 @@ const (
 // configId is a constant in all but name
 var configId = strings.Join([]string{cfgName, "v4"}, api.ConfigurationVersionSeparator)
 
-func setupStoreRedis() (storage.StoreManager, *redis.Client) {
-	store := storage.NewRedisStoreWithDefaults(container.Address)
+func setupStoreRedis() (storage2.StoreManager, *redis.Client) {
+	store := storage2.NewRedisStoreWithDefaults(container.Address)
 	Ω(store).ToNot(BeNil())
 	store.SetLogLevel(slf4go.NONE)
 
@@ -42,12 +42,12 @@ func setupStoreRedis() (storage.StoreManager, *redis.Client) {
 	// purposes. Do NOT do this in your code.
 	rdb := redis.NewClient(&redis.Options{
 		Addr: container.Address,
-		DB:   storage.DefaultRedisDb,
+		DB:   storage2.DefaultRedisDb,
 	})
 	return store, rdb
 }
 
-func storeSomeFSMs(store storage.StoreManager, count int) {
+func storeSomeFSMs(store storage2.StoreManager, count int) {
 	for id := 1; id < count; id++ {
 		fsm := &protos.FiniteStateMachine{
 			ConfigId: configId,
@@ -66,7 +66,7 @@ func storeSomeFSMs(store storage.StoreManager, count int) {
 var _ = Describe("Redis Store", func() {
 
 	Context("for simple operations", func() {
-		var store storage.StoreManager
+		var store storage2.StoreManager
 		var rdb *redis.Client
 		var cfg *protos.Configuration
 
@@ -89,8 +89,8 @@ var _ = Describe("Redis Store", func() {
 		It("can get a configuration back", func() {
 			id := api.GetVersionId(cfg)
 			val, _ := proto.Marshal(cfg)
-			res, err := rdb.Set(context.Background(), storage.NewKeyForConfig(id), val,
-				storage.NeverExpire).Result()
+			res, err := rdb.Set(context.Background(), storage2.NewKeyForConfig(id), val,
+				storage2.NeverExpire).Result()
 			Ω(err).ToNot(HaveOccurred())
 			Ω(res).To(Equal("OK"))
 
@@ -109,7 +109,7 @@ var _ = Describe("Redis Store", func() {
 			var found protos.Configuration
 			Ω(store.PutConfig(cfg)).ToNot(HaveOccurred())
 			val, err := rdb.Get(context.Background(),
-				storage.NewKeyForConfig(api.GetVersionId(cfg))).Bytes()
+				storage2.NewKeyForConfig(api.GetVersionId(cfg))).Bytes()
 			Ω(err).ToNot(HaveOccurred())
 
 			Ω(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
@@ -132,8 +132,8 @@ var _ = Describe("Redis Store", func() {
 			}
 			// Storing the FSM behind the store's back
 			val, _ := proto.Marshal(fsm)
-			key := storage.NewKeyForMachine(id, fsm.ConfigId)
-			res, err := rdb.Set(context.Background(), key, val, storage.NeverExpire).Result()
+			key := storage2.NewKeyForMachine(id, fsm.ConfigId)
+			res, err := rdb.Set(context.Background(), key, val, storage2.NeverExpire).Result()
 
 			Ω(err).ToNot(HaveOccurred())
 			Ω(res).To(Equal("OK"))
@@ -155,7 +155,7 @@ var _ = Describe("Redis Store", func() {
 				},
 			}
 			Ω(store.PutStateMachine(id, fsm)).ToNot(HaveOccurred())
-			val, err := rdb.Get(context.Background(), storage.NewKeyForMachine(id, cfgName)).Bytes()
+			val, err := rdb.Get(context.Background(), storage2.NewKeyForMachine(id, cfgName)).Bytes()
 			Ω(err).ToNot(HaveOccurred())
 
 			Ω(proto.Unmarshal(val, &found)).ToNot(HaveOccurred())
@@ -172,9 +172,9 @@ var _ = Describe("Redis Store", func() {
 		It("can get events back", func() {
 			id := uuid.New().String()
 			ev := api.NewEvent("confirmed")
-			key := storage.NewKeyForEvent(id, cfgName)
+			key := storage2.NewKeyForEvent(id, cfgName)
 			val, _ := proto.Marshal(ev)
-			_, err := rdb.Set(context.Background(), key, val, storage.NeverExpire).Result()
+			_, err := rdb.Set(context.Background(), key, val, storage2.NeverExpire).Result()
 			Ω(err).ToNot(HaveOccurred())
 
 			found, err := store.GetEvent(id, cfgName)
@@ -184,8 +184,8 @@ var _ = Describe("Redis Store", func() {
 		It("can save events", func() {
 			ev := api.NewEvent("confirmed")
 			id := ev.EventId
-			Ω(store.PutEvent(ev, cfgName, storage.NeverExpire)).ToNot(HaveOccurred())
-			val, err := rdb.Get(context.Background(), storage.NewKeyForEvent(id, cfgName)).Bytes()
+			Ω(store.PutEvent(ev, cfgName, storage2.NeverExpire)).ToNot(HaveOccurred())
+			val, err := rdb.Get(context.Background(), storage2.NewKeyForEvent(id, cfgName)).Bytes()
 			Ω(err).ToNot(HaveOccurred())
 
 			var found protos.Event
@@ -205,9 +205,9 @@ var _ = Describe("Redis Store", func() {
 				Id:      "1234-feed-beef",
 				Details: "this was just a test",
 			}
-			Ω(store.AddEventOutcome(id, cfg, response, storage.NeverExpire)).ToNot(HaveOccurred())
+			Ω(store.AddEventOutcome(id, cfg, response, storage2.NeverExpire)).ToNot(HaveOccurred())
 
-			key := storage.NewKeyForOutcome(id, cfg)
+			key := storage2.NewKeyForOutcome(id, cfg)
 			val, err := rdb.Get(context.Background(), key).Bytes()
 			Ω(err).ToNot(HaveOccurred())
 			var found protos.EventOutcome
@@ -222,9 +222,9 @@ var _ = Describe("Redis Store", func() {
 				Details: "this was just a test",
 				Id:      "1234-feed-beef",
 			}
-			key := storage.NewKeyForOutcome(id, cfg)
+			key := storage2.NewKeyForOutcome(id, cfg)
 			val, _ := proto.Marshal(response)
-			_, err := rdb.Set(context.Background(), key, val, storage.NeverExpire).Result()
+			_, err := rdb.Set(context.Background(), key, val, storage2.NeverExpire).Result()
 			Ω(err).ToNot(HaveOccurred())
 			found, err := store.GetOutcomeForEvent(id, cfg)
 			Ω(err).ToNot(HaveOccurred())
@@ -237,16 +237,16 @@ var _ = Describe("Redis Store", func() {
 			Ω(store.PutStateMachine("fake", nil)).To(HaveOccurred())
 		})
 		It("should gracefully handle a nil Event", func() {
-			Ω(store.PutEvent(nil, cfgName, storage.NeverExpire)).To(HaveOccurred())
+			Ω(store.PutEvent(nil, cfgName, storage2.NeverExpire)).To(HaveOccurred())
 		})
 		It("should gracefully handle a nil Outcome", func() {
 			Ω(store.AddEventOutcome("fake", "test", nil,
-				storage.NeverExpire)).To(HaveOccurred())
+				storage2.NeverExpire)).To(HaveOccurred())
 		})
 	})
 
 	When("querying for configurations", func() {
-		var store storage.StoreManager
+		var store storage2.StoreManager
 		var rdb *redis.Client
 
 		BeforeEach(func() {
@@ -281,7 +281,7 @@ var _ = Describe("Redis Store", func() {
 		})
 	})
 	When("querying for FSMs", func() {
-		var store storage.StoreManager
+		var store storage2.StoreManager
 		var rdb *redis.Client
 
 		BeforeEach(func() {

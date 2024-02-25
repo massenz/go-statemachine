@@ -15,11 +15,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/golang/protobuf/proto"
+	"github.com/massenz/go-statemachine/pkg/api"
 	log "github.com/massenz/slf4go/logging"
 	"os"
 	"time"
-
-	"github.com/massenz/go-statemachine/api"
 
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )

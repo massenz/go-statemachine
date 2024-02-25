@@ -12,8 +12,8 @@ package grpc_test
 import (
 	"context"
 	"crypto/tls"
-	"github.com/massenz/go-statemachine/grpc"
-	internals "github.com/massenz/go-statemachine/internal/testing"
+	"github.com/massenz/go-statemachine/pkg/grpc"
+	internals "github.com/massenz/go-statemachine/pkg/internal/testing"
 	slf4go "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	g "google.golang.org/grpc"

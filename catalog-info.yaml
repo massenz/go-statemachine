@@ -2,7 +2,7 @@ apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   annotations:
-    crashoverride.com/artifact: "fsm-server"
+    crashoverride.com/artifact: "fsm-cmd"
     crashoverride.com/component: "go-statemachine"
 
   name: statemachine

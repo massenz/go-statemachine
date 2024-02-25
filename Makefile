@@ -6,7 +6,7 @@ GOOS ?= $(shell uname -s | tr "[:upper:]" "[:lower:]")
 GOARCH ?= amd64
 GOMOD := $(shell go list -m)
 
-version := v0.12.1
+version := v0.13.0
 release := $(version)-g$(shell git rev-parse --short HEAD)
 out := build/bin
 server := fsm-server-$(version)_$(GOOS)-$(GOARCH)
@@ -24,7 +24,7 @@ dockerfile := docker/Dockerfile
 # Edit only the packages list, when adding new functionality,
 # the rest is deduced automatically.
 #
-pkgs := ./api ./grpc ./pubsub ./storage
+pkgs := pkg/api pkg/grpc pkg/pubsub pkg/storage pkg/internal
 all_go := $(shell for d in $(pkgs); do find $$d -name "*.go"; done)
 test_srcs := $(shell for d in $(pkgs); do find $$d -name "*_test.go"; done)
 srcs := $(filter-out $(test_srcs),$(all_go))
@@ -57,15 +57,15 @@ version: ## Displays the current version tag (release)
 	@echo $(release)
 
 fmt: ## Formats the Go source code using 'go fmt'
-	@go fmt $(pkgs) ./cmd ./clients
+	@go fmt $(pkgs) ./cmd fsm-cli/client fsm-cli/cmd
 
 ##@ Development
 .PHONY: build test container cov clean fmt
-$(out)/$(server): pkg/cmd/main.go $(srcs)
+$(out)/$(server): cmd/main.go $(srcs)
 	@mkdir -p $(out)
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
-		-ldflags "-X $(GOMOD)/api.Release=$(release)" \
-		-o $(out)/$(server) pkg/cmd/main.go
+		-ldflags "-X $(GOMOD)/pkg/api.Release=$(release)" \
+		-o $(out)/$(server) cmd/main.go
 
 .PHONY: build
 build: $(out)/$(server) ## Builds the Statemachine server binary

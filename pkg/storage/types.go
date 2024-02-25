@@ -52,7 +52,7 @@ type ConfigStore interface {
 	GetConfig(versionId string) (*protos.Configuration, StoreErr)
 	PutConfig(cfg *protos.Configuration) StoreErr
 
-	// GetAllConfigs returns all the `Configurations` that exist in the server, regardless of
+	// GetAllConfigs returns all the `Configurations` that exist in the cmd, regardless of
 	// the version, and whether are used or not by an FSM.
 	GetAllConfigs() []string
 

@@ -12,31 +12,31 @@ package pubsub_test
 import (
 	"fmt"
 	. "github.com/JiaYongfei/respect/gomega"
+	pubsub2 "github.com/massenz/go-statemachine/pkg/pubsub"
+	storage2 "github.com/massenz/go-statemachine/pkg/storage"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/massenz/slf4go/logging"
 	"time"
 
-	"github.com/massenz/go-statemachine/pubsub"
-	"github.com/massenz/go-statemachine/storage"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("A Listener", func() {
 	Context("when store-backed", func() {
 		var (
-			testListener    *pubsub.EventsListener
+			testListener    *pubsub2.EventsListener
 			eventsCh        chan protos.EventRequest
 			notificationsCh chan protos.EventResponse
-			store           storage.StoreManager
+			store           storage2.StoreManager
 		)
 		BeforeEach(func() {
 			eventsCh = make(chan protos.EventRequest)
 			notificationsCh = make(chan protos.EventResponse)
-			store = storage.NewRedisStoreWithDefaults(redisContainer.Address)
+			store = storage2.NewRedisStoreWithDefaults(redisContainer.Address)
 			store.SetLogLevel(logging.NONE)
-			testListener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
+			testListener = pubsub2.NewEventsListener(&pubsub2.ListenerOptions{
 				EventsChannel:        eventsCh,
 				NotificationsChannel: notificationsCh,
 				StatemachinesStore:   store,
@@ -120,7 +120,7 @@ var _ = Describe("A Listener", func() {
 				g.Ω(fsm.History[0].Details).To(Equal("more details"))
 				g.Ω(fsm.History[0].Transition.Event).To(Equal("move"))
 			}, 120*time.Millisecond, 40*time.Millisecond).Should(Succeed())
-			Eventually(func() storage.StoreErr {
+			Eventually(func() storage2.StoreErr {
 				_, err := store.GetEvent(event.EventId, "test")
 				return err
 			}).Should(BeNil())

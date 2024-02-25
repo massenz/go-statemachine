@@ -11,7 +11,7 @@ package storage_test
 
 import (
 	"context"
-	internals "github.com/massenz/go-statemachine/internal/testing"
+	internals "github.com/massenz/go-statemachine/pkg/internal/testing"
 	"testing"
 	"time"
 

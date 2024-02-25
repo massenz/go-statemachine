@@ -15,6 +15,9 @@ import (
 	"crypto/x509"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/massenz/go-statemachine/pkg/api"
+	"github.com/massenz/go-statemachine/pkg/internal/config"
+	"github.com/massenz/go-statemachine/pkg/storage"
 	"github.com/massenz/slf4go/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -27,10 +30,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/internal/config"
-	"github.com/massenz/go-statemachine/storage"
 
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
@@ -60,7 +59,7 @@ type grpcSubscriber struct {
 	*Config
 }
 
-// Health will return the status of the server and the underlying store
+// Health will return the status of the cmd and the underlying store
 func (s *grpcSubscriber) Health(context.Context, *emptypb.Empty) (*protos.HealthResponse, error) {
 	var response = &protos.HealthResponse{
 		State:      protos.HealthResponse_READY,
@@ -146,7 +145,7 @@ func (s *grpcSubscriber) GetAllConfigurations(ctx context.Context, req *wrappers
 	*protos.ListResponse, error) {
 	cfgName := req.Value
 	if cfgName == "" {
-		s.Logger.Trace("looking up all available configurations on server")
+		s.Logger.Trace("looking up all available configurations on cmd")
 		return &protos.ListResponse{Ids: s.Store.GetAllConfigs()}, nil
 	}
 	s.Logger.Trace("looking up all version for configuration %s", cfgName)
@@ -292,15 +291,15 @@ func (s *grpcSubscriber) StreamAllConfigurations(in *wrapperspb.StringValue, str
 	return nil
 }
 
-// NewGrpcServer creates a new gRPC server to handle incoming events and other API calls.
+// NewGrpcServer creates a new gRPC cmd to handle incoming events and other API calls.
 // The `Config` can be used to configure the backing store, a timeout and the logger.
 func NewGrpcServer(cfg *Config) (*grpc.Server, error) {
 	var creds credentials.TransportCredentials
 	if !cfg.TlsEnabled {
-		logging.RootLog.Warn("TLS is disabled for gRPC server, using insecure credentials")
+		logging.RootLog.Warn("TLS is disabled for gRPC cmd, using insecure credentials")
 		creds = insecure.NewCredentials()
 	} else {
-		logging.RootLog.Debug("TLS is enabled for gRPC server")
+		logging.RootLog.Debug("TLS is enabled for gRPC cmd")
 		serverTLSConfig, err := SetupTLSConfig(cfg)
 		if err != nil {
 			logging.RootLog.Error("could not setup TLS config: %q", err)

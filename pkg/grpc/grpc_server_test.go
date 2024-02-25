@@ -12,6 +12,9 @@ package grpc_test
 import (
 	"context"
 	"fmt"
+	. "github.com/massenz/go-statemachine/pkg/api"
+	"github.com/massenz/go-statemachine/pkg/grpc"
+	storage2 "github.com/massenz/go-statemachine/pkg/storage"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"net"
 	"strings"
@@ -29,13 +32,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/grpc"
-	"github.com/massenz/go-statemachine/storage"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
-var NotImplemented = storage.NotImplementedError("mock")
+var NotImplemented = storage2.NotImplementedError("mock")
 
 type Mockstore struct {
 	mock.Mock
@@ -44,11 +44,11 @@ type Mockstore struct {
 func (m *Mockstore) SetLogLevel(level slf4go.LogLevel) {
 }
 
-func (m *Mockstore) GetConfig(versionId string) (*protos.Configuration, storage.StoreErr) {
+func (m *Mockstore) GetConfig(versionId string) (*protos.Configuration, storage2.StoreErr) {
 	return nil, nil
 }
 
-func (m *Mockstore) PutConfig(cfg *protos.Configuration) storage.StoreErr {
+func (m *Mockstore) PutConfig(cfg *protos.Configuration) storage2.StoreErr {
 	return NotImplemented
 }
 
@@ -60,7 +60,7 @@ func (m *Mockstore) GetAllVersions(name string) []string {
 	return nil
 }
 
-func (m *Mockstore) GetStateMachine(id string, cfg string) (*protos.FiniteStateMachine, storage.StoreErr) {
+func (m *Mockstore) GetStateMachine(id string, cfg string) (*protos.FiniteStateMachine, storage2.StoreErr) {
 	return nil, NotImplemented
 }
 
@@ -80,7 +80,7 @@ func (csm *Mockstore) TxProcessEvent(id, cfgName string, evt *protos.Event) erro
 	return NotImplemented
 }
 
-func (m *Mockstore) GetEvent(id string, cfg string) (*protos.Event, storage.StoreErr) {
+func (m *Mockstore) GetEvent(id string, cfg string) (*protos.Event, storage2.StoreErr) {
 	return nil, NotImplemented
 }
 
@@ -92,7 +92,7 @@ func (m *Mockstore) AddEventOutcome(eventId string, cfgName string, response *pr
 	return NotImplemented
 }
 
-func (m *Mockstore) GetOutcomeForEvent(eventId string, cfgName string) (*protos.EventOutcome, storage.StoreErr) {
+func (m *Mockstore) GetOutcomeForEvent(eventId string, cfgName string) (*protos.EventOutcome, storage2.StoreErr) {
 	return nil, NotImplemented
 }
 
@@ -123,11 +123,11 @@ var _ = Describe("the gRPC Server", func() {
 
 			client = NewClient(listener.Addr().String(), false)
 			// TODO: use GinkgoWriter for logs
-			l := slf4go.NewLog("grpc-server-test")
+			l := slf4go.NewLog("grpc-cmd-test")
 			l.Level = slf4go.DEBUG
 			// Note the `Config` here has no store configured, because we are
 			// only testing events in this Context, and those are never stored
-			// in Redis by the gRPC server (other parts of the system do).
+			// in Redis by the gRPC cmd (other parts of the system do).
 			server, err := grpc.NewGrpcServer(&grpc.Config{
 				EventsChannel: testCh,
 				Logger:        l,
@@ -249,19 +249,19 @@ var _ = Describe("the gRPC Server", func() {
 			cfg      *protos.Configuration
 			fsm      *protos.FiniteStateMachine
 			done     func()
-			store    storage.StoreManager
+			store    storage2.StoreManager
 		)
 
 		// Server setup
 		BeforeEach(func() {
-			store = storage.NewRedisStoreWithDefaults(redisContainer.Address)
+			store = storage2.NewRedisStoreWithDefaults(redisContainer.Address)
 			store.SetLogLevel(slf4go.NONE)
 			listener, _ = net.Listen("tcp", ":0")
 			cc, _ := g.Dial(listener.Addr().String(),
 				g.WithTransportCredentials(insecure.NewCredentials()))
 			client = protos.NewStatemachineServiceClient(cc)
 			// Use this to log errors when diagnosing test failures; then set to NONE once done.
-			l := slf4go.NewLog("grpc-server-test")
+			l := slf4go.NewLog("grpc-cmd-test")
 			l.Level = slf4go.NONE
 			server, _ := grpc.NewGrpcServer(&grpc.Config{
 				Store:  store,
@@ -281,7 +281,7 @@ var _ = Describe("the gRPC Server", func() {
 			done()
 			rdb := redis.NewClient(&redis.Options{
 				Addr: redisContainer.Address,
-				DB:   storage.DefaultRedisDb,
+				DB:   storage2.DefaultRedisDb,
 			})
 			rdb.FlushDB(context.Background())
 		})
@@ -373,7 +373,7 @@ var _ = Describe("the gRPC Server", func() {
 				Ω(len(found.Ids)).To(Equal(3))
 				for _, value := range versions {
 					Ω(found.Ids).To(ContainElement(
-						strings.Join([]string{name, value}, storage.KeyPrefixComponentsSeparator)))
+						strings.Join([]string{name, value}, storage2.KeyPrefixComponentsSeparator)))
 				}
 			})
 		})

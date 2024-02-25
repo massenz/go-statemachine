@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 go build -o out/bin/hc docker/grpc_health.go
 
 # NOTE: Use the Ubuntu image; other images will encounter errors,
 #       including the "`GLIBC_2.32' not found" error.
-#       Alpine (which uses /bin/sh) emits an error which makes no sense (./fsm-server not found)
+#       Alpine (which uses /bin/sh) emits an error which makes no sense (./fsm-cmd not found)
 #       only because, in fact, it cannot find the library.
 FROM  ubuntu:22.04
 LABEL org.opencontainers.image.authors="Marco Massenzio <marco@alertavert.com>"
@@ -22,7 +22,7 @@ LABEL org.opencontainers.image.licenses=Apache-2.0
 RUN apt-get update && apt-get install ca-certificates -y
 RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
 
-# Sensible defaults for the server, for reference
+# Sensible defaults for the cmd, for reference
 # we list all the environment variables used by the
 # entrypoint script.
 ENV GRPC_PORT=7398 SERVER_PORT=7399 DEBUG=""  \
@@ -35,8 +35,8 @@ WORKDIR /app
 RUN chown sm-bot:sm-bot /app
 
 USER sm-bot
-COPY --from=builder /server/out/bin/fsm-server* ./fsm-server
-COPY --from=builder /server/out/bin/hc ./
+COPY --from=builder /cmd/out/bin/fsm-server* ./fsm-server
+COPY --from=builder /cmd/out/bin/hc ./
 ADD docker/entrypoint.sh ./
 
 EXPOSE ${SERVER_PORT}

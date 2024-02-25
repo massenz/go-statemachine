@@ -13,8 +13,8 @@ const (
 	CAFile = "ca.pem"
 
 	// ServerCertFile is the Server certificate (containing the valid host names), use `make gencert` to generate.
-	ServerCertFile = "server.pem"
+	ServerCertFile = "cmd.pem"
 
 	// ServerKeyFile the private signing key for the certificate, use `make gencert` to generate.
-	ServerKeyFile = "server-key.pem"
+	ServerKeyFile = "cmd-key.pem"
 )

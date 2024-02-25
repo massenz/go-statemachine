@@ -11,7 +11,7 @@ package pubsub
 
 import (
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/massenz/go-statemachine/storage"
+	"github.com/massenz/go-statemachine/pkg/storage"
 	log "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	"time"

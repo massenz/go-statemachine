@@ -11,6 +11,8 @@ package pubsub_test
 
 import (
 	. "github.com/JiaYongfei/respect/gomega"
+	"github.com/massenz/go-statemachine/pkg/api"
+	pubsub2 "github.com/massenz/go-statemachine/pkg/pubsub"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -20,21 +22,18 @@ import (
 	"github.com/google/uuid"
 	"github.com/massenz/slf4go/logging"
 
-	"github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/pubsub"
-
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("SQS Publisher", func() {
 	Context("when correctly initialized", func() {
 		var (
-			testPublisher   *pubsub.SqsPublisher
+			testPublisher   *pubsub2.SqsPublisher
 			notificationsCh chan protos.EventResponse
 		)
 		BeforeEach(func() {
 			notificationsCh = make(chan protos.EventResponse)
-			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &awsLocal.Address)
+			testPublisher = pubsub2.NewSqsPublisher(notificationsCh, &awsLocal.Address)
 			Expect(testPublisher).ToNot(BeNil())
 			// Set to DEBUG when diagnosing test failures
 			testPublisher.SetLogLevel(logging.NONE)

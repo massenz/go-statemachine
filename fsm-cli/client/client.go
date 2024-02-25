@@ -63,7 +63,7 @@ func NewClient(address string, hasTls bool) *CliClient {
 	return &CliClient{protos.NewStatemachineServiceClient(cc)}
 }
 
-// sendEvent is an internal method that encapsulates sending the Event to the server,
+// sendEvent is an internal method that encapsulates sending the Event to the cmd,
 // and wraps the StatemachineServiceClient.SendEvent function
 func (c *CliClient) sendEvent(request *protos.EventRequest) (*protos.EventResponse, error) {
 	api.UpdateEvent(request.Event)
@@ -145,10 +145,10 @@ func (c *CliClient) Send(path string) error {
 	return err
 }
 
-// Get will retrieve the required entity from the server and generate the
+// Get will retrieve the required entity from the cmd and generate the
 // YAML representation accordingly.
 // It takes two arguments, the kind and the id of the entity, and prints the
-// contents returned by the server to stdout (or returns an error if not found)
+// contents returned by the cmd to stdout (or returns an error if not found)
 func (c *CliClient) Get(kind, id string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

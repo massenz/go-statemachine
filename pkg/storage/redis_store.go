@@ -15,13 +15,13 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"github.com/golang/protobuf/proto"
+	"github.com/massenz/go-statemachine/pkg/api"
 	slf4go "github.com/massenz/slf4go/logging"
 	"math/rand"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/massenz/go-statemachine/api"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
@@ -140,7 +140,7 @@ func (csm *RedisStore) wait() {
 
 /////// StoreManager implementation
 
-// Health checks that the server is ready to accept connections
+// Health checks that the cmd is ready to accept connections
 func (csm *RedisStore) Health() StoreErr {
 	ctx, cancel := context.WithTimeout(context.Background(), csm.Timeout)
 	defer cancel()
@@ -187,7 +187,7 @@ func (csm *RedisStore) PutConfig(cfg *protos.Configuration) StoreErr {
 	if csm.client.Exists(context.Background(), key).Val() == 1 {
 		return AlreadyExistsError(key)
 	}
-	// TODO: Find out whether the client allows to batch requests, instead of sending multiple server requests
+	// TODO: Find out whether the client allows to batch requests, instead of sending multiple cmd requests
 	csm.client.SAdd(context.Background(), ConfigsPrefix, cfg.Name)
 	csm.client.SAdd(context.Background(), NewKeyForConfig(cfg.Name), api.GetVersionId(cfg))
 	return csm.put(key, cfg, NeverExpire)
@@ -379,13 +379,13 @@ func (csm *RedisStore) GetOutcomeForEvent(id string, cfg string) (*protos.EventO
 
 /////// Constructor methods
 
-// NewRedisStoreWithDefaults creates a new StoreManager backed by a Redis server, with
+// NewRedisStoreWithDefaults creates a new StoreManager backed by a Redis cmd, with
 // all default settings, in a single node configuration.
 func NewRedisStoreWithDefaults(address string) StoreManager {
 	return NewRedisStore(address, false, DefaultRedisDb, DefaultTimeout, DefaultMaxRetries)
 }
 
-// NewRedisStore creates a new StoreManager backed by a Redis server, reachable at address, in
+// NewRedisStore creates a new StoreManager backed by a Redis cmd, reachable at address, in
 // cluster configuration if isCluster is set to true.
 // The db value indicates which database to use.
 //
