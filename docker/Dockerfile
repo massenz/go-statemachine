@@ -7,7 +7,7 @@ WORKDIR /server
 COPY . .
 RUN rm -rf certs data
 RUN CGO_ENABLED=0 make build
-RUN CGO_ENABLED=0 go build -o out/bin/hc docker/grpc_health.go
+RUN CGO_ENABLED=0 go build -o build/bin/hc docker/grpc_health.go
 
 # NOTE: Use the Ubuntu image; other images will encounter errors,
 #       including the "`GLIBC_2.32' not found" error.
@@ -35,8 +35,8 @@ WORKDIR /app
 RUN chown sm-bot:sm-bot /app
 
 USER sm-bot
-COPY --from=builder /cmd/out/bin/fsm-server* ./fsm-server
-COPY --from=builder /cmd/out/bin/hc ./
+COPY --from=builder /server/build/bin/fsm-server* ./fsm-server
+COPY --from=builder /server/build/bin/hc ./
 ADD docker/entrypoint.sh ./
 
 EXPOSE ${SERVER_PORT}

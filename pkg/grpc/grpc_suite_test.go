@@ -61,7 +61,7 @@ func NewClient(address string, isTls bool) protos.StatemachineServiceClient {
 	var creds credentials.TransportCredentials
 	if isTls {
 		clientTlsConfig := &tls.Config{}
-		ca, err := grpc.ParseCAFile("../certs/ca.pem")
+		ca, err := grpc.ParseCAFile("../../certs/ca.pem")
 		Expect(err).ToNot(HaveOccurred())
 		clientTlsConfig.RootCAs = ca
 
