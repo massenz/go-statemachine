@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"github.com/massenz/go-statemachine/client"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"os"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -14,7 +16,7 @@ import (
 )
 
 var (
-	svc *client.CliClient
+	svc   *client.CliClient
 	stack tc.ComposeStack
 )
 
@@ -23,39 +25,42 @@ func TestClient(t *testing.T) {
 	RunSpecs(t, "CLI Client Suite")
 }
 
-
 func StartServices() {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	defer cancel()
+
+	composeYaml := os.Getenv("CLI_TEST_COMPOSE")
+	Ω(composeYaml).ShouldNot(BeEmpty())
 
 	// Define the Docker Compose setup
 	//
 	// If the tests fail because the test server is not coming up, you can
 	// debug (and see logs) using this command:
 	//   RELEASE=$(make version) BASEDIR=$(pwd) docker compose -f docker/cli-test-compose.yaml up
-	compose, err := tc.NewDockerCompose("../docker/cli-test-compose.yaml")
-	Expect(err).ToNot(HaveOccurred())
+	compose, err := tc.NewDockerCompose(composeYaml)
+	Ω(err).ToNot(HaveOccurred())
 	stack = compose.WithOsEnv()
 
 	// Start the Docker Compose setup
-	Expect(stack.Up(ctx)).To(Succeed())
+	Ω(stack.Up(ctx)).To(Succeed())
 
 	// Get the container IP address and port
 	smServer, err := stack.ServiceContainer(ctx, "server")
-	Expect(err).ToNot(HaveOccurred())
+	Ω(err).ToNot(HaveOccurred())
 	port, err := smServer.MappedPort(ctx, "7398")
-	Expect(err).ToNot(HaveOccurred())
+	Ω(err).ToNot(HaveOccurred())
 
 	// It is *important* to use `localhost` here, as Certs are issued with that hostname
 	svc = client.NewClient(fmt.Sprintf("localhost:%s", port.Port()), true)
-	Expect(svc).ToNot(BeNil())
+	Ω(svc).ToNot(BeNil())
 }
 
 var _ = BeforeSuite(func() {
 	StartServices()
 	_, err := svc.Health(context.Background(), &emptypb.Empty{})
-	Expect(err).Should(Succeed())
+	Ω(err).ShouldNot(HaveOccurred())
 })
 
 var _ = AfterSuite(func() {
-	Expect(stack.Down(context.Background(), tc.RemoveOrphans(true), tc.RemoveImagesLocal)).To(Succeed())
+	Ω(stack.Down(context.Background(), tc.RemoveOrphans(true), tc.RemoveImagesLocal)).To(Succeed())
 })

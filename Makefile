@@ -8,11 +8,11 @@ GOMOD := $(shell go list -m)
 
 version := v0.12.1
 release := $(version)-g$(shell git rev-parse --short HEAD)
-prog := fsm-server
-bin := out/bin/$(prog)-$(version)_$(GOOS)-$(GOARCH)
+out := build/bin
+server := fsm-server-$(version)_$(GOOS)-$(GOARCH)
+cli := fsm-cli-$(version)_$(GOOS)-$(GOARCH)
 
 # CLI Configuration
-cli := out/bin/fsm-cli-$(version)_$(GOOS)-$(GOARCH)
 cli_config := ${HOME}/.fsm
 
 image := massenz/statemachine
@@ -49,7 +49,7 @@ help: ## Display this help.
 .PHONY: clean
 img=$(shell docker images -q --filter=reference=$(image))
 clean: ## Cleans up the binary, container image and other data
-	@rm -f $(bin)
+	@rm $(out)/$(server) $(out)/$(cli)
 	@[ ! -z $(img) ] && docker rmi $(img) || true
 	@rm -rf certs
 
@@ -61,27 +61,29 @@ fmt: ## Formats the Go source code using 'go fmt'
 
 ##@ Development
 .PHONY: build test container cov clean fmt
-$(bin): server/main.go $(srcs)
-	@mkdir -p $(shell dirname $(bin))
+$(out)/$(server): pkg/cmd/main.go $(srcs)
+	@mkdir -p $(out)
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		-ldflags "-X $(GOMOD)/api.Release=$(release)" \
-		-o $(bin) server/main.go
+		-o $(out)/$(server) pkg/cmd/main.go
 
 .PHONY: build
-build: $(bin) ## Builds the Statemachine server binary
+build: $(out)/$(server) ## Builds the Statemachine server binary
 
 .PHONY: cli
-cli: cli/fsm-cli.go  ## Builds the CLI client used to connect to the server
-	@mkdir -p $(shell dirname $(cli))
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
+cli: fsm-cli/cmd/main.go  ## Builds the CLI client used to connect to the server
+	@mkdir -p $(out)
+	cd fsm-cli && GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		-ldflags "-X main.Release=$(version)" \
-		-o $(cli) cli/fsm-cli.go
+		-o ../$(out)/$(cli) cmd/main.go
 
 .PHONY: cli_tests
-cli-test: client/handlers_test.go ## Run tests for the CLI Client
+cli-test: ## Run tests for the CLI Client
 	@mkdir -p $(cli_config)/certs
-	@cp certs/ca.pem $(cli_config)/certs
-	RELEASE=$(release) BASEDIR=$(shell pwd) ginkgo test ./client
+	@cp certs/ca.pem $(cli_config)/certs || true
+	cd fsm-cli && RELEASE=$(release) BASEDIR=$(shell pwd) \
+		CLI_TEST_COMPOSE=$(shell pwd)/docker/cli-test-compose.yaml \
+		ginkgo test ./client
 
 test: $(srcs) $(test_srcs)  ## Runs all tests
 	ginkgo $(pkgs)
