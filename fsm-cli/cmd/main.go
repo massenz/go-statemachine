@@ -13,10 +13,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	. "github.com/massenz/go-statemachine/client"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"os"
 	"strings"
+
+	"google.golang.org/protobuf/types/known/emptypb"
+
+	. "github.com/massenz/fsm-cli/client"
 )
 
 var (

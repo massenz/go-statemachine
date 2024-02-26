@@ -14,9 +14,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/golang/protobuf/ptypes/wrappers"
-	"github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/grpc"
-	protos "github.com/massenz/statemachine-proto/golang/api"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	g "google.golang.org/grpc"
@@ -29,6 +26,10 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/massenz/go-statemachine/api"
+	"github.com/massenz/go-statemachine/grpc"
+	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 const (
