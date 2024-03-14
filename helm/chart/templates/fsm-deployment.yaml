@@ -18,13 +18,15 @@ spec:
     spec:
       containers:
       - name: statemachine
-        image: massenz/statemachine:{{ .Values.fsm.version }}
+        image: "massenz/statemachine:{{ .Values.fsm.version }}"
         imagePullPolicy: Always
-        
+
         # TODO: Move all these configurations to a ConfigMap
         env:
+          {{- if .Values.aws.useLocalstack }}
           - name: AWS_ENDPOINT
             value: "http://awslocal.infra"
+          {{- end }}
           - name: AWS_REGION
             value: us-west-2
           - name: AWS_PROFILE
@@ -44,9 +46,9 @@ spec:
             value: -insecure
           {{- end }}
           - name: GRPC_PORT
-            value: {{ .Values.fsm.grpcPort | default "7398" | quote }}
+            value: {{ .Values.fsm.grpcPort | default 7398 | quote }}
           - name: REDIS
-            value: {{ .Values.redis.host }}:{{ .Values.redis.port | default 6379 }}
+            value: {{ .Values.redis.host }}:{{ .Values.redis.port | default 6379 | quote}}
         ports:
           - containerPort: 7398
             name: grpc-port
@@ -54,15 +56,15 @@ spec:
           - name: aws-creds
             mountPath: "/home/sm-bot/.aws"
             readOnly: true
-            
+
       volumes:
         - name: aws-creds
-          configMap: 
+          configMap:
             name: aws-creds
             items:
               - key: credentials
                 path: credentials
-        
+
 ---
 apiVersion: v1
 kind: Service
@@ -76,4 +78,3 @@ spec:
       protocol: TCP
       port: {{ .Values.fsm.grpcPort }}
       targetPort: grpc-port
-      

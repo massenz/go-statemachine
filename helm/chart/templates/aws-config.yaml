@@ -1,5 +1,15 @@
 # Created by M. Massenzio, 2024
-# Fake AWS Creds to connect to Localstack
+#
+# AWS Credentials to connect to SQS
+# This is a ConfigMap that can be used to inject the AWS credentials into the application
+# It is used by the `aws-creds` Secret, which is mounted as a volume in the application's Pod.
+#
+# By default, the credentials are set to fake values that will work with the LocalStack test
+# container, but can be overridden by setting them to actual values via the command line, using
+# the `--set` option, or Env variables, using the `--set-env` option.
+#
+# DO NOT STORE actual credentials in this file, as it will be committed to the repository, or
+# in the `values.yaml` file, which is also committed to the repository.
 
 apiVersion: v1
 kind: ConfigMap
@@ -9,8 +19,6 @@ data:
   credentials: |
       # Fake Security credentials for LocalStack
       # Created 2022-06-19
-    
       [sm-bot]
-      aws_access_key_id = ZoB2bPU
-      aws_secret_access_key = X7dUWU4l
-      
+      aws_access_key_id = {{ .Values.aws.accessKeyId | default "ZoB2bPU" }}
+      aws_secret_access_key = {{ .Values.aws.secretAccessKey | default "X7dUWU4l" }}
