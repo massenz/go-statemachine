@@ -1,0 +1,16 @@
+# Created by M. Massenzio, 2024
+# Fake AWS Creds to connect to Localstack
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-creds
+data:
+  credentials: |
+      # Fake Security credentials for LocalStack
+      # Created 2022-06-19
+    
+      [sm-bot]
+      aws_access_key_id = ZoB2bPU
+      aws_secret_access_key = X7dUWU4l
+      
