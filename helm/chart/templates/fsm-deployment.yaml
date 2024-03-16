@@ -17,45 +17,48 @@ spec:
         app: fsm
     spec:
       containers:
-      - name: statemachine
-        image: "massenz/statemachine:{{ .Values.fsm.version }}"
-        imagePullPolicy: Always
-
-        # TODO: Move all these configurations to a ConfigMap
-        env:
+        - name: statemachine
+          image: "massenz/statemachine:{{ .Values.fsm.version }}"
+          imagePullPolicy: Always
+          resources:
+            limits:
+              memory: {{ .Values.fsm.memory | default "128Mi" | quote }}
+              cpu: {{ .Values.fsm.cpu | default "100m" | quote }}
+          # TODO: Move all these configurations to a ConfigMap
+          env:
           {{- if .Values.aws.useLocalstack }}
-          - name: AWS_ENDPOINT
-            value: "http://awslocal.infra"
+            - name: AWS_ENDPOINT
+              value: "http://awslocal.infra"
           {{- end }}
-          - name: AWS_REGION
-            value: us-west-2
-          - name: AWS_PROFILE
-            value: sm-bot
-          - name: TIMEOUT
-            value: 200ms
+            - name: AWS_REGION
+              value: us-west-2
+            - name: AWS_PROFILE
+              value: sm-bot
+            - name: TIMEOUT
+              value: 200ms
           {{- if .Values.fsm.debug }}
-          - name: DEBUG
-            value: -debug
+            - name: DEBUG
+              value: -debug
           {{- end }}
-          - name: EVENTS_Q
-            value: {{ .Values.fsm.queue.events }}
-          - name: NOTIFICATIONS_Q
-            value: {{ .Values.fsm.queue.notifications }}
+            - name: EVENTS_Q
+              value: {{ .Values.fsm.queue.events }}
+            - name: NOTIFICATIONS_Q
+              value: {{ .Values.fsm.queue.notifications }}
           {{- if .Values.fsm.ttl.disable }}
-          - name: INSECURE
-            value: -insecure
+            - name: INSECURE
+              value: -insecure
           {{- end }}
-          - name: GRPC_PORT
-            value: {{ .Values.fsm.grpcPort | default 7398 | quote }}
-          - name: REDIS
-            value: {{ .Values.redis.host }}:{{ .Values.redis.port | default 6379 | quote}}
-        ports:
-          - containerPort: 7398
-            name: grpc-port
-        volumeMounts:
-          - name: aws-creds
-            mountPath: "/home/sm-bot/.aws"
-            readOnly: true
+            - name: GRPC_PORT
+              value: {{ .Values.fsm.grpcPort | default 7398 | quote }}
+            - name: REDIS
+              value: {{ .Values.redis.host }}:{{ .Values.redis.port | default 6379 | quote}}
+          ports:
+            - containerPort: 7398
+              name: grpc-port
+          volumeMounts:
+            - name: aws-creds
+              mountPath: "/home/sm-bot/.aws"
+              readOnly: true
 
       volumes:
         - name: aws-creds

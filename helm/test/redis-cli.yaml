@@ -17,6 +17,10 @@ spec:
   containers:
     - image: redis:6.2-alpine
       name: redis-cli
+      resources:
+        limits:
+          memory: "64Mi"
+          cpu: "100m"
       command: ["sleep"]
       args:
       - infinity

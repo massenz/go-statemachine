@@ -32,7 +32,12 @@ spec:
     spec:
       containers:
       - name: redis
-        image: redis:{{ .Values.redis.version }}
+        image: "redis:{{ .Values.redis.version }}"
+        resources:
+          limits:
+            memory: {{ .Values.redis.memory | default "1024Mi" | quote }}
+            cpu: {{ .Values.redis.cpu | default "500m" | quote }}
+
         ports:
         - containerPort: 6379
           name: tcp
@@ -47,4 +52,3 @@ spec:
       resources:
         requests:
           storage: {{ .Values.redis.diskSize }}
-
