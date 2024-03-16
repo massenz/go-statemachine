@@ -22,7 +22,7 @@ LABEL org.opencontainers.image.licenses=Apache-2.0
 RUN apt-get update && apt-get install ca-certificates -y
 RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
 
-# Sensible defaults for the cmd, for reference
+# Sensible defaults for the server, for reference
 # we list all the environment variables used by the
 # entrypoint script.
 ENV GRPC_PORT=7398 SERVER_PORT=7399 DEBUG=""  \
