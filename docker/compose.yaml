@@ -11,7 +11,7 @@ services:
     container_name: "redis"
     image: "redis:6.2-alpine"
     hostname: redis
-    command: "redis-cmd --save 60 1 --loglevel warning"
+    command: "redis-server --save 60 1 --loglevel warning"
     volumes:
       - "${TMPDIR:-/tmp}/redis:/data"
     ports:

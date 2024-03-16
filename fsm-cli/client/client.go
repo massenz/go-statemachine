@@ -27,8 +27,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/grpc"
+	"github.com/massenz/go-statemachine/pkg/api"
+	"github.com/massenz/go-statemachine/pkg/grpc"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 

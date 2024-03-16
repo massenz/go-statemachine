@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/golang/protobuf v1.5.3
-	github.com/massenz/go-statemachine v0.12.0-gdd3da8f
+	github.com/massenz/go-statemachine v0.13.0-g6e9e42d
 	github.com/massenz/statemachine-proto/golang v1.2.0-g8dbe9c5
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.31.1
