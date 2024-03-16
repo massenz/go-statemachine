@@ -1,0 +1,8 @@
+# Created by M. Massenzio, 2024
+# Statemachine Server Helm Chart
+
+apiVersion: v1
+appVersion: "v0.12.1"
+description: FSM Server deployment
+name: fsm-server
+version: 0.1.0

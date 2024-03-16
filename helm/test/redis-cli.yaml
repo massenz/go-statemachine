@@ -1,0 +1,26 @@
+# Copyright (c) 2024 AlertAvert.com  All rights reserved.
+# Created by M. Massenzio
+#
+# Pod running a Redis CLI REPL for testing.
+# Usage:
+#   kubectl apply -f redis-cli.yaml
+#   kubectl exec -ti redis-cli -- redis-cli -h <redis>
+
+apiVersion: v1
+kind: Pod
+metadata:
+    name: redis-cli
+    labels:
+      role: debug
+      scope: dev
+spec:
+  containers:
+    - image: redis:6.2-alpine
+      name: redis-cli
+      resources:
+        limits:
+          memory: "64Mi"
+          cpu: "100m"
+      command: ["sleep"]
+      args:
+      - infinity

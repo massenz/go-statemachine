@@ -1,0 +1,83 @@
+# Created by M. Massenzio, 2024
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fsm-cluster
+  labels:
+    app.kubernetes.io/name: fsm
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fsm
+  template:
+    metadata:
+      labels:
+        app: fsm
+    spec:
+      containers:
+        - name: statemachine
+          image: "massenz/statemachine:{{ .Values.fsm.version }}"
+          imagePullPolicy: Always
+          resources:
+            limits:
+              memory: {{ .Values.fsm.memory | default "128Mi" | quote }}
+              cpu: {{ .Values.fsm.cpu | default "100m" | quote }}
+          # TODO: Move all these configurations to a ConfigMap
+          env:
+          {{- if .Values.aws.useLocalstack }}
+            - name: AWS_ENDPOINT
+              value: "http://awslocal.infra"
+          {{- end }}
+            - name: AWS_REGION
+              value: us-west-2
+            - name: AWS_PROFILE
+              value: sm-bot
+            - name: TIMEOUT
+              value: 200ms
+          {{- if .Values.fsm.debug }}
+            - name: DEBUG
+              value: -debug
+          {{- end }}
+            - name: EVENTS_Q
+              value: {{ .Values.fsm.queue.events }}
+            - name: NOTIFICATIONS_Q
+              value: {{ .Values.fsm.queue.notifications }}
+          {{- if .Values.fsm.ttl.disable }}
+            - name: INSECURE
+              value: -insecure
+          {{- end }}
+            - name: GRPC_PORT
+              value: {{ .Values.fsm.grpcPort | default 7398 | quote }}
+            - name: REDIS
+              value: {{ .Values.redis.host }}:{{ .Values.redis.port | default 6379 | quote}}
+          ports:
+            - containerPort: 7398
+              name: grpc-port
+          volumeMounts:
+            - name: aws-creds
+              mountPath: "/home/sm-bot/.aws"
+              readOnly: true
+
+      volumes:
+        - name: aws-creds
+          configMap:
+            name: aws-creds
+            items:
+              - key: credentials
+                path: credentials
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fsm
+spec:
+  selector:
+    app.kubernetes.io/name: fsm
+  ports:
+    - name: grpc
+      protocol: TCP
+      port: {{ .Values.fsm.grpcPort }}
+      targetPort: grpc-port

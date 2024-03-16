@@ -6,13 +6,13 @@ GOOS ?= $(shell uname -s | tr "[:upper:]" "[:lower:]")
 GOARCH ?= amd64
 GOMOD := $(shell go list -m)
 
-version := v0.12.1
+version := v0.13.0
 release := $(version)-g$(shell git rev-parse --short HEAD)
-prog := fsm-server
-bin := out/bin/$(prog)-$(version)_$(GOOS)-$(GOARCH)
+out := build/bin
+server := fsm-server-$(version)_$(GOOS)-$(GOARCH)
+cli := fsm-cli-$(version)_$(GOOS)-$(GOARCH)
 
 # CLI Configuration
-cli := out/bin/fsm-cli-$(version)_$(GOOS)-$(GOARCH)
 cli_config := ${HOME}/.fsm
 
 image := massenz/statemachine
@@ -24,7 +24,7 @@ dockerfile := docker/Dockerfile
 # Edit only the packages list, when adding new functionality,
 # the rest is deduced automatically.
 #
-pkgs := ./api ./grpc ./pubsub ./storage
+pkgs := pkg/api pkg/grpc pkg/pubsub pkg/storage pkg/internal
 all_go := $(shell for d in $(pkgs); do find $$d -name "*.go"; done)
 test_srcs := $(shell for d in $(pkgs); do find $$d -name "*_test.go"; done)
 srcs := $(filter-out $(test_srcs),$(all_go))
@@ -49,7 +49,7 @@ help: ## Display this help.
 .PHONY: clean
 img=$(shell docker images -q --filter=reference=$(image))
 clean: ## Cleans up the binary, container image and other data
-	@rm -f $(bin)
+	@rm $(out)/$(server) $(out)/$(cli)
 	@[ ! -z $(img) ] && docker rmi $(img) || true
 	@rm -rf certs
 
@@ -57,31 +57,33 @@ version: ## Displays the current version tag (release)
 	@echo $(release)
 
 fmt: ## Formats the Go source code using 'go fmt'
-	@go fmt $(pkgs) ./cmd ./clients
+	@go fmt $(pkgs) ./cmd fsm-cli/client fsm-cli/cmd
 
 ##@ Development
 .PHONY: build test container cov clean fmt
-$(bin): server/main.go $(srcs)
-	@mkdir -p $(shell dirname $(bin))
+$(out)/$(server): cmd/main.go $(srcs)
+	@mkdir -p $(out)
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
-		-ldflags "-X $(GOMOD)/api.Release=$(release)" \
-		-o $(bin) server/main.go
+		-ldflags "-X $(GOMOD)/pkg/api.Release=$(release)" \
+		-o $(out)/$(server) cmd/main.go
 
 .PHONY: build
-build: $(bin) ## Builds the Statemachine server binary
+build: $(out)/$(server) ## Builds the Statemachine server binary
 
 .PHONY: cli
-cli: cli/fsm-cli.go  ## Builds the CLI client used to connect to the server
-	@mkdir -p $(shell dirname $(cli))
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
+cli: fsm-cli/cmd/main.go  ## Builds the CLI client used to connect to the server
+	@mkdir -p $(out)
+	cd fsm-cli && GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		-ldflags "-X main.Release=$(version)" \
-		-o $(cli) cli/fsm-cli.go
+		-o ../$(out)/$(cli) cmd/main.go
 
-.PHONY: cli_tests
-cli-test: client/handlers_test.go ## Run tests for the CLI Client
+.PHONY: cli-test
+cli-test: ## Run tests for the CLI Client
 	@mkdir -p $(cli_config)/certs
-	@cp certs/ca.pem $(cli_config)/certs
-	RELEASE=$(release) BASEDIR=$(shell pwd) ginkgo test ./client
+	@cp certs/ca.pem $(cli_config)/certs || true
+	cd fsm-cli && RELEASE=$(release) BASEDIR=$(shell pwd) \
+		CLI_TEST_COMPOSE=$(shell pwd)/docker/cli-test-compose.yaml \
+		ginkgo test ./client
 
 test: $(srcs) $(test_srcs)  ## Runs all tests
 	ginkgo $(pkgs)
@@ -123,7 +125,7 @@ ca-config := $(config_dir)/ca-config.json
 server-csr := $(config_dir)/localhost-csr.json
 
 .PHONY: gencert
-gencert: $(ca-csr) $(config) $(server-csr) ## Generates all certificates in the certs directory (requires cfssl and cfssl, see https://github.com/cloudflare/cfssl#installation)
+gencert: $(ca-csr) $(ca-config) $(server-csr) ## Generates all certificates in the certs directory (requires cfssl and cfssl, see https://github.com/cloudflare/cfssl#installation)
 	cfssl gencert \
 		-initca $(ca-csr) | cfssljson -bare ca
 
