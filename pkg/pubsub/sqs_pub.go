@@ -13,9 +13,9 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/golang/protobuf/proto"
 	slf4go "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
+	"google.golang.org/protobuf/proto"
 )
 
 // NewSqsPublisher will create a new `Publisher` to send error notifications received on the
@@ -66,10 +66,15 @@ func (s *SqsPublisher) Publish(errorsTopic string) {
 			s.logger.Warn("unexpected notification for Ok outcome [Event ID: %s]", eventResponse.EventId)
 			continue
 		}
+		response, err := proto.Marshal(&eventResponse)
+		if err != nil {
+			s.logger.Error("Cannot marshal eventResponse (%s): %v", eventResponse.String(), err)
+			continue
+		}
 		msgResult, err := s.client.SendMessage(&sqs.SendMessageInput{
 			DelaySeconds: &delay,
 			// Encodes the Event as a string, using Protobuf implementation.
-			MessageBody: aws.String(proto.MarshalTextString(&eventResponse)),
+			MessageBody: aws.String(string(response)),
 			QueueUrl:    &errorsQueueUrl,
 		})
 		if err != nil {

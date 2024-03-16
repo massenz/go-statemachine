@@ -8,7 +8,6 @@ require (
 	github.com/JiaYongfei/respect v0.0.0-20211019032000-61a979c8e39a
 	github.com/aws/aws-sdk-go v1.44.4
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/golang/protobuf v1.5.3
 	github.com/google/uuid v1.3.0
 	github.com/massenz/slf4go v0.3.2-g4eb5504
 	github.com/massenz/statemachine-proto/golang v1.2.0-g8dbe9c5
@@ -37,6 +36,7 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/compress v1.16.0 // indirect
 	github.com/kr/text v0.2.0 // indirect

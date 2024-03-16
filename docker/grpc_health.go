@@ -14,11 +14,11 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"github.com/golang/protobuf/jsonpb"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"log"
 	"time"
@@ -58,10 +58,9 @@ func main() {
 	if err != nil {
 		log.Fatal("cannot connect to cmd:", err)
 	}
-	marshaler := &jsonpb.Marshaler{}
-	jsonString, err := marshaler.MarshalToString(resp)
+	jsonBytes, err := protojson.Marshal(resp)
 	if err != nil {
 		log.Fatal("Error while marshaling the message to JSON:", err)
 	}
-	fmt.Println(jsonString)
+	fmt.Println(string(jsonBytes))
 }

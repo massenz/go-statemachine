@@ -12,9 +12,9 @@ package pubsub_test
 import (
 	"context"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	internals "github.com/massenz/go-statemachine/pkg/internal/testing"
 	"github.com/massenz/go-statemachine/pkg/pubsub"
+	"google.golang.org/protobuf/proto"
 	"os"
 	"testing"
 	"time"
@@ -110,9 +110,11 @@ func getSqsMessage(queue string) *sqs.Message {
 // postSqsMessage mirrors the decoding of the SQS Message in the Subscriber and will
 // send it over the `queue`, so that we can test the Publisher can correctly receive it.
 func postSqsMessage(queue string, msg *api.EventRequest) error {
+	body, err := proto.Marshal(msg)
+	Expect(err).ToNot(HaveOccurred())
 	q := pubsub.GetQueueUrl(testSqsClient, queue)
-	_, err := testSqsClient.SendMessage(&sqs.SendMessageInput{
-		MessageBody: aws.String(proto.MarshalTextString(msg)),
+	_, err = testSqsClient.SendMessage(&sqs.SendMessageInput{
+		MessageBody: aws.String(string(body)),
 		QueueUrl:    &q,
 	})
 	return err
