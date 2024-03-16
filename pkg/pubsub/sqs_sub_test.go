@@ -10,29 +10,28 @@
 package pubsub_test
 
 import (
-	"github.com/massenz/go-statemachine/pkg/api"
-	pubsub2 "github.com/massenz/go-statemachine/pkg/pubsub"
-	"time"
-
 	. "github.com/JiaYongfei/respect/gomega"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	log "github.com/massenz/slf4go/logging"
+	"time"
 
+	"github.com/massenz/go-statemachine/pkg/api"
+	"github.com/massenz/go-statemachine/pkg/pubsub"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("SQS Subscriber", func() {
 	Context("when correctly initialized", func() {
 		var (
-			testSubscriber *pubsub2.SqsSubscriber
+			testSubscriber *pubsub.SqsSubscriber
 			eventsCh       chan protos.EventRequest
 		)
 		BeforeEach(func() {
 			Expect(awsLocal).ToNot(BeNil())
 			eventsCh = make(chan protos.EventRequest)
-			testSubscriber = pubsub2.NewSqsSubscriber(eventsCh, &awsLocal.Address)
+			testSubscriber = pubsub.NewSqsSubscriber(eventsCh, &awsLocal.Address)
 			Expect(testSubscriber).ToNot(BeNil())
 			// Set to DEBUG when diagnosing failing tests
 			testSubscriber.SetLogLevel(log.NONE)

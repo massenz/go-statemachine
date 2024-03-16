@@ -59,7 +59,7 @@ type grpcSubscriber struct {
 	*Config
 }
 
-// Health will return the status of the cmd and the underlying store
+// Health will return the status of the gRPC Server and the underlying store
 func (s *grpcSubscriber) Health(context.Context, *emptypb.Empty) (*protos.HealthResponse, error) {
 	var response = &protos.HealthResponse{
 		State:      protos.HealthResponse_READY,
@@ -145,7 +145,7 @@ func (s *grpcSubscriber) GetAllConfigurations(ctx context.Context, req *wrappers
 	*protos.ListResponse, error) {
 	cfgName := req.Value
 	if cfgName == "" {
-		s.Logger.Trace("looking up all available configurations on cmd")
+		s.Logger.Trace("looking up all available configurations")
 		return &protos.ListResponse{Ids: s.Store.GetAllConfigs()}, nil
 	}
 	s.Logger.Trace("looking up all version for configuration %s", cfgName)
@@ -296,10 +296,10 @@ func (s *grpcSubscriber) StreamAllConfigurations(in *wrapperspb.StringValue, str
 func NewGrpcServer(cfg *Config) (*grpc.Server, error) {
 	var creds credentials.TransportCredentials
 	if !cfg.TlsEnabled {
-		logging.RootLog.Warn("TLS is disabled for gRPC cmd, using insecure credentials")
+		logging.RootLog.Warn("TLS is disabled for gRPC Server, using insecure credentials")
 		creds = insecure.NewCredentials()
 	} else {
-		logging.RootLog.Debug("TLS is enabled for gRPC cmd")
+		logging.RootLog.Debug("TLS is enabled for gRPC Server")
 		serverTLSConfig, err := SetupTLSConfig(cfg)
 		if err != nil {
 			logging.RootLog.Error("could not setup TLS config: %q", err)

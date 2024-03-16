@@ -40,5 +40,4 @@ To run a Redis CLI, deploy the `test/redis-cli.yaml` Pod, then run:
 kubectl exec -it redis-cli -- redis-cli -h redis
 ```
 
-> Mofidy `redis` with the appropriate namespace if the CLI is running in a different namespace
-
+> Modify `redis` with the appropriate namespace if the CLI is running in a different namespace

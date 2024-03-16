@@ -77,7 +77,7 @@ cli: fsm-cli/cmd/main.go  ## Builds the CLI client used to connect to the server
 		-ldflags "-X main.Release=$(version)" \
 		-o ../$(out)/$(cli) cmd/main.go
 
-.PHONY: cli_tests
+.PHONY: cli-test
 cli-test: ## Run tests for the CLI Client
 	@mkdir -p $(cli_config)/certs
 	@cp certs/ca.pem $(cli_config)/certs || true
@@ -125,7 +125,7 @@ ca-config := $(config_dir)/ca-config.json
 server-csr := $(config_dir)/localhost-csr.json
 
 .PHONY: gencert
-gencert: $(ca-csr) $(config) $(server-csr) ## Generates all certificates in the certs directory (requires cfssl and cfssl, see https://github.com/cloudflare/cfssl#installation)
+gencert: $(ca-csr) $(ca-config) $(server-csr) ## Generates all certificates in the certs directory (requires cfssl and cfssl, see https://github.com/cloudflare/cfssl#installation)
 	cfssl gencert \
 		-initca $(ca-csr) | cfssljson -bare ca
 

@@ -146,7 +146,7 @@ func (c *CliClient) Send(path string) error {
 	return err
 }
 
-// Get will retrieve the required entity from the cmd and generate the
+// Get will retrieve the required entity from the FSM Server and generate the
 // YAML representation accordingly.
 // It takes two arguments, the kind and the id of the entity, and prints the
 // contents returned by the server to stdout (or returns an error if not found)

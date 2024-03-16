@@ -12,7 +12,7 @@ package pubsub_test
 import (
 	. "github.com/JiaYongfei/respect/gomega"
 	"github.com/massenz/go-statemachine/pkg/api"
-	pubsub2 "github.com/massenz/go-statemachine/pkg/pubsub"
+	"github.com/massenz/go-statemachine/pkg/pubsub"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -28,12 +28,12 @@ import (
 var _ = Describe("SQS Publisher", func() {
 	Context("when correctly initialized", func() {
 		var (
-			testPublisher   *pubsub2.SqsPublisher
+			testPublisher   *pubsub.SqsPublisher
 			notificationsCh chan protos.EventResponse
 		)
 		BeforeEach(func() {
 			notificationsCh = make(chan protos.EventResponse)
-			testPublisher = pubsub2.NewSqsPublisher(notificationsCh, &awsLocal.Address)
+			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &awsLocal.Address)
 			Expect(testPublisher).ToNot(BeNil())
 			// Set to DEBUG when diagnosing test failures
 			testPublisher.SetLogLevel(logging.NONE)

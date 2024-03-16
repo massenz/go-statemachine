@@ -15,13 +15,13 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"github.com/golang/protobuf/proto"
-	"github.com/massenz/go-statemachine/pkg/api"
 	slf4go "github.com/massenz/slf4go/logging"
 	"math/rand"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/massenz/go-statemachine/pkg/api"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 

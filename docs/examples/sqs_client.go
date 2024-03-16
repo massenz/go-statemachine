@@ -7,7 +7,7 @@
  * Author: Marco Massenzio (marco@alertavert.com)
  */
 
-package examples
+package main
 
 import (
 	"context"
@@ -44,9 +44,9 @@ func NewOrderDetails(orderId, customerId string, orderTotal float64) *OrderDetai
 }
 
 func (o *OrderDetails) String() string {
-	res, error := json.Marshal(o)
-	if error != nil {
-		panic(error)
+	res, err := json.Marshal(o)
+	if err != nil {
+		panic(err)
 	}
 	return string(res)
 }

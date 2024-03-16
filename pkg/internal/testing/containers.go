@@ -25,7 +25,7 @@ const (
 )
 
 // Container is an internal wrapper around the `testcontainers.Container` carrying also
-// the `Address` (which could be a URI) to which the cmd can be reached at.
+// the `Address` (which could be a URI) to which the Server can be reached at.
 type Container struct {
 	testcontainers.Container
 	Address string

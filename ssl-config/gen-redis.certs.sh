@@ -5,7 +5,7 @@
 #   tests/tls/ca.{crt,key}          Self signed CA certificate.
 #   tests/tls/redis.{crt,key}       A certificate with no key usage/policy restrictions.
 #   tests/tls/client.{crt,key}      A certificate restricted for SSL client usage.
-#   tests/tls/cmd.{crt,key}      A certificate restricted for SSL cmd usage.
+#   tests/tls/server.{crt,key}      A certificate restricted for SSL cmd usage.
 #   tests/tls/redis.dh              DH Params file.
 
 generate_cert() {
@@ -51,7 +51,7 @@ keyUsage = digitalSignature, keyEncipherment
 nsCertType = client
 _END_
 
-generate_cert cmd "Server-only" "-extfile tests/tls/openssl.cnf -extensions server_cert"
+generate_cert server "Server-only" "-extfile tests/tls/openssl.cnf -extensions server_cert"
 generate_cert client "Client-only" "-extfile tests/tls/openssl.cnf -extensions client_cert"
 generate_cert redis "Generic-cert"
 

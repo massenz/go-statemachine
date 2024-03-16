@@ -14,7 +14,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	. "github.com/massenz/go-statemachine/pkg/api"
 	"github.com/massenz/go-statemachine/pkg/grpc"
-	storage2 "github.com/massenz/go-statemachine/pkg/storage"
+	"github.com/massenz/go-statemachine/pkg/storage"
 	"github.com/massenz/slf4go/logging"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -35,18 +35,18 @@ var _ = Describe("gRPC Server Streams", func() {
 			client   api.StatemachineServiceClient
 			cfg      *api.Configuration
 			done     func()
-			store    storage2.StoreManager
+			store    storage.StoreManager
 		)
 		// Server setup
 		BeforeEach(func() {
-			store = storage2.NewRedisStoreWithDefaults(redisContainer.Address)
+			store = storage.NewRedisStoreWithDefaults(redisContainer.Address)
 			store.SetLogLevel(logging.NONE)
 			listener, _ = net.Listen("tcp", ":0")
 			cc, _ := g.Dial(listener.Addr().String(),
 				g.WithTransportCredentials(insecure.NewCredentials()))
 			client = api.NewStatemachineServiceClient(cc)
 			// Use this to log errors when diagnosing test failures; then set to NONE once done.
-			l := logging.NewLog("grpc-cmd-test")
+			l := logging.NewLog("grpc-server-test")
 			l.Level = logging.NONE
 			server, _ := grpc.NewGrpcServer(&grpc.Config{
 				Store:  store,
@@ -64,7 +64,7 @@ var _ = Describe("gRPC Server Streams", func() {
 			done()
 			rdb := redis.NewClient(&redis.Options{
 				Addr: redisContainer.Address,
-				DB:   storage2.DefaultRedisDb,
+				DB:   storage.DefaultRedisDb,
 			})
 			rdb.FlushDB(context.Background())
 		})

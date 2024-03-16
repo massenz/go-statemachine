@@ -11,8 +11,9 @@ package pubsub
 
 import (
 	"fmt"
-	storage2 "github.com/massenz/go-statemachine/pkg/storage"
 	log "github.com/massenz/slf4go/logging"
+
+	"github.com/massenz/go-statemachine/pkg/storage"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
@@ -62,7 +63,7 @@ func (listener *EventsListener) ListenForMessages() {
 			continue
 		}
 		// The event is well-formed, we can store for later retrieval
-		if err := listener.store.PutEvent(request.Event, cfgName, storage2.NeverExpire); err != nil {
+		if err := listener.store.PutEvent(request.Event, cfgName, storage.NeverExpire); err != nil {
 			listener.PostNotificationAndReportOutcome(makeResponse(&request,
 				protos.EventOutcome_InternalError,
 				fmt.Sprintf("could not store event: %v", err)))
@@ -72,7 +73,7 @@ func (listener *EventsListener) ListenForMessages() {
 			request.Event.Transition.Event, fsmId)
 		if err := listener.store.TxProcessEvent(fsmId, cfgName, request.Event); err != nil {
 			var errCode protos.EventOutcome_StatusCode
-			if storage2.IsNotFoundErr(err) {
+			if storage.IsNotFoundErr(err) {
 				errCode = protos.EventOutcome_FsmNotFound
 			} else {
 				errCode = protos.EventOutcome_InternalError
@@ -91,7 +92,7 @@ func (listener *EventsListener) ListenForMessages() {
 
 func (listener *EventsListener) reportOutcome(response *protos.EventResponse) {
 	if err := listener.store.AddEventOutcome(response.EventId, response.GetOutcome().GetConfig(),
-		response.Outcome, storage2.NeverExpire); err != nil {
+		response.Outcome, storage.NeverExpire); err != nil {
 		listener.logger.Error("could not save event outcome: %v", err)
 	}
 }
