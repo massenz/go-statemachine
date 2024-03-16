@@ -1,0 +1,22 @@
+# Created by M. Massenzio, 2024
+# Statemachine Server Helm Chart Values
+
+fsm:
+    version: v0.12.1-ge3adb69
+    grpcPort: 7398
+    debug: true
+    queue:
+        events: "events"
+        notifications: "notifications"
+    ttl:
+        disable: true
+
+redis:
+    replicas: 1
+    version: 6.2-alpine
+    diskSize: 100Mi
+    host: redis
+    port: 6379
+
+aws:
+    useLocalstack: false

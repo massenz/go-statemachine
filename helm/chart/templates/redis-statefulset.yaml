@@ -1,0 +1,54 @@
+# Created by M. Massenzio, 2024
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.redis.host | default "redis" }}
+  labels:
+    app: redis
+spec:
+  ports:
+  - port: {{ .Values.redis.port | default 6379 }}
+    name: tcp
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: redis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+spec:
+  serviceName: "redis"
+  replicas: {{ .Values.redis.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+    spec:
+      containers:
+      - name: redis
+        image: "redis:{{ .Values.redis.version }}"
+        resources:
+          limits:
+            memory: {{ .Values.redis.memory | default "1024Mi" | quote }}
+            cpu: {{ .Values.redis.cpu | default "500m" | quote }}
+
+        ports:
+        - containerPort: 6379
+          name: tcp
+        volumeMounts:
+        - name: data
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: {{ .Values.redis.diskSize }}

@@ -15,7 +15,6 @@ services:
 
   server:
     depends_on:
-#      - localstack
       - redis
     networks:
       - test-net
@@ -27,6 +26,7 @@ services:
       EVENTS_Q: ""
       NOTIFICATIONS_Q: ""
       TIMEOUT: 200ms
+      INSECURE: -insecure
     volumes:
       - ${BASEDIR}/docker/aws-credentials:/home/sm-bot/.aws/credentials
       - ${BASEDIR}/certs:/etc/statemachine/certs

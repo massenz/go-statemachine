@@ -24,11 +24,11 @@ import (
 	"time"
 )
 
-// Most basic binary to run health checks on the server.
+// Most basic binary to run health checks on the cmd.
 // Used to assert readiness of the container/pod in Docker/Kubernetes.
 func main() {
 	var address = flag.String("host", "localhost:7398",
-		"The address (host:port) for the GRPC server")
+		"The address (host:port) for the GRPC cmd")
 	var timeout = flag.Duration("timeout", 200*time.Millisecond,
 		"timeout expressed as a duration string (e.g., 200ms, 1s, etc.)")
 	var noTLS = flag.Bool("insecure", false, "disables TLS")
@@ -56,7 +56,7 @@ func main() {
 
 	resp, err := client.Health(ctx, &emptypb.Empty{})
 	if err != nil {
-		log.Fatal("cannot connect to server:", err)
+		log.Fatal("cannot connect to cmd:", err)
 	}
 	marshaler := &jsonpb.Marshaler{}
 	jsonString, err := marshaler.MarshalToString(resp)

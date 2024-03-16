@@ -7,7 +7,7 @@
  * Author: Marco Massenzio (marco@alertavert.com)
  */
 
-package examples
+package main
 
 import (
 	"context"
@@ -44,9 +44,9 @@ func NewOrderDetails(orderId, customerId string, orderTotal float64) *OrderDetai
 }
 
 func (o *OrderDetails) String() string {
-	res, error := json.Marshal(o)
-	if error != nil {
-		panic(error)
+	res, err := json.Marshal(o)
+	if err != nil {
+		panic(err)
 	}
 	return string(res)
 }
@@ -86,7 +86,7 @@ func NewSqs(endpoint *string) *sqs.SQS {
 }
 
 // main simulates a Client sending an SQS event message for an Order entity
-// whose status is being tracked by `fsm-server`.
+// whose status is being tracked by `fsm-cmd`.
 func main() {
 	endpoint := flag.String("endpoint", "", "Use http://localhost:4566 to use LocalStack")
 	q := flag.String("q", "", "The SQS Queue to send an Event to")

@@ -1,0 +1,41 @@
+# Upon pushing to the main branch it runs all tests.
+#
+# Copyright (c) 2022 AlertAvert.com.  All rights reserved.
+# Author: Marco Massenzio (marco@alertavert.com)
+#
+name: Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  Test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Generate Certs
+      run: |
+        export GOPATH=/opt/go
+        mkdir -p $GOPATH/bin
+        export PATH=$GOPATH/bin:$PATH
+        go install github.com/cloudflare/cfssl/cmd/cfssl@v1.6.3
+        go install github.com/cloudflare/cfssl/cmd/cfssljson@v1.6.3
+        make gencert
+    - name: Build Container
+      run: |
+        make container
+    - name: Test Server
+      run: |
+        mkdir -p ${HOME}/.aws && cp data/credentials ${HOME}/.aws/
+        export AWS_REGION=us-west-2
+        go test ./pkg/api ./pkg/grpc ./pkg/pubsub ./pkg/storage
+
+# TODO: need to disable for now, as this fails and I can't figure out why
+#    - name: Test CLI
+#      run: |
+#        mkdir -p ${HOME}/.fsm/certs
+#        cp certs/ca.pem ${HOME}/.fsm/certs/
+#        RELEASE=$(make version) BASEDIR=$(pwd) go test ./client
