@@ -14,7 +14,6 @@ import (
 	"fmt"
 	. "github.com/JiaYongfei/respect/gomega"
 	"github.com/go-redis/redis/v8"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/massenz/go-statemachine/pkg/api"
 	storage2 "github.com/massenz/go-statemachine/pkg/storage"
@@ -22,6 +21,7 @@ import (
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"google.golang.org/protobuf/proto"
 	"strings"
 )
 

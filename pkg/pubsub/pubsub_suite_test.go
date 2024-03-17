@@ -12,9 +12,6 @@ package pubsub_test
 import (
 	"context"
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	internals "github.com/massenz/go-statemachine/pkg/internal/testing"
-	"github.com/massenz/go-statemachine/pkg/pubsub"
 	"os"
 	"testing"
 	"time"
@@ -26,6 +23,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 
+	internals "github.com/massenz/go-statemachine/pkg/internal/testing"
+	"github.com/massenz/go-statemachine/pkg/pubsub"
 	"github.com/massenz/statemachine-proto/golang/api"
 )
 
@@ -78,8 +77,12 @@ var _ = BeforeSuite(func() {
 }, 2.0)
 
 var _ = AfterSuite(func() {
-	Ω(awsLocal.Terminate(context.Background())).ToNot(HaveOccurred())
-	Ω(redisContainer.Terminate(context.Background())).ToNot(HaveOccurred())
+	if awsLocal != nil {
+		Ω(awsLocal.Terminate(context.Background())).ToNot(HaveOccurred())
+	}
+	if redisContainer != nil {
+		Ω(redisContainer.Terminate(context.Background())).ToNot(HaveOccurred())
+	}
 }, 2.0)
 
 // getQueueName provides a way to obtain a process-independent name for the SQS queue,
@@ -110,9 +113,12 @@ func getSqsMessage(queue string) *sqs.Message {
 // postSqsMessage mirrors the decoding of the SQS Message in the Subscriber and will
 // send it over the `queue`, so that we can test the Publisher can correctly receive it.
 func postSqsMessage(queue string, msg *api.EventRequest) error {
+	marshaler := pubsub.Base64ProtoMarshaler{}
+	body, err := marshaler.MarshalToText(msg)
+	Expect(err).ToNot(HaveOccurred())
 	q := pubsub.GetQueueUrl(testSqsClient, queue)
-	_, err := testSqsClient.SendMessage(&sqs.SendMessageInput{
-		MessageBody: aws.String(proto.MarshalTextString(msg)),
+	_, err = testSqsClient.SendMessage(&sqs.SendMessageInput{
+		MessageBody: aws.String(string(body)),
 		QueueUrl:    &q,
 	})
 	return err

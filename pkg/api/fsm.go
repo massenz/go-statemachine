@@ -11,9 +11,9 @@ package api
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	log "github.com/massenz/slf4go/logging"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"strings"
 

@@ -10,13 +10,45 @@
 package pubsub
 
 import (
+	"encoding/base64"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/golang/protobuf/proto"
 	slf4go "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
+	"google.golang.org/protobuf/proto"
 )
+
+// ProtoTextMarshaler is an interface that allows for marshaling and unmarshaling of Protobuf messages
+// to and from text.
+// This is useful when we need to send Protobuf messages as text, for example when using SQS.
+type ProtoTextMarshaler interface {
+	MarshalToText(proto.Message) (string, error)
+	UnmarshalFromText(string, *proto.Message) error
+}
+
+// Base64ProtoMarshaler is a simple implementation of the `ProtoTextMarshaler` interface, that
+// encodes the Protobuf message as a Base64 string.
+type Base64ProtoMarshaler struct{}
+
+func (m *Base64ProtoMarshaler) MarshalToText(msg proto.Message) (string, error) {
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(data), nil
+}
+
+func (m *Base64ProtoMarshaler) UnmarshalFromText(text string, msg proto.Message) error {
+	data, err := base64.StdEncoding.DecodeString(text)
+	if err != nil {
+		return err
+	}
+	return proto.Unmarshal(data, msg)
+}
+
+// Module-level variable to use as a default implementation of the `ProtoTextMarshaler` interface.
+var p = &Base64ProtoMarshaler{}
 
 // NewSqsPublisher will create a new `Publisher` to send error notifications received on the
 // `errorsChannel` to an SQS `dead-letter queue`.
@@ -66,10 +98,15 @@ func (s *SqsPublisher) Publish(errorsTopic string) {
 			s.logger.Warn("unexpected notification for Ok outcome [Event ID: %s]", eventResponse.EventId)
 			continue
 		}
+		response, err := p.MarshalToText(&eventResponse)
+		if err != nil {
+			s.logger.Error("Cannot marshal eventResponse (%s): %v", eventResponse.String(), err)
+			continue
+		}
 		msgResult, err := s.client.SendMessage(&sqs.SendMessageInput{
 			DelaySeconds: &delay,
 			// Encodes the Event as a string, using Protobuf implementation.
-			MessageBody: aws.String(proto.MarshalTextString(&eventResponse)),
+			MessageBody: aws.String(response),
 			QueueUrl:    &errorsQueueUrl,
 		})
 		if err != nil {
