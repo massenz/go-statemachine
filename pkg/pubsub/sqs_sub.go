@@ -16,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/massenz/go-statemachine/pkg/api"
 	log "github.com/massenz/slf4go/logging"
-	"google.golang.org/protobuf/proto"
 	"os"
 	"time"
 
@@ -133,7 +132,7 @@ func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
 		return
 	}
 	var request protos.EventRequest
-	err := proto.Unmarshal([]byte(*msg.Body), &request)
+	err := p.UnmarshalFromText(*msg.Body, &request)
 	if err != nil {
 		s.logger.Error("message %v has invalid body: %s", msg.MessageId, err.Error())
 		// TODO: publish error to DLQ.

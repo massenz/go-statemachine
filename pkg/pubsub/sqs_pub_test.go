@@ -20,8 +20,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/massenz/slf4go/logging"
-	"google.golang.org/protobuf/proto"
-
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
@@ -63,7 +61,8 @@ var _ = Describe("SQS Publisher", func() {
 			// Emulate SQS Client behavior
 			body := *res.Body
 			var receivedEvt protos.EventResponse
-			Expect(proto.Unmarshal([]byte(body), &receivedEvt)).Should(Succeed())
+			unmarshaler := pubsub.Base64ProtoMarshaler{}
+			Expect(unmarshaler.UnmarshalFromText(body, &receivedEvt)).Should(Succeed())
 			Expect(receivedEvt).To(Respect(notification))
 
 			close(notificationsCh)
@@ -131,7 +130,9 @@ var _ = Describe("SQS Publisher", func() {
 					Eventually(res.Body).ShouldNot(BeNil())
 					var receivedEvt protos.EventResponse
 					Eventually(func(g Gomega) {
-						g.Expect(proto.Unmarshal([]byte(*res.Body), &receivedEvt)).Should(Succeed())
+						unmarshaler := pubsub.Base64ProtoMarshaler{}
+						g.Expect(unmarshaler.UnmarshalFromText(*res.Body,
+							&receivedEvt)).Should(Succeed())
 						g.Expect(receivedEvt.EventId).To(Equal(fmt.Sprintf("event-%d", i)))
 						g.Expect(receivedEvt.Outcome.Code).To(Equal(protos.EventOutcome_InternalError))
 						g.Expect(receivedEvt.Outcome.Details).To(Equal("more details about the error"))
