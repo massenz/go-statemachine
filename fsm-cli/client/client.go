@@ -13,13 +13,13 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/golang/protobuf/ptypes/wrappers"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	g "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/ptypes/wrappers"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
@@ -27,8 +27,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/massenz/go-statemachine/api"
-	"github.com/massenz/go-statemachine/grpc"
+	"github.com/massenz/go-statemachine/pkg/api"
+	"github.com/massenz/go-statemachine/pkg/grpc"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 

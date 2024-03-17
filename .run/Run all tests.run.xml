@@ -2,10 +2,14 @@
   <configuration default="false" name="Run all tests" type="GoTestRunConfiguration" factoryName="Go Test" singleton="false">
     <module name="statemachine" />
     <working_directory value="$PROJECT_DIR$" />
-    <parameters value="./api ./grpc ./pubsub ./storage" />
+    <EXTENSION ID="software.aws.toolkits.jetbrains.core.execution.GoAwsConnectionRunConfigurationExtension">
+      <option name="credential" />
+      <option name="region" />
+      <option name="useCurrentConnection" value="false" />
+    </EXTENSION>
     <kind value="DIRECTORY" />
     <package value="github.com/massenz/go-statemachine/api" />
-    <directory value="$PROJECT_DIR$" />
+    <directory value="$PROJECT_DIR$/pkg" />
     <filePath value="$PROJECT_DIR$" />
     <framework value="gotest" />
     <method v="2" />

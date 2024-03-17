@@ -10,11 +10,11 @@
 package api_test
 
 import (
-	"github.com/golang/protobuf/jsonpb"
 	. "github.com/massenz/go-statemachine/pkg/api"
 	log "github.com/massenz/slf4go/logging"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"google.golang.org/protobuf/encoding/protojson"
 	"os"
 
 	protos "github.com/massenz/statemachine-proto/golang/api"
@@ -74,24 +74,24 @@ var _ = Describe("FSM Protocol Buffers", func() {
 
 		It("can be parsed without errors", func() {
 
-			Expect(jsonpb.UnmarshalString(transition, &t)).ShouldNot(HaveOccurred())
+			Expect(protojson.Unmarshal([]byte(transition), &t)).ShouldNot(HaveOccurred())
 			Expect(t.From).To(Equal("source"))
 			Expect(t.To).To(Equal("binary"))
 			Expect(t.Event).To(Equal("build"))
 		})
 		It("events only need the name of the event to pars", func() {
-			Expect(jsonpb.UnmarshalString(simpleEvent, &evt)).ShouldNot(HaveOccurred())
+			Expect(protojson.Unmarshal([]byte(simpleEvent), &evt)).ShouldNot(HaveOccurred())
 			Expect(evt.Transition.Event).To(Equal("build"))
 
 		})
 		It("can define complex configurations", func() {
-			Expect(jsonpb.UnmarshalString(compiler, &gccConfig)).ShouldNot(HaveOccurred())
+			Expect(protojson.Unmarshal([]byte(compiler), &gccConfig)).ShouldNot(HaveOccurred())
 			Expect(len(gccConfig.States)).To(Equal(3))
 			Expect(len(gccConfig.Transitions)).To(Equal(2))
 			Expect(gccConfig.Version).To(Equal("v1"))
 		})
 		It("can be used to create FSMs", func() {
-			Expect(jsonpb.UnmarshalString(compiler, &gccConfig)).ShouldNot(HaveOccurred())
+			Expect(protojson.Unmarshal([]byte(compiler), &gccConfig)).ShouldNot(HaveOccurred())
 			fsm, err := NewStateMachine(&gccConfig)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(fsm.FSM.State).To(Equal("source"))
@@ -189,7 +189,7 @@ var _ = Describe("FSM Protocol Buffers", func() {
 				var err error
 				configJson, err = os.ReadFile("../../data/orders.json")
 				Expect(err).ToNot(HaveOccurred())
-				Expect(jsonpb.UnmarshalString(string(configJson), &orders)).ToNot(HaveOccurred())
+				Expect(protojson.Unmarshal(configJson, &orders)).ToNot(HaveOccurred())
 			})
 			It("JSON can be unmarshalled", func() {
 				Expect(orders.Name).To(Equal("test.orders"))
