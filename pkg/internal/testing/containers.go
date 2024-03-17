@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	localstackImage    = "localstack/localstack:1.3"
+	localstackImage    = "localstack/localstack:3.2"
 	localstackEdgePort = "4566"
 	redisImage         = "redis:6"
 	redisPort          = "6379/tcp"

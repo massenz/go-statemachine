@@ -77,8 +77,12 @@ var _ = BeforeSuite(func() {
 }, 2.0)
 
 var _ = AfterSuite(func() {
-	Ω(awsLocal.Terminate(context.Background())).ToNot(HaveOccurred())
-	Ω(redisContainer.Terminate(context.Background())).ToNot(HaveOccurred())
+	if awsLocal != nil {
+		Ω(awsLocal.Terminate(context.Background())).ToNot(HaveOccurred())
+	}
+	if redisContainer != nil {
+		Ω(redisContainer.Terminate(context.Background())).ToNot(HaveOccurred())
+	}
 }, 2.0)
 
 // getQueueName provides a way to obtain a process-independent name for the SQS queue,
