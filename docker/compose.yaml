@@ -42,7 +42,7 @@ services:
       - sm-net
     ports:
       - '7398:7398'
-    image: "massenz/statemachine:${RELEASE}"
+    image: "massenz/fsm-server:${RELEASE}"
     environment:
       AWS_ENDPOINT: "http://awslocal:4566"
       AWS_REGION: us-west-2
