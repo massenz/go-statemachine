@@ -56,17 +56,6 @@ fmt: ## Formats the Go source code using 'go fmt'
 	@go fmt $(pkgs) ./cmd fsm-cli/client fsm-cli/cmd
 
 ##@ Development
-.PHONY: build test container cov clean fmt
-$(out)/$(server): cmd/main.go $(srcs)
-	@mkdir -p $(out)
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
-		-ldflags "-X $(GOMOD)/pkg/api.Release=$(release)" \
-		-o $(out)/$(server) cmd/main.go
-
-.PHONY: build
-build: $(out)/$(server) ## Builds the Statemachine server binary
-
-##@ Development
 .PHONY: build
 build: cmd/main.go $(srcs)
 	@mkdir -p build/bin
@@ -96,7 +85,7 @@ coverage: build/reports/coverage.out ## Shows the coverage report in the browser
 	@go tool cover -html=build/reports/coverage.out
 
 .PHONY: all
-all: build test ## Builds the binary and runs all tests
+all: build gencert test ## Builds the binary and runs all tests
 
 PORT ?= 7398
 .PHONY: dev
