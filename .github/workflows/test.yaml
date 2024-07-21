@@ -16,6 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    - name: Install YQ
+      run: |
+        sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq &&\
+          sudo chmod +x /usr/bin/yq
     - name: Generate Certs
       run: |
         export GOPATH=/opt/go
@@ -32,10 +36,3 @@ jobs:
         mkdir -p ${HOME}/.aws && cp data/credentials ${HOME}/.aws/
         export AWS_REGION=us-west-2
         go test ./pkg/api ./pkg/grpc ./pkg/pubsub ./pkg/storage
-
-# TODO: need to disable for now, as this fails when using SSL and I can't figure out why
-#    - name: Test CLI
-#      run: |
-#        mkdir -p ${HOME}/.fsm/certs
-#        cp certs/ca.pem ${HOME}/.fsm/certs/
-#        RELEASE=$(make version) BASEDIR=$(pwd) go test ./client

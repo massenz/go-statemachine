@@ -10,12 +10,6 @@ all_go := $(shell for d in $(pkgs); do find $$d -name "*.go"; done)
 test_srcs := $(shell for d in $(pkgs); do find $$d -name "*_test.go"; done)
 srcs := $(filter-out $(test_srcs),$(all_go))
 
-# Certificates
-certs_dir := ssl-config
-ca-csr := $(certs_dir)/ca-csr.json
-ca-config := $(certs_dir)/ca-config.json
-server-csr := $(certs_dir)/localhost-csr.json
-
 ##@ General
 .PHONY: clean
 img=$(shell docker images -q --filter=reference=$(image))
@@ -118,35 +112,27 @@ check_certs:
 		echo "$(GREEN)[OK]$(RESET) Certificates found in $(shell pwd)/certs"; \
 	fi
 
-config_dir := ssl-config
-ca-csr := $(config_dir)/ca-csr.json
-ca-config := $(config_dir)/ca-config.json
-server-csr := $(config_dir)/localhost-csr.json
-
-cfssl != which cfssl
-cfssljson != which cfssljson
-ifeq ($(strip $(cfssl)),)
-  $(error cfssl not installed)
-endif
-ifeq ($(strip $(cfssljson)),)
-  $(error cfssljson not installed)
-endif
+ssl_config := ../ssl-config
+ca-csr := $(ssl_config)/ca-csr.json
+ca-config := $(ssl_config)/ca-config.json
+server-csr := $(ssl_config)/localhost-csr.json
 
 .PHONY: certs
-certs: $(ca-csr) $(config) $(server-csr) ## Generates all certificates in the certs directory (requires cfssl, see https://github.com/cloudflare/cfssl#installation)
-	$(cfssl) gencert \
-		-initca $(ca-csr) | cfssljson -bare ca
-	$(cfssl) gencert \
-		-ca=ca.pem \
-		-ca-key=ca-key.pem \
-		-config=$(ca-config) \
-		-profile=server \
-		$(server-csr)  | $(cfssljson) -bare server
+certs:  ## Generates all certificates in the certs directory (requires cfssl, see https://github.com/cloudflare/cfssl#installation)
 	@mkdir -p certs
-	@mv *.pem certs/
-	@rm *.csr
-	@chmod a+r certs/*
-	@echo "Certificates generated in $(shell pwd)/certs"
+	@cd certs && \
+		cfssl gencert \
+			-initca $(ca-csr) 2>/dev/null | cfssljson -bare ca
+	@cd certs && \
+		cfssl gencert \
+			-ca=ca.pem \
+			-ca-key=ca-key.pem \
+			-config=$(ca-config) \
+			-profile=server \
+			$(server-csr)  2>/dev/null | cfssljson -bare server
+	@rm certs/*.csr
+	@chmod a+r certs/*.pem
+	@echo "$(GREEN)[SUCCESS]$(RESET) Certificates generated"
 
 .PHONY: clean-cert
 clean-cert:
