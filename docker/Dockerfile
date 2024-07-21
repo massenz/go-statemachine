@@ -6,6 +6,8 @@ FROM golang:1.22 as builder
 WORKDIR /server
 COPY . .
 RUN rm -rf certs data
+RUN wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
+      -O /usr/bin/yq && chmod +x /usr/bin/yq
 RUN CGO_ENABLED=0 make build
 RUN CGO_ENABLED=0 go build -o build/bin/hc docker/grpc_health.go
 
