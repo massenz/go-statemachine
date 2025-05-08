@@ -1,8 +1,6 @@
 module github.com/massenz/go-statemachine
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.24.1
 
 require (
 	github.com/JiaYongfei/respect v0.0.0-20211019032000-61a979c8e39a
