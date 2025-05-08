@@ -3,7 +3,7 @@
 # Created by Marco Massenzio, 2023-07-13
 
 name: fsm-server
-version: 0.12.2
+version: 0.14.0
 description: A StateMachine gRPC server, backed by Redis storage
 author: Marco Massenzio (marco@alertavert.com)
 license: Apache-2.0
