@@ -1,6 +1,8 @@
 module github.com/massenz/fsm-cli
 
+
 go 1.24.1
+toolchain go1.24.1
 
 require (
 	github.com/massenz/go-statemachine v0.13.2-gc72711f
