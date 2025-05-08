@@ -50,7 +50,6 @@ ifeq ($(strip $(version)),)
   $(error $(YELLOW)version$(RED) must be defined, use yq and settings.yaml, or define it before including this file$(RESET))
 endif
 release := v$(version)-g$(git_commit)
-$(info $(GREEN)Release: $(release)$(RESET))
 
 # Certificates
 certs_dir := ssl-config
