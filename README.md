@@ -4,7 +4,7 @@ A basic implementation of a Finite State Machine in Go
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-[![Tests](https://github.com/massenz/go-statemachine/actions/workflows/test.yml/badge.svg)](https://github.com/massenz/go-statemachine/actions/workflows/test.yml)
+[![Tests](https://github.com/massenz/go-statemachine/actions/workflows/test.yaml/badge.svg)](https://github.com/massenz/go-statemachine/actions/workflows/test.yaml)
 [![Release](https://github.com/massenz/go-statemachine/actions/workflows/release.yaml/badge.svg)](https://github.com/massenz/go-statemachine/actions/workflows/release.yaml)
 
 ### Copyright & Licensing
