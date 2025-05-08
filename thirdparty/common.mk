@@ -15,13 +15,15 @@ GOMOD := $(shell go list -m)
 UNAME_M := $(shell uname -m)
 ifeq ($(UNAME_M),x86_64)
     GOARCH = amd64
-else ifeq ($(UNAME_M),arm64)
-    GOARCH = arm64
 else ifeq ($(UNAME_M),armv6l)
     GOARCH = arm
 else ifeq ($(UNAME_M),armv7l)
     GOARCH = arm
+else ifeq ($(UNAME_M),arm64)
+    GOARCH = arm64
 else ifeq ($(UNAME_M),armv8l)
+    GOARCH = arm64
+else ifeq ($(UNAME_M),aarch64)
     GOARCH = arm64
 else
     $(error Unsupported architecture $(UNAME_M))
@@ -43,7 +45,7 @@ endif
 # Versioning
 # The `version` is a static value, set in settings.yaml, and ONLY used to tag the release,
 # `release` includes the git SHA and will be used to tag the binary and container.
-git_commit ?= $(shell git rev-parse --short HEAD)
+git_commit := $(shell git rev-parse --short HEAD)
 ifeq ($(strip $(version)),)
   $(error $(YELLOW)version$(RED) must be defined, use yq and settings.yaml, or define it before including this file$(RESET))
 endif
