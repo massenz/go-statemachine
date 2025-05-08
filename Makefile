@@ -30,7 +30,7 @@ fmt: ## Formats the Go source code using 'go fmt'
 .PHONY: build
 build: cmd/main.go $(srcs)  ## Builds the binary
 	@mkdir -p build/bin
-	@echo "Building rel. $(release); OS/Arch: $(GOOS)/$(GOARCH) - Pkg: $(GOMOD)"
+	@echo "$(GREEN)Building rel. $(release)$(RESET); OS/Arch: $(GOOS)/$(GOARCH) - Pkg: $(GOMOD)"
 	@GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		-ldflags "-X $(GOMOD)/api.Release=$(release)" \
 		-o build/bin/$(bin) cmd/main.go
