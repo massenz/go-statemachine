@@ -1,7 +1,10 @@
 # Copyright (c) 2022-2024 AlertAvert.com.  All rights reserved.
 # Created by M. Massenzio, 2022-03-14
 
-include thirdparty/common.mk
+# Uses common-utils Makefile utilities.
+# See github.com/massenz/common-utils
+include ${COMMON_UTILS}/templates/common.mk
+
 bin := $(appname)-$(release)_$(GOOS)-$(GOARCH)
 
 # Source files & Test files definitions
