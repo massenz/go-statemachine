@@ -60,10 +60,31 @@ coverage: build/reports/coverage.out ## Shows the coverage report in the browser
 all: build gencert test ## Builds the binary and runs all tests
 
 PORT ?= 7398
+# Address of the Redis instance to use for local development.
+# Override on the command line, e.g. `make dev REDIS_ADDR=host:port`.
+REDIS_ADDR ?= localhost:6379
+
 .PHONY: dev
-dev: build ## Runs the server binary in development mode
-    # FIXME: this currently does not work and should be adjusted
-	build/bin/$(bin) -debug -grpc-port $(PORT)
+dev: build ## Runs the server binary in development mode (no TLS)
+	@# Require a running Docker container named 'redis' for local development.
+	@if ! docker ps --format '{{.Names}}' | grep -q '^redis$$'; then \
+		echo "$(RED)[ERROR]$(RESET) Redis container 'redis' is not running; start it with:"; \
+		echo "  docker compose -f docker/compose.yaml --project-name sm up redis -d"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Running server against Redis at $(YELLOW)$(REDIS_ADDR)$(RESET) (TLS disabled)"
+	build/bin/$(bin) -debug -grpc-port $(PORT) -redis $(REDIS_ADDR) -insecure
+
+.PHONY: dev-tls
+dev-tls: build check_certs ## Runs the server binary in development mode with TLS (using ./certs)
+	@# Require a running Docker container named 'redis' for local development.
+	@if ! docker ps --format '{{.Names}}' | grep -q '^redis$$'; then \
+		echo "$(RED)[ERROR]$(RESET) Redis container 'redis' is not running; start it with:"; \
+		echo "  docker compose -f docker/compose.yaml --project-name sm up redis -d"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Running server against Redis at $(YELLOW)$(REDIS_ADDR)$(RESET) with TLS from $(YELLOW)$(shell pwd)/certs$(RESET)"
+	TLS_CONFIG_DIR=$(shell pwd)/certs build/bin/$(bin) -debug -grpc-port $(PORT) -redis $(REDIS_ADDR)
 
 ##@ Container Management
 # Convenience targets to run locally containers and

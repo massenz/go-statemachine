@@ -244,6 +244,33 @@ They are kept in the [statemachine-proto](https://github.com/massenz/statemachin
 **Supporting services**<br/>
 The `fsm-server` requires a running [Redis](#) server and [AWS Simple Queue Service (SQS)](#); they can be both run locally in containers: see [the Docker Compose](docker/compose.yaml) configuration and [Container Build & Run](#container-build--run).
 
+### Local development helpers (`make dev` / `make dev-tls`)
+
+For day-to-day local development against a Redis instance, the `Makefile` provides a couple of convenience targets:
+
+- `make dev`
+  - Builds the server binary.
+  - Verifies that a Docker container named `redis` is running.
+  - Runs `fsm-server` in development mode **without TLS** (using the `-insecure` flag).
+- `make dev-tls`
+  - Builds the server binary.
+  - Verifies that a Docker container named `redis` is running.
+  - Ensures TLS certificates exist under `./certs` (generating them via `make certs` if needed).
+  - Runs `fsm-server` in development mode **with TLS enabled**, pointing `TLS_CONFIG_DIR` at `./certs`.
+
+Both targets default to connecting to `localhost:6379` (you can override this via `REDIS_ADDR`):
+
+```sh
+make dev        # or: make dev REDIS_ADDR=host:port
+make dev-tls    # or: make dev-tls REDIS_ADDR=host:port
+```
+
+If either target is invoked and a container named `redis` is not running, the command will abort with an error and a hint to start it, for example:
+
+```sh
+docker compose -f docker/compose.yaml --project-name sm up redis -d
+```
+
 
 ## Build & Test
 
