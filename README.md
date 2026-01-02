@@ -321,8 +321,14 @@ Logs are sent to `stdout` by default, but this can be changed using the [`slf4go
 
 ## Running the CLI Client
 
-To test the server functionality, you can use the [CLI client](cli/fsm-cli.go).  
-See [the User Guide](docs/cli.md) for details.
+To test the server functionality, you can use the separate `fsm-cli` module and binary. Build it with:
+
+```sh
+make cli
+```
+
+This places the CLI binary under `build/bin/` with a name derived from `settings.yaml`.
+See [the User Guide](docs/cli.md) for detailed CLI usage and YAML examples.
 
 
 ## Container Build & Run

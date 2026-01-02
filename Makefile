@@ -89,7 +89,9 @@ dev-tls: build check_certs ## Runs the server binary in development mode with TL
 ##@ Container Management
 # Convenience targets to run locally containers and
 # setup the test environments.
-image := massenz/$(appname)
+# NOTE: the published image name is kept stable as "massenz/statemachine" to
+# match existing documentation and client test manifests.
+image := massenz/statemachine
 compose := docker/compose.yaml
 dockerfile := docker/Dockerfile
 

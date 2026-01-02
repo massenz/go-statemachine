@@ -2,7 +2,6 @@ package client_test
 
 import (
 	"context"
-	"fmt"
 	"github.com/massenz/fsm-cli/client"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"os"
@@ -44,21 +43,20 @@ func StartServices() {
 	// Start the Docker Compose setup
 	Ω(stack.Up(ctx)).To(Succeed())
 
-	// Get the container IP address and port
-	smServer, err := stack.ServiceContainer(ctx, "server")
-	Ω(err).ToNot(HaveOccurred())
-	port, err := smServer.MappedPort(ctx, "7398")
-	Ω(err).ToNot(HaveOccurred())
-
-	// It is *important* to use `localhost` here, as Certs are issued with that hostname
-	svc = client.NewClient(fmt.Sprintf("localhost:%s", port.Port()), true)
+	// The test compose file maps the gRPC server to localhost:7398; connect directly
+	// rather than relying on dynamic port mappings from testcontainers.
+	svc = client.NewClient("localhost:7398", true)
 	Ω(svc).ToNot(BeNil())
 }
 
 var _ = BeforeSuite(func() {
 	StartServices()
-	_, err := svc.Health(context.Background(), &emptypb.Empty{})
-	Ω(err).ShouldNot(HaveOccurred())
+	// Server startup can take a moment after the containers are reported as started,
+	// so we poll Health until it succeeds or times out.
+	Eventually(func() error {
+		_, err := svc.Health(context.Background(), &emptypb.Empty{})
+		return err
+	}, 30*time.Second, 500*time.Millisecond).Should(Succeed())
 })
 
 var _ = AfterSuite(func() {
