@@ -12,9 +12,10 @@ package pubsub
 import (
 	"encoding/base64"
 	"fmt"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	slf4go "github.com/massenz/slf4go/logging"
+	"github.com/rs/zerolog/log"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	"google.golang.org/protobuf/proto"
 )
@@ -61,19 +62,10 @@ func NewSqsPublisher(channel <-chan protos.EventResponse, awsUrl *string) *SqsPu
 		return nil
 	}
 	return &SqsPublisher{
-		logger:        slf4go.NewLog("SQS-Pub"),
+		logger:        log.With().Str("logger", "SQS-Pub").Logger(),
 		client:        client,
 		notifications: channel,
 	}
-}
-
-// SetLogLevel allows the SqsPublisher to implement the log.Loggable interface
-func (s *SqsPublisher) SetLogLevel(level slf4go.LogLevel) {
-	if s == nil || s.logger == nil {
-		fmt.Println("WARN: attempt to set Log level on a nil SqsPublisher")
-		return
-	}
-	s.logger.Level = level
 }
 
 // GetQueueUrl retrieves from AWS SQS the URL for the queue, given the topic name
@@ -83,7 +75,7 @@ func GetQueueUrl(client *sqs.SQS, topic string) string {
 	})
 	if err != nil || out.QueueUrl == nil {
 		// From the Google School: fail fast and noisily from an unrecoverable error
-		slf4go.RootLog.Fatal(fmt.Errorf("cannot get SQS Queue URL for topic %s: %v", topic, err))
+		log.Fatal().Err(fmt.Errorf("cannot get SQS Queue URL for topic %s", topic)).Msg("cannot get SQS Queue URL")
 	}
 	return *out.QueueUrl
 }
@@ -95,12 +87,12 @@ func (s *SqsPublisher) Publish(errorsTopic string) {
 	for eventResponse := range s.notifications {
 		isOKOutcome := eventResponse.Outcome != nil && eventResponse.Outcome.Code == protos.EventOutcome_Ok
 		if isOKOutcome {
-			s.logger.Warn("unexpected notification for Ok outcome [Event ID: %s]", eventResponse.EventId)
+			s.logger.Warn().Msgf("unexpected notification for Ok outcome [Event ID: %s]", eventResponse.EventId)
 			continue
 		}
 		response, err := p.MarshalToText(&eventResponse)
 		if err != nil {
-			s.logger.Error("Cannot marshal eventResponse (%s): %v", eventResponse.String(), err)
+			s.logger.Error().Msgf("Cannot marshal eventResponse (%s): %v", eventResponse.String(), err)
 			continue
 		}
 		msgResult, err := s.client.SendMessage(&sqs.SendMessageInput{
@@ -110,10 +102,10 @@ func (s *SqsPublisher) Publish(errorsTopic string) {
 			QueueUrl:    &errorsQueueUrl,
 		})
 		if err != nil {
-			s.logger.Error("Cannot publish eventResponse (%s): %v", eventResponse.String(), err)
+			s.logger.Error().Msgf("Cannot publish eventResponse (%s): %v", eventResponse.String(), err)
 			continue
 		}
-		s.logger.Debug("Notification successfully posted to SQS: %s", *msgResult.MessageId)
+		s.logger.Debug().Msgf("Notification successfully posted to SQS: %s", *msgResult.MessageId)
 	}
-	s.logger.Info("SQS Publisher exiting")
+	s.logger.Info().Msg("SQS publisher exiting")
 }

@@ -11,19 +11,21 @@ package grpc_test
 
 import (
 	"context"
+	"io"
+	"net"
+
 	"github.com/go-redis/redis/v8"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	. "github.com/massenz/go-statemachine/pkg/api"
 	"github.com/massenz/go-statemachine/pkg/grpc"
 	"github.com/massenz/go-statemachine/pkg/storage"
-	"github.com/massenz/slf4go/logging"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	g "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/wrapperspb"
-	"io"
-	"net"
 
 	"github.com/massenz/statemachine-proto/golang/api"
 )
@@ -40,14 +42,14 @@ var _ = Describe("gRPC Server Streams", func() {
 		// Server setup
 		BeforeEach(func() {
 			store = storage.NewRedisStoreWithDefaults(redisContainer.Address)
-			store.SetLogLevel(logging.NONE)
+			zerolog.SetGlobalLevel(zerolog.Disabled)
 			listener, _ = net.Listen("tcp", ":0")
 			cc, _ := g.Dial(listener.Addr().String(),
 				g.WithTransportCredentials(insecure.NewCredentials()))
 			client = api.NewStatemachineServiceClient(cc)
-			// Use this to log errors when diagnosing test failures; then set to NONE once done.
-			l := logging.NewLog("grpc-server-test")
-			l.Level = logging.NONE
+			// Use this to log errors when diagnosing test failures; then mute via global level.
+			l := log.With().Str("logger", "grpc-server-test").Logger()
+			zerolog.SetGlobalLevel(zerolog.Disabled)
 			server, _ := grpc.NewGrpcServer(&grpc.Config{
 				Store:  store,
 				Logger: l,

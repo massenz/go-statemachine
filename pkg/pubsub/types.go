@@ -10,11 +10,12 @@
 package pubsub
 
 import (
-	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/massenz/go-statemachine/pkg/storage"
-	log "github.com/massenz/slf4go/logging"
-	protos "github.com/massenz/statemachine-proto/golang/api"
 	"time"
+
+	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/rs/zerolog"
+	"github.com/massenz/go-statemachine/pkg/storage"
+	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 const (
@@ -35,7 +36,7 @@ const (
 // The messages are polled from the `events` channel, and if any error is encountered,
 // error messages are posted on a `notifications` channel for further processing upstream.
 type EventsListener struct {
-	logger        *log.Log
+	logger        zerolog.Logger
 	events        <-chan protos.EventRequest
 	notifications chan<- protos.EventResponse
 	store         storage.StoreManager
@@ -53,7 +54,7 @@ type ListenerOptions struct {
 // SqsPublisher is a wrapper around the AWS SQS client,
 // and is used to publish messages to provided queues when outcomes are encountered.
 type SqsPublisher struct {
-	logger        *log.Log
+	logger        zerolog.Logger
 	client        *sqs.SQS
 	notifications <-chan protos.EventResponse
 }
@@ -62,7 +63,7 @@ type SqsPublisher struct {
 // The subscriber will poll the queue for new messages,
 // and will post them on the `events` channel from where an `EventsListener` will process them.
 type SqsSubscriber struct {
-	logger               *log.Log
+	logger               zerolog.Logger
 	client               *sqs.SQS
 	events               chan<- protos.EventRequest
 	Timeout              time.Duration

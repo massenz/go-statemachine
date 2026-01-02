@@ -10,20 +10,20 @@
 package api_test
 
 import (
+	"os"
+
+	"github.com/rs/zerolog"
 	. "github.com/massenz/go-statemachine/pkg/api"
-	log "github.com/massenz/slf4go/logging"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"google.golang.org/protobuf/encoding/protojson"
-	"os"
 
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 var _ = Describe("FSM Protocol Buffers", func() {
 	BeforeEach(func() {
-		Logger = log.NewLog("statemachine-test")
-		Logger.Level = log.NONE
+		zerolog.SetGlobalLevel(zerolog.Disabled)
 	})
 	Context("if well defined", func() {
 		It("can be initialized", func() {

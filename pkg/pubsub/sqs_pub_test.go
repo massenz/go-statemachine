@@ -19,7 +19,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/massenz/slf4go/logging"
+	"github.com/rs/zerolog"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
@@ -33,8 +33,8 @@ var _ = Describe("SQS Publisher", func() {
 			notificationsCh = make(chan protos.EventResponse)
 			testPublisher = pubsub.NewSqsPublisher(notificationsCh, &awsLocal.Address)
 			Expect(testPublisher).ToNot(BeNil())
-			// Set to DEBUG when diagnosing test failures
-			testPublisher.SetLogLevel(logging.NONE)
+			// Mute logs during tests; set to Debug when diagnosing failures
+			zerolog.SetGlobalLevel(zerolog.Disabled)
 			SetDefaultEventuallyPollingInterval(pollingInterval)
 			SetDefaultEventuallyTimeout(timeout)
 		})

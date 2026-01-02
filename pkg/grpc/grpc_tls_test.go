@@ -12,9 +12,11 @@ package grpc_test
 import (
 	"context"
 	"fmt"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/massenz/go-statemachine/pkg/grpc"
 	"github.com/massenz/go-statemachine/pkg/storage"
-	slf4go "github.com/massenz/slf4go/logging"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	"math/rand"
@@ -43,8 +45,8 @@ var _ = Describe("gRPC Server with TLS", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 
 			// TODO: use GinkgoWriter for logs
-			l := slf4go.NewLog("grpc-TLS-test")
-			l.Level = slf4go.NONE
+			l := log.With().Str("logger", "grpc-TLS-test").Logger()
+			zerolog.SetGlobalLevel(zerolog.Disabled)
 			server, err := grpc.NewGrpcServer(&grpc.Config{
 				EventsChannel: testCh,
 				Logger:        l,

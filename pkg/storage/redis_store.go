@@ -13,8 +13,10 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+
 	"github.com/go-redis/redis/v8"
-	slf4go "github.com/massenz/slf4go/logging"
+	"github.com/rs/zerolog"
+	zlog "github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"math/rand"
 	"os"
@@ -35,7 +37,7 @@ const (
 )
 
 type RedisStore struct {
-	logger     *slf4go.Log
+	logger     zerolog.Logger
 	client     redis.UniversalClient
 	Timeout    time.Duration
 	MaxRetries int
@@ -47,7 +49,7 @@ type RedisStore struct {
 // with a given timeout and a number of retries.
 func (csm *RedisStore) get(key string, value proto.Message) StoreErr {
 	attemptsLeft := csm.MaxRetries
-	csm.logger.Trace("Looking up key `%s` (Max retries: %d)", key, attemptsLeft)
+	csm.logger.Trace().Msgf("Looking up key `%s` (Max retries: %d)", key, attemptsLeft)
 	var cancel context.CancelFunc
 	defer func() {
 		if cancel != nil {
@@ -62,23 +64,23 @@ func (csm *RedisStore) get(key string, value proto.Message) StoreErr {
 		data, err := cmd.Bytes()
 		if err == redis.Nil {
 			// The key isn't there, no point in retrying
-			csm.logger.Debug("Key `%s` not found", key)
+			csm.logger.Debug().Msgf("Key `%s` not found", key)
 			cancel()
 			return NotFoundError(key)
 		} else if err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
 				// The error here may be recoverable, so we'll keep trying until we run out of attempts
-				csm.logger.Error(err.Error())
+				csm.logger.Error().Err(err).Msg("redis get timeout")
 				if attemptsLeft == 0 {
-					csm.logger.Error("max retries reached, giving up")
+					csm.logger.Error().Msg("max retries reached, giving up")
 					cancel()
 					return err
 				}
-				csm.logger.Trace("retrying after timeout, attempts left: %d", attemptsLeft)
+				csm.logger.Trace().Msgf("retrying after timeout, attempts left: %d", attemptsLeft)
 				csm.wait()
 			} else {
 				// This is a different error, we'll just return it
-				csm.logger.Error(err.Error())
+				csm.logger.Error().Err(err).Msg("redis get error")
 				cancel()
 				return GenericStoreError(err.Error())
 			}
@@ -91,7 +93,7 @@ func (csm *RedisStore) get(key string, value proto.Message) StoreErr {
 
 func (csm *RedisStore) put(key string, value proto.Message, ttl time.Duration) StoreErr {
 	attemptsLeft := csm.MaxRetries
-	csm.logger.Trace("Storing key `%s` (Max retries: %d)", key, attemptsLeft)
+	csm.logger.Trace().Msgf("Storing key `%s` (Max retries: %d)", key, attemptsLeft)
 	var cancel context.CancelFunc
 	defer func() {
 		if cancel != nil {
@@ -105,7 +107,7 @@ func (csm *RedisStore) put(key string, value proto.Message, ttl time.Duration) S
 		attemptsLeft--
 		data, err := proto.Marshal(value)
 		if err != nil {
-			csm.logger.Error("cannot convert proto to bytes: %q", err)
+			csm.logger.Error().Err(err).Msg("cannot convert proto to bytes")
 			return InvalidDataError(err.Error())
 		}
 		cmd := csm.client.Set(ctx, key, data, ttl)
@@ -116,13 +118,13 @@ func (csm *RedisStore) put(key string, value proto.Message, ttl time.Duration) S
 				if attemptsLeft == 0 {
 					return TooManyAttempts("")
 				}
-				csm.logger.Debug("retrying after timeout, attempts left: %d", attemptsLeft)
+				csm.logger.Debug().Msgf("retrying after timeout, attempts left: %d", attemptsLeft)
 				csm.wait()
 			} else {
 				return GenericStoreError(err.Error())
 			}
 		} else {
-			csm.logger.Debug("stored value for key `%s`", key)
+			csm.logger.Debug().Msgf("stored value for key `%s`", key)
 			return nil
 		}
 	}
@@ -147,7 +149,7 @@ func (csm *RedisStore) Health() StoreErr {
 
 	_, err := csm.client.Ping(ctx).Result()
 	if err != nil {
-		csm.logger.Error("Error pinging redis: %s", err.Error())
+		csm.logger.Error().Err(err).Msg("error pinging redis")
 		return GenericStoreError(err.Error())
 	}
 	return nil
@@ -161,10 +163,7 @@ func (csm *RedisStore) GetTimeout() time.Duration {
 	return csm.Timeout
 }
 
-// SetLogLevel for RedisStore implements the Loggable interface
-func (csm *RedisStore) SetLogLevel(level slf4go.LogLevel) {
-	csm.logger.Level = level
-}
+// SetLogLevel is no longer needed; RedisStore relies on zerolog's global log level.
 
 /////// ConfigStore implementation
 
@@ -173,7 +172,7 @@ func (csm *RedisStore) GetConfig(id string) (*protos.Configuration, StoreErr) {
 	var cfg protos.Configuration
 	err := csm.get(key, &cfg)
 	if err != nil {
-		csm.logger.Error("cannot retrieve configuration: %v", err)
+		csm.logger.Error().Err(err).Msg("cannot retrieve configuration")
 		return nil, err
 	}
 	return &cfg, nil
@@ -195,24 +194,24 @@ func (csm *RedisStore) PutConfig(cfg *protos.Configuration) StoreErr {
 
 func (csm *RedisStore) GetAllConfigs() []string {
 	// TODO: enable splitting results with a (cursor, count)
-	csm.logger.Debug("Looking up all configs in DB")
+	csm.logger.Debug().Msg("Looking up all configs in DB")
 	configs, err := csm.client.SMembers(context.Background(), ConfigsPrefix).Result()
 	if err != nil {
-		csm.logger.Error(NoConfigurationsFmt, err)
+		csm.logger.Error().Err(err).Msg(NoConfigurationsFmt)
 		return nil
 	}
-	csm.logger.Debug(ReturningItemsFmt, len(configs))
+	csm.logger.Debug().Msgf(ReturningItemsFmt, len(configs))
 	return configs
 }
 
 func (csm *RedisStore) GetAllVersions(name string) []string {
-	csm.logger.Debug("Looking up all versions for Configurations `%s` in DB", name)
+	csm.logger.Debug().Msgf("Looking up all versions for Configurations %s in DB", name)
 	configs, err := csm.client.SMembers(context.Background(), NewKeyForConfig(name)).Result()
 	if err != nil {
-		csm.logger.Error(NoConfigurationsFmt, err)
+		csm.logger.Error().Err(err).Msg(NoConfigurationsFmt)
 		return nil
 	}
-	csm.logger.Debug(ReturningItemsFmt, len(configs))
+	csm.logger.Debug().Msgf(ReturningItemsFmt, len(configs))
 	return configs
 }
 
@@ -223,7 +222,7 @@ func (csm *RedisStore) GetStateMachine(id string, cfg string) (*protos.FiniteSta
 	var stateMachine protos.FiniteStateMachine
 	err := csm.get(key, &stateMachine)
 	if err != nil {
-		csm.logger.Error("error getting FSM `%s`: %v", key, err)
+		csm.logger.Error().Err(err).Msgf("error getting FSM %s", key)
 		return nil, err
 	}
 	return &stateMachine, nil
@@ -240,15 +239,14 @@ func (csm *RedisStore) PutStateMachine(id string, stateMachine *protos.FiniteSta
 
 func (csm *RedisStore) GetAllInState(cfg string, state string) []string {
 	// TODO: enable splitting results with a (cursor, count)
-	csm.logger.Debug("Looking up all FSMs [%s] in DB with state `%s`", cfg, state)
+	csm.logger.Debug().Msgf("Looking up all FSMs [%s] in DB with state `%s`", cfg, state)
 	key := NewKeyForMachinesByState(cfg, state)
 	fsms, err := csm.client.SMembers(context.Background(), key).Result()
 	if err != nil {
-		const format = "Could not retrieve FSMs for state `%s`: %s"
-		csm.logger.Error(format, state, err)
+		csm.logger.Error().Err(err).Msgf("Could not retrieve FSMs for state %s", state)
 		return nil
 	}
-	csm.logger.Debug(ReturningItemsFmt, len(fsms))
+	csm.logger.Debug().Msgf(ReturningItemsFmt, len(fsms))
 	return fsms
 }
 
@@ -280,41 +278,41 @@ func (csm *RedisStore) TxProcessEvent(id, cfgName string, evt *protos.Event) Sto
 	ctx, _ := context.WithTimeout(context.Background(), DefaultTimeout)
 	// See Tx example at https://redis.uptrace.dev/guide/go-redis-pipelines.html#transactions
 	txf := func(tx *redis.Tx) error {
-		csm.logger.Trace("Tx starts")
+		csm.logger.Trace().Msg("Tx starts")
 		fsm, err := csm.GetStateMachine(id, cfgName)
 		if err != nil {
-			csm.logger.Debug("error looking up FSM %s: %v", id, err)
+			csm.logger.Debug().Msgf("error looking up FSM %s: %v", id, err)
 			return NotFoundError(NewKeyForMachine(id, cfgName))
 		}
-		csm.logger.Trace("Tx got SM [%s]", id)
+		csm.logger.Trace().Msgf("Tx got SM [%s]", id)
 		cfg, err := csm.GetConfig(fsm.ConfigId)
 		if err != nil {
 			return NotFoundError(err.Error())
 		}
 		oldState := fsm.GetState()
-		csm.logger.Trace("Tx got CFG [%s]", api.GetVersionId(cfg))
+		csm.logger.Trace().Msgf("Tx got CFG [%s]", api.GetVersionId(cfg))
 		if err = (&api.ConfiguredStateMachine{Config: cfg, FSM: fsm}).SendEvent(evt); err != nil {
 			return err
 		}
-		csm.logger.Trace("Tx changed SM to: %s", fsm.State)
+		csm.logger.Trace().Msgf("Tx changed SM to: %s", fsm.State)
 		// If the watched keys are unchanged, the Tx is committed
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			csm.logger.Trace("Tx committing change")
+			csm.logger.Trace().Msg("Tx committing change")
 			data, err := proto.Marshal(fsm)
 			if err != nil {
-				csm.logger.Error("cannot convert proto to bytes: %q", err)
+				csm.logger.Error().Err(err).Msg("cannot convert proto to bytes")
 				return InvalidDataError(err.Error())
 			}
 			cmd := pipe.Set(ctx, NewKeyForMachine(id, cfgName), data, NeverExpire)
 			if cmd.Err() != nil {
-				csm.logger.Error("could not update fsm [%s](Configuration: %s): %v", id, cfgName, cmd.Err())
+				csm.logger.Error().Err(cmd.Err()).Msgf("could not update fsm [%s](Configuration: %s)", id, cfgName)
 				return cmd.Err()
 			}
-			csm.logger.Trace("Tx committed")
-			csm.logger.Trace("updating SET of FSM states")
+			csm.logger.Trace().Msg("Tx committed")
+			csm.logger.Trace().Msg("updating SET of FSM states")
 			err = csm.UpdateState(cfgName, id, oldState, fsm.GetState())
 			if err != nil {
-				csm.logger.Error("could not update the SET containing FSM per state: %v", err)
+				csm.logger.Error().Err(err).Msg("could not update the SET containing FSM per state")
 				return err
 			}
 			return nil
@@ -323,15 +321,15 @@ func (csm *RedisStore) TxProcessEvent(id, cfgName string, evt *protos.Event) Sto
 	}
 	for i := 0; i < DefaultMaxRetries; i++ {
 		key := NewKeyForMachine(id, cfgName)
-		csm.logger.Trace("(%d) watching %s", i, key)
-		err := csm.client.Watch(ctx, txf, key)
-		if err == redis.TxFailedErr {
-			// We may be able to retry
-			csm.logger.Trace("(%d) Tx failed, retrying", i)
+		csm.logger.Trace().Msgf("(%d) watching %s", i, key)
+			err := csm.client.Watch(ctx, txf, key)
+			if err == redis.TxFailedErr {
+				// We may be able to retry
+				csm.logger.Trace().Msgf("(%d) Tx failed, retrying", i)
 			continue
 		}
 		// err may be nil here, in which case, success!
-		csm.logger.Trace("returning with (%v)", err)
+		csm.logger.Trace().Msgf("returning with (%v)", err)
 		return err
 	}
 	return TooManyAttempts("")
@@ -344,7 +342,7 @@ func (csm *RedisStore) GetEvent(id string, cfg string) (*protos.Event, StoreErr)
 	var event protos.Event
 	err := csm.get(key, &event)
 	if err != nil {
-		csm.logger.Error("cannot retrieve event `%s`: %v", key, err)
+		csm.logger.Error().Err(err).Msgf("cannot retrieve event %s", key)
 		return nil, err
 	}
 	return &event, nil
@@ -371,7 +369,7 @@ func (csm *RedisStore) GetOutcomeForEvent(id string, cfg string) (*protos.EventO
 	var outcome protos.EventOutcome
 	err := csm.get(key, &outcome)
 	if err != nil {
-		csm.logger.Error("cannot retrieve outcome for event `%s`: %v", key, err)
+		csm.logger.Error().Err(err).Msgf("cannot retrieve outcome for event %s", key)
 		return nil, err
 	}
 	return &outcome, nil
@@ -393,13 +391,13 @@ func NewRedisStoreWithDefaults(address string) StoreManager {
 // if they time out after timeout expires.
 // Use the [Health] function to check whether the store is reachable.
 func NewRedisStore(address string, isCluster bool, db int, timeout time.Duration, maxRetries int) StoreManager {
-	logger := slf4go.NewLog(fmt.Sprintf("redis://%s/%d", address, db))
+	logger := zlog.With().Str("logger", fmt.Sprintf("redis://%s/%d", address, db)).Logger()
 
 	var tlsConfig *tls.Config
 	var client redis.UniversalClient
 
 	if os.Getenv("REDIS_TLS") != "" {
-		logger.Info("Using TLS for Redis connection")
+		logger.Info().Msg("Using TLS for Redis connection")
 		tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 
@@ -417,7 +415,7 @@ func NewRedisStore(address string, isCluster bool, db int, timeout time.Duration
 	}
 
 	return &RedisStore{
-		logger:     slf4go.NewLog(fmt.Sprintf("redis://%s/%d", address, db)),
+		logger:     logger,
 		client:     client,
 		Timeout:    timeout,
 		MaxRetries: maxRetries,

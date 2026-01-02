@@ -12,9 +12,10 @@ package grpc_test
 import (
 	"context"
 	"crypto/tls"
+
+	"github.com/rs/zerolog"
 	"github.com/massenz/go-statemachine/pkg/grpc"
 	internals "github.com/massenz/go-statemachine/pkg/internal/testing"
-	slf4go "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	g "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -38,8 +39,8 @@ var _ = BeforeSuite(func() {
 	var err error
 	redisContainer, err = internals.NewRedisContainer(context.Background())
 	Expect(err).ToNot(HaveOccurred())
-	// Muting the RootLog to prevent annoying warning re TLS
-	slf4go.RootLog.Level = slf4go.NONE
+	// Muting global zerolog logging to prevent annoying warning re TLS
+	zerolog.SetGlobalLevel(zerolog.Disabled)
 	// Note the timeout here is in seconds (and it's not a time.Duration either)
 }, 5.0)
 

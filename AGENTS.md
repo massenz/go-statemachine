@@ -35,6 +35,8 @@ All operations on the main server module (building, testing, etc.) are driven by
 
 Whenever validating your changes, please use either of `make build` or `make test` to ensure correctness.
 
+All code changes ought to be made in their own branch: if the repo is not already in a separete branch, create one via `git checkout -b <branch-name>`, asking for a descriptive name, unless the instructions make it obvious what name to use.
+
 ### Tooling prerequisites
 
 - Install Ginkgo v1 CLI (the Makefile and tests assume v1, not v2):

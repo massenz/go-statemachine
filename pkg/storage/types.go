@@ -11,10 +11,10 @@ package storage
 
 import (
 	"fmt"
-	log "github.com/massenz/slf4go/logging"
-	protos "github.com/massenz/statemachine-proto/golang/api"
 	"regexp"
 	"time"
+
+	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 type StoreErr = error
@@ -111,7 +111,6 @@ type EventStore interface {
 }
 
 type StoreManager interface {
-	log.Loggable
 	ConfigStore
 	FSMStore
 	EventStore
