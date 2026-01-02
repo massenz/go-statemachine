@@ -14,11 +14,17 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+	zlog "github.com/rs/zerolog/log"
 	"github.com/massenz/go-statemachine/pkg/api"
 	"github.com/massenz/go-statemachine/pkg/internal/config"
 	"github.com/massenz/go-statemachine/pkg/storage"
-	"github.com/massenz/slf4go/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -26,10 +32,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
 
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
@@ -37,7 +39,7 @@ import (
 type Config struct {
 	EventsChannel chan<- protos.EventRequest
 	Store         storage.StoreManager
-	Logger        *logging.Log
+	Logger        zerolog.Logger
 	Timeout       time.Duration
 	ServerAddress string
 	TlsEnabled    bool
@@ -67,17 +69,17 @@ func (s *grpcSubscriber) Health(context.Context, *emptypb.Empty) (*protos.Health
 		TlsEnabled: s.TlsEnabled,
 	}
 	if s.Store == nil {
-		s.Logger.Error("Redis store not initialized, cannot process requests")
+		s.Logger.Error().Msg("Redis store not initialized, cannot process requests")
 		return nil, status.Error(codes.Internal, "data store not configured")
 	}
 	if s.EventsChannel == nil {
-		s.Logger.Error("events channel not initialized, cannot process events")
+		s.Logger.Error().Msg("events channel not initialized, cannot process events")
 		response.State = protos.HealthResponse_NOT_READY
 		return response, nil
 	}
 	err := s.Store.Health()
 	if err != nil {
-		s.Logger.Error("Redis store not ready: %v", err)
+		s.Logger.Error().Msgf("Redis store not ready: %v", err)
 		response.State = protos.HealthResponse_NOT_READY
 	}
 	return response, nil
@@ -100,21 +102,21 @@ func (s *grpcSubscriber) SendEvent(ctx context.Context, request *protos.EventReq
 	if hasDeadline {
 		timeout = deadline.Sub(time.Now())
 	}
-	s.Logger.Trace("Sending Event to channel: %v", request.Event)
+	s.Logger.Trace().Msgf("Sending Event to channel: %v", request.Event)
 	select {
 	case s.EventsChannel <- *request:
-		return &protos.EventResponse{
-			EventId: request.Event.EventId,
-		}, nil
-	case <-time.After(timeout):
-		s.Logger.Error("Timeout exceeded when trying to post event to internal channel")
+			return &protos.EventResponse{
+				EventId: request.Event.EventId,
+			}, nil
+		case <-time.After(timeout):
+			s.Logger.Error().Msg("Timeout exceeded when trying to post event to internal channel")
 		return nil, status.Error(codes.DeadlineExceeded, "cannot post event")
 	}
 }
 
 func (s *grpcSubscriber) PutConfiguration(ctx context.Context, cfg *protos.Configuration) (*protos.PutResponse, error) {
 	if err := api.CheckValid(cfg); err != nil {
-		s.Logger.Error("invalid configuration: %v", err)
+		s.Logger.Error().Msgf("invalid configuration: %v", err)
 		return nil, status.Errorf(codes.InvalidArgument, "invalid configuration: %v", err)
 	}
 	if deadline, ok := ctx.Deadline(); ok {
@@ -123,7 +125,7 @@ func (s *grpcSubscriber) PutConfiguration(ctx context.Context, cfg *protos.Confi
 		}
 	}
 	if err := s.Store.PutConfig(cfg); err != nil {
-		s.Logger.Error("could not store configuration: %v", err)
+		s.Logger.Error().Msgf("could not store configuration: %v", err)
 		if strings.Contains(err.Error(), "already exists") {
 			return nil, status.Errorf(codes.AlreadyExists, "cannot store configuration: %v", err)
 		}
@@ -134,7 +136,7 @@ func (s *grpcSubscriber) PutConfiguration(ctx context.Context, cfg *protos.Confi
 			return nil, ctx.Err()
 		}
 	}
-	s.Logger.Trace("configuration stored: %s", api.GetVersionId(cfg))
+	s.Logger.Trace().Msgf("configuration stored: %s", api.GetVersionId(cfg))
 	return &protos.PutResponse{
 		Id: api.GetVersionId(cfg),
 		// Note: this is the magic incantation to use a `one_of` field in Protobuf.
@@ -145,20 +147,20 @@ func (s *grpcSubscriber) GetAllConfigurations(ctx context.Context, req *wrappers
 	*protos.ListResponse, error) {
 	cfgName := req.Value
 	if cfgName == "" {
-		s.Logger.Trace("looking up all available configurations")
+		s.Logger.Trace().Msg("looking up all available configurations")
 		return &protos.ListResponse{Ids: s.Store.GetAllConfigs()}, nil
 	}
-	s.Logger.Trace("looking up all version for configuration %s", cfgName)
+	s.Logger.Trace().Msgf("looking up all version for configuration %s", cfgName)
 	return &protos.ListResponse{Ids: s.Store.GetAllVersions(cfgName)}, nil
 }
 
 func (s *grpcSubscriber) GetConfiguration(ctx context.Context, configId *wrapperspb.StringValue) (
 	*protos.Configuration, error) {
 	cfgId := configId.Value
-	s.Logger.Trace("retrieving Configuration %s", cfgId)
+	s.Logger.Trace().Msgf("retrieving Configuration %s", cfgId)
 	cfg, err := s.Store.GetConfig(cfgId)
 	if err != nil {
-		s.Logger.Error("could not get configuration: %v", err)
+		s.Logger.Error().Msgf("could not get configuration: %v", err)
 		return nil, status.Errorf(codes.NotFound, "configuration %s not found", cfgId)
 	}
 	return cfg, nil
@@ -187,15 +189,15 @@ func (s *grpcSubscriber) PutFiniteStateMachine(ctx context.Context,
 	if fsm.State == "" {
 		fsm.State = cfg.StartingState
 	}
-	s.Logger.Trace("storing FSM [%s] configured with %s", id, fsm.ConfigId)
+	s.Logger.Trace().Msgf("storing FSM [%s] configured with %s", id, fsm.ConfigId)
 	if err := s.Store.PutStateMachine(id, fsm); err != nil {
-		s.Logger.Error("could not store FSM [%v]: %v", fsm, err)
+		s.Logger.Error().Msgf("could not store FSM [%v]: %v", fsm, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	// we cannot interrupt here, even if deadline is passed, as it would leave the
 	// store in an inconsistent state.
 	if err := s.Store.UpdateState(cfg.Name, id, "", fsm.State); err != nil {
-		s.Logger.Error("could not store FSM in state set [%s]: %v", fsm.State, err)
+		s.Logger.Error().Msgf("could not store FSM in state set [%s]: %v", fsm.State, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	return &protos.PutResponse{Id: id, EntityResponse: &protos.PutResponse_Fsm{Fsm: fsm}}, nil
@@ -211,7 +213,7 @@ func (s *grpcSubscriber) GetFiniteStateMachine(ctx context.Context, in *protos.G
 	if fsmId == "" {
 		return nil, status.Error(codes.InvalidArgument, "ID must always be provided when looking up statemachine")
 	}
-	s.Logger.Debug("looking up FSM [%s] (Configuration: %s)", fsmId, cfg)
+	s.Logger.Debug().Msgf("looking up FSM [%s] (Configuration: %s)", fsmId, cfg)
 	fsm, err := s.Store.GetStateMachine(fsmId, cfg)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, storage.NotFoundError(fsmId).Error())
@@ -238,7 +240,7 @@ func (s *grpcSubscriber) GetEventOutcome(ctx context.Context, in *protos.EventRe
 	*protos.EventResponse, error) {
 	evtId := in.GetId()
 	cfg := in.GetConfig()
-	s.Logger.Debug("looking up EventOutcome %s (%s)", evtId, cfg)
+	s.Logger.Debug().Msgf("looking up EventOutcome %s (%s)", evtId, cfg)
 	outcome, err := s.Store.GetOutcomeForEvent(evtId, cfg)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "cannot get outcome for event %s: %v", evtId, err)
@@ -264,7 +266,7 @@ func (s *grpcSubscriber) StreamAllInstate(in *protos.GetFsmRequest, stream State
 			Id:             id,
 			EntityResponse: &protos.PutResponse_Fsm{Fsm: fsm},
 		}); err != nil {
-			s.Logger.Error("could not stream response back: %s", err)
+			s.Logger.Error().Msgf("could not stream response back: %s", err)
 			return err
 		}
 	}
@@ -296,13 +298,13 @@ func (s *grpcSubscriber) StreamAllConfigurations(in *wrapperspb.StringValue, str
 func NewGrpcServer(cfg *Config) (*grpc.Server, error) {
 	var creds credentials.TransportCredentials
 	if !cfg.TlsEnabled {
-		logging.RootLog.Warn("TLS is disabled for gRPC Server, using insecure credentials")
+		zlog.Warn().Msg("TLS is disabled for gRPC Server, using insecure credentials")
 		creds = insecure.NewCredentials()
 	} else {
-		logging.RootLog.Debug("TLS is enabled for gRPC Server")
+		zlog.Debug().Msg("TLS is enabled for gRPC Server")
 		serverTLSConfig, err := SetupTLSConfig(cfg)
 		if err != nil {
-			logging.RootLog.Error("could not setup TLS config: %q", err)
+			zlog.Error().Msgf("could not setup TLS config: %q", err)
 			return nil, err
 		}
 		creds = credentials.NewTLS(serverTLSConfig)
@@ -331,13 +333,13 @@ func SetupTLSConfig(cfg *Config) (*tls.Config, error) {
 	}
 	certFile := filepath.Join(cfg.TlsCerts, config.ServerCertFile)
 	keyFile := filepath.Join(cfg.TlsCerts, config.ServerKeyFile)
-	cfg.Logger.Info("setting up TLS: Server Certificate: %s, Key: %s", certFile, keyFile)
+	cfg.Logger.Info().Msgf("setting up TLS: Server Certificate: %s, Key: %s", certFile, keyFile)
 	tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		cfg.Logger.Error("cannot load certs: %s", err)
+		cfg.Logger.Error().Msgf("cannot load certs: %s", err)
 		return nil, err
 	}
-	cfg.Logger.Info("Adding CA Cert: %s/%s", cfg.TlsCerts, config.CAFile)
+	cfg.Logger.Info().Msgf("Adding CA Cert: %s/%s", cfg.TlsCerts, config.CAFile)
 	ca, err := ParseCAFile(filepath.Join(cfg.TlsCerts, config.CAFile))
 	if err != nil {
 		return nil, err

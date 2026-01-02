@@ -14,8 +14,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	log "github.com/massenz/slf4go/logging"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	"github.com/massenz/go-statemachine/pkg/api"
 	"github.com/massenz/go-statemachine/pkg/pubsub"
@@ -33,8 +34,8 @@ var _ = Describe("SQS Subscriber", func() {
 			eventsCh = make(chan protos.EventRequest)
 			testSubscriber = pubsub.NewSqsSubscriber(eventsCh, &awsLocal.Address)
 			Expect(testSubscriber).ToNot(BeNil())
-			// Set to DEBUG when diagnosing failing tests
-			testSubscriber.SetLogLevel(log.NONE)
+			// Mute logs during tests; set to Debug when diagnosing failures
+			zerolog.SetGlobalLevel(zerolog.Disabled)
 			// Make it exit much sooner in tests
 			d, _ := time.ParseDuration("200msec")
 			testSubscriber.PollingInterval = d

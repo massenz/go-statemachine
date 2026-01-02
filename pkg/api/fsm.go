@@ -11,11 +11,12 @@ package api
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/google/uuid"
-	log "github.com/massenz/slf4go/logging"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"strings"
 
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
@@ -43,9 +44,8 @@ var (
 	UnexpectedError                      = fmt.Errorf("the request was malformed")
 	UnreachableStateConfigurationError   = "state %s is not used in any of the transitions"
 
-	// Logger is made accessible so that its `Level` can be changed
-	// or can be sent to a `NullLog` during testing.
-	Logger = log.NewLog("api")
+	// Logger is made accessible so that its `Level` can be changed or swapped in tests.
+	Logger = log.With().Str("logger", "api").Logger()
 )
 
 // ConfiguredStateMachine is the internal representation of an FSM, which
@@ -57,7 +57,7 @@ type ConfiguredStateMachine struct {
 
 func NewStateMachine(configuration *protos.Configuration) (*ConfiguredStateMachine, error) {
 	if configuration.Name == "" || configuration.Version == "" {
-		Logger.Error("Missing configuration name")
+		Logger.Error().Msg("Missing configuration name")
 		return nil, MalformedConfigurationError
 	}
 	return &ConfiguredStateMachine{

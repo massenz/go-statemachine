@@ -11,13 +11,14 @@ package pubsub
 
 import (
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/rs/zerolog/log"
 	"github.com/massenz/go-statemachine/pkg/api"
-	log "github.com/massenz/slf4go/logging"
-	"os"
-	"time"
 
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
@@ -56,7 +57,7 @@ func NewSqsSubscriber(eventsChannel chan<- protos.EventRequest, sqsUrl *string) 
 		return nil
 	}
 	return &SqsSubscriber{
-		logger:               log.NewLog("SQS-Sub"),
+		logger:               log.With().Str("logger", "SQS-Sub").Logger(),
 		client:               client,
 		events:               eventsChannel,
 		Timeout:              DefaultVisibilityTimeout,
@@ -65,31 +66,22 @@ func NewSqsSubscriber(eventsChannel chan<- protos.EventRequest, sqsUrl *string) 
 	}
 }
 
-// SetLogLevel allows the SqsSubscriber to implement the log.Loggable interface
-func (s *SqsSubscriber) SetLogLevel(level log.LogLevel) {
-	if s == nil || s.logger == nil {
-		fmt.Println("WARN: attempt to set Log level on a nil SqsSubscriber")
-		return
-	}
-	s.logger.Level = level
-}
-
 // Subscribe runs until signaled on the Done channel and listens for incoming Events
 func (s *SqsSubscriber) Subscribe(topic string, done <-chan interface{}) {
 	queueUrl := GetQueueUrl(s.client, topic)
-	s.logger.Name = fmt.Sprintf("%s{%s}", s.logger.Name, topic)
-	s.logger.Info("SQS Subscriber started for queue: %s", queueUrl)
+	s.logger = s.logger.With().Str("topic", topic).Str("queue", queueUrl).Logger()
+	s.logger.Info().Msg("SQS subscriber started")
 
 	timeout := int64(s.Timeout.Seconds())
 	for {
 		select {
 		case <-done:
-			s.logger.Info("SQS Subscriber terminating")
+			s.logger.Info().Msg("SQS Subscriber terminating")
 			return
 		default:
 		}
 		start := time.Now()
-		s.logger.Trace("Polling SQS at %v", start)
+		s.logger.Trace().Msgf("Polling SQS at %v", start)
 		msgResult, err := s.client.ReceiveMessage(&sqs.ReceiveMessageInput{
 			AttributeNames: []*string{
 				aws.String(sqs.MessageSystemAttributeNameSentTimestamp),
@@ -103,38 +95,38 @@ func (s *SqsSubscriber) Subscribe(topic string, done <-chan interface{}) {
 		})
 		if err == nil {
 			if len(msgResult.Messages) > 0 {
-				s.logger.Debug("Got %d messages", len(msgResult.Messages))
+				s.logger.Debug().Msgf("Got %d messages", len(msgResult.Messages))
 			} else {
-				s.logger.Trace("no messages in queue")
+				s.logger.Trace().Msg("no messages in queue")
 			}
 			for _, msg := range msgResult.Messages {
-				s.logger.Trace("processing %v", msg.String())
+				s.logger.Trace().Msgf("processing %v", msg.String())
 				go s.ProcessMessage(msg, &queueUrl)
 			}
 		} else {
-			s.logger.Error(err.Error())
+			s.logger.Error().Err(err).Msg("error receiving SQS message")
 		}
 		timeLeft := s.PollingInterval - time.Since(start)
 		if timeLeft > 0 {
-			s.logger.Trace("sleeping for %v", timeLeft)
+			s.logger.Trace().Msgf("sleeping for %v", timeLeft)
 			time.Sleep(timeLeft)
 		}
 	}
 }
 
 func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
-	s.logger.Trace("Processing Message %v", msg.MessageId)
+	s.logger.Trace().Str("message_id", fmt.Sprint(*msg.MessageId)).Msg("processing SQS message")
 
 	// The body of the message (the actual request) is mandatory.
 	if msg.Body == nil {
-		s.logger.Error("Message %v has no body", msg.MessageId)
+		s.logger.Error().Msgf("Message %v has no body", msg.MessageId)
 		// TODO: publish error to DLQ.
 		return
 	}
 	var request protos.EventRequest
 	err := p.UnmarshalFromText(*msg.Body, &request)
 	if err != nil {
-		s.logger.Error("message %v has invalid body: %s", msg.MessageId, err.Error())
+		s.logger.Error().Msgf("message %v has invalid body: %s", msg.MessageId, err.Error())
 		// TODO: publish error to DLQ.
 		return
 	}
@@ -142,7 +134,7 @@ func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
 	destId := request.GetId()
 	if destId == "" {
 		errDetails := fmt.Sprintf("no Destination ID in %v", request.String())
-		s.logger.Error(errDetails)
+		s.logger.Error().Msg(errDetails)
 		// TODO: publish error to DLQ.
 		return
 	}
@@ -151,18 +143,18 @@ func (s *SqsSubscriber) ProcessMessage(msg *sqs.Message, queueUrl *string) {
 	s.events <- request
 
 	for i := 0; i < s.MessageRemoveRetries; i++ {
-		s.logger.Debug("removing message %v from SQS", *msg.MessageId)
-		_, err = s.client.DeleteMessage(&sqs.DeleteMessageInput{
-			QueueUrl:      queueUrl,
-			ReceiptHandle: msg.ReceiptHandle,
-		})
-		if err != nil {
-			errDetails := fmt.Sprintf("failed to remove message %v from SQS (attempt: %d)",
-				msg.MessageId, i+1)
-			s.logger.Error("%s: %v", errDetails, err)
-		} else {
-			break
-		}
+		s.logger.Debug().Msgf("removing message %v from SQS", *msg.MessageId)
+			_, err = s.client.DeleteMessage(&sqs.DeleteMessageInput{
+				QueueUrl:      queueUrl,
+				ReceiptHandle: msg.ReceiptHandle,
+			})
+			if err != nil {
+				errDetails := fmt.Sprintf("failed to remove message %v from SQS (attempt: %d)",
+					msg.MessageId, i+1)
+				s.logger.Error().Msgf("%s: %v", errDetails, err)
+			} else {
+				break
+			}
 	}
-	s.logger.Trace("message %v removed", msg.MessageId)
+	s.logger.Trace().Msgf("message %v removed", msg.MessageId)
 }

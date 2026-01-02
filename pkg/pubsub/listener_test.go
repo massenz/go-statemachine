@@ -10,15 +10,14 @@
 package pubsub_test
 
 import (
-	"github.com/massenz/go-statemachine/pkg/pubsub"
-	"github.com/massenz/go-statemachine/pkg/storage"
-	"github.com/massenz/slf4go/logging"
+	"time"
 
 	. "github.com/JiaYongfei/respect/gomega"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"time"
+	"github.com/rs/zerolog"
+	"github.com/massenz/go-statemachine/pkg/pubsub"
+	"github.com/massenz/go-statemachine/pkg/storage"
 
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
@@ -35,15 +34,14 @@ var _ = Describe("A Listener", func() {
 			eventsCh = make(chan protos.EventRequest)
 			notificationsCh = make(chan protos.EventResponse)
 			store = storage.NewRedisStoreWithDefaults(redisContainer.Address)
-			store.SetLogLevel(logging.NONE)
+			zerolog.SetGlobalLevel(zerolog.Disabled)
 			testListener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
 				EventsChannel:        eventsCh,
 				NotificationsChannel: notificationsCh,
 				StatemachinesStore:   store,
 				ListenersPoolSize:    0,
 			})
-			// Set to DEBUG when diagnosing test failures
-			testListener.SetLogLevel(logging.NONE)
+			// Logs are globally muted above; bump level during debugging if needed.
 		})
 		const eventId = "1234-abcdef"
 		It("can post error notifications", func() {

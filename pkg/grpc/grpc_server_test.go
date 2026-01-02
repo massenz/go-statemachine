@@ -12,8 +12,11 @@ package grpc_test
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/go-redis/redis/v8"
-	slf4go "github.com/massenz/slf4go/logging"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/mock"
 	g "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -22,7 +25,6 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	"net"
 	"strings"
-	"time"
 
 	. "github.com/JiaYongfei/respect/gomega"
 	. "github.com/onsi/ginkgo"
@@ -38,9 +40,6 @@ var NotImplemented = storage.NotImplementedError("mock")
 
 type Mockstore struct {
 	mock.Mock
-}
-
-func (m *Mockstore) SetLogLevel(level slf4go.LogLevel) {
 }
 
 func (m *Mockstore) GetConfig(versionId string) (*protos.Configuration, storage.StoreErr) {
@@ -122,8 +121,8 @@ var _ = Describe("the gRPC Server", func() {
 
 			client = NewClient(listener.Addr().String(), false)
 			// TODO: use GinkgoWriter for logs
-			l := slf4go.NewLog("grpc-cmd-test")
-			l.Level = slf4go.NONE
+			l := log.With().Str("logger", "grpc-cmd-test").Logger()
+			zerolog.SetGlobalLevel(zerolog.Disabled)
 			// Note the `Config` here has no store configured, because we are
 			// only testing events in this Context, and those are never stored
 			// in Redis by the gRPC Server (other parts of the system do).
@@ -254,14 +253,13 @@ var _ = Describe("the gRPC Server", func() {
 		// Server setup
 		BeforeEach(func() {
 			store = storage.NewRedisStoreWithDefaults(redisContainer.Address)
-			store.SetLogLevel(slf4go.NONE)
 			listener, _ = net.Listen("tcp", ":0")
 			cc, _ := g.Dial(listener.Addr().String(),
 				g.WithTransportCredentials(insecure.NewCredentials()))
 			client = protos.NewStatemachineServiceClient(cc)
-			// Use this to log errors when diagnosing test failures; then set to NONE once done.
-			l := slf4go.NewLog("grpc-cmd-test")
-			l.Level = slf4go.NONE
+			// Use this to log errors when diagnosing test failures; then mute by setting global level.
+			l := log.With().Str("logger", "grpc-cmd-test").Logger()
+			zerolog.SetGlobalLevel(zerolog.Disabled)
 			server, _ := grpc.NewGrpcServer(&grpc.Config{
 				Store:  store,
 				Logger: l,

@@ -12,12 +12,13 @@ package storage_test
 import (
 	"context"
 	"fmt"
+
 	. "github.com/JiaYongfei/respect/gomega"
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/massenz/go-statemachine/pkg/api"
 	storage2 "github.com/massenz/go-statemachine/pkg/storage"
-	slf4go "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -36,7 +37,7 @@ var configId = strings.Join([]string{cfgName, "v4"}, api.ConfigurationVersionSep
 func setupStoreRedis() (storage2.StoreManager, *redis.Client) {
 	store := storage2.NewRedisStoreWithDefaults(container.Address)
 	Ω(store).ToNot(BeNil())
-	store.SetLogLevel(slf4go.NONE)
+	zerolog.SetGlobalLevel(zerolog.Disabled)
 
 	// This is used to go "behind the back" of our StoreManager and mess with it for testing
 	// purposes. Do NOT do this in your code.

@@ -13,6 +13,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/rs/zerolog"
+	zlog "github.com/rs/zerolog/log"
+
 	"github.com/massenz/go-statemachine/pkg/api"
 	"github.com/massenz/go-statemachine/pkg/grpc"
 	"github.com/massenz/go-statemachine/pkg/pubsub"
@@ -24,20 +30,11 @@ import (
 	"sync"
 	"syscall"
 
-	log "github.com/massenz/slf4go/logging"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
-func SetLogLevel(services []log.Loggable, level log.LogLevel) {
-	for _, s := range services {
-		if s != nil {
-			s.SetLogLevel(level)
-		}
-	}
-}
-
 var (
-	logger = log.NewLog("fsmsrv")
+	logger = zlog.With().Str("logger", "fsmsrv").Logger()
 
 	listener *pubsub.EventsListener
 	pub      *pubsub.SqsPublisher
@@ -65,6 +62,10 @@ var (
 )
 
 func main() {
+	// Global zerolog configuration.
+	zerolog.TimeFieldFormat = time.RFC3339Nano
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	zlog.Logger = zlog.Output(os.Stderr)
 
 	var awsEndpoint = flag.String("endpoint-url", "",
 		"HTTP URL for AWS SQS to connect to; usually best left undefined, "+
@@ -91,37 +92,47 @@ func main() {
 			" performance, do not use in production or on heavily loaded systems (will override the -debug option)")
 	flag.Parse()
 
-	logger.Info("starting State Machine Server - Rel. %s", api.Release)
+	logger.Info().Str("release", api.Release).Msg("starting State Machine Server")
 
 	if *redisUrl == "" {
-		logger.Fatal(errors.New("in-memory store deprecated, a Redis server must be configured"))
+		logger.Fatal().Err(errors.New("in-memory store deprecated, a Redis server must be configured")).Msg("fatal configuration error")
 	} else {
-		logger.Info("connecting to Redis server at %s", *redisUrl)
-		logger.Info("with timeout: %s, max-retries: %d", *timeout, *maxRetries)
+		logger.Info().
+			Str("redis_addr", *redisUrl).
+			Str("redis_cluster", strconv.FormatBool(*cluster)).
+			Str("redis_timeout", timeout.String()).
+			Str("redis_max_retries", strconv.Itoa(*maxRetries)).
+			Msg("connecting to Redis server")
 		store = storage.NewRedisStore(*redisUrl, *cluster, 1, *timeout, *maxRetries)
 	}
 	done := make(chan interface{})
 	if *eventsTopic != "" {
-		logger.Info("connecting to SQS Topic: %s", *eventsTopic)
+		logger.Info().
+			Str("sqs_topic", *eventsTopic).
+			Str("sqs_endpoint", *awsEndpoint).
+			Msg("connecting to SQS topic for incoming events")
 		sub = pubsub.NewSqsSubscriber(eventsCh, awsEndpoint)
 		if sub == nil {
-			logger.Fatal(errors.New("cannot create a valid SQS Subscriber"))
+			logger.Fatal().Err(errors.New("cannot create a valid SQS Subscriber")).Msg("fatal error creating SQS subscriber")
 		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			logger.Info("subscribing to events on topic [%s]", *eventsTopic)
+			logger.Info().Msgf("subscribing to events on topic [%s]", *eventsTopic)
 			sub.Subscribe(*eventsTopic, done)
 		}()
 	}
 
 	if *notificationsTopic != "" {
-		logger.Info("sending errors to DLQ topic [%s]", *notificationsTopic)
+		logger.Info().
+			Str("sqs_dlq_topic", *notificationsTopic).
+			Str("sqs_endpoint", *awsEndpoint).
+			Msg("sending error notifications to DLQ topic")
 		notificationsCh = make(chan protos.EventResponse)
 		defer close(notificationsCh)
 		pub = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint)
 		if pub == nil {
-			logger.Fatal(errors.New("cannot create a valid SQS Publisher"))
+			logger.Fatal().Err(errors.New("cannot create a valid SQS Publisher")).Msg("fatal error creating SQS publisher")
 		}
 		go pub.Publish(*notificationsTopic)
 	}
@@ -133,21 +144,21 @@ func main() {
 		// TODO: workers pool not implemented yet.
 		ListenersPoolSize: 0,
 	})
-	logger.Info("starting events listener")
+	logger.Info().Msg("starting events listener")
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		listener.ListenForMessages()
 	}()
 
-	logger.Info("gRPC Server running at tcp://:%d", *grpcPort)
+	logger.Info().Str("grpc_port", strconv.Itoa(*grpcPort)).Msg("gRPC server starting")
 	svr := startGrpcServer(*grpcPort, *noTls, eventsCh)
 
 	// This should not be invoked until we have initialized all the services.
 	setLogLevel(*debug, *trace)
-	logger.Info("statemachine server ready for processing events...")
+	logger.Info().Msg("statemachine server ready for processing events...")
 	RunUntilStopped(done, svr)
-	logger.Info("...done. Goodbye.")
+	logger.Info().Msg("...done. Goodbye.")
 }
 
 func RunUntilStopped(done chan interface{}, svr *g.Server) {
@@ -157,28 +168,26 @@ func RunUntilStopped(done chan interface{}, svr *g.Server) {
 
 	// Block until a signal is received.
 	_ = <-c
-	logger.Info("shutting down services...")
+	logger.Info().Msg("shutting down services...")
 	close(done)
 	close(eventsCh)
 	svr.GracefulStop()
-	logger.Info("waiting for services to exit...")
+	logger.Info().Msg("waiting for services to exit...")
 	wg.Wait()
 }
 
-// setLogLevel sets the logging level for all the services' loggers, depending on
-// whether the -debug or -trace flag is enabled (if neither, we log at INFO level).
+// setLogLevel sets the global logging level depending on -debug / -trace.
 // If both are set, then -trace takes priority.
 func setLogLevel(debug bool, trace bool) {
-	var logLevel log.LogLevel = log.INFO
+	level := zerolog.InfoLevel
 	if debug && !trace {
-		logger.Info("verbose logging enabled")
-		logLevel = log.DEBUG
+		logger.Info().Msg("verbose logging enabled")
+		level = zerolog.DebugLevel
 	} else if trace {
-		logger.Info("trace logging enabled")
-		logLevel = log.TRACE
+		logger.Info().Msg("trace logging enabled")
+		level = zerolog.TraceLevel
 	}
-	logger.Level = logLevel
-	SetLogLevel([]log.Loggable{store, pub, sub, listener}, logLevel)
+	zerolog.SetGlobalLevel(level)
 }
 
 // startGrpcServer will start a new gRPC server, bound to
@@ -198,16 +207,16 @@ func startGrpcServer(port int, disableTls bool, events chan<- protos.EventReques
 		TlsEnabled:    !disableTls,
 	})
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatal().Err(err).Msg("failed to create gRPC server")
 	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err = grpcServer.Serve(l)
-		if err != nil {
-			logger.Fatal(err)
-		}
-		logger.Info("gRPC Server exited")
+			err = grpcServer.Serve(l)
+			if err != nil {
+				logger.Fatal().Err(err).Msg("gRPC server exited with error")
+			}
+			logger.Info().Msg("gRPC Server exited")
 	}()
 	return grpcServer
 }

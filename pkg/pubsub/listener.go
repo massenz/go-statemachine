@@ -11,55 +11,50 @@ package pubsub
 
 import (
 	"fmt"
-	log "github.com/massenz/slf4go/logging"
 
+	"github.com/rs/zerolog/log"
 	"github.com/massenz/go-statemachine/pkg/storage"
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
 
 func NewEventsListener(options *ListenerOptions) *EventsListener {
 	return &EventsListener{
-		logger:        log.NewLog("Listener"),
+		logger:        log.With().Str("logger", "Listener").Logger(),
 		events:        options.EventsChannel,
 		store:         options.StatemachinesStore,
 		notifications: options.NotificationsChannel,
 	}
 }
 
-// SetLogLevel to implement the log.Loggable interface
-func (listener *EventsListener) SetLogLevel(level log.LogLevel) {
-	listener.logger.Level = level
-}
-
 func (listener *EventsListener) PostNotificationAndReportOutcome(eventResponse *protos.EventResponse) {
 	if eventResponse.Outcome.Code != protos.EventOutcome_Ok {
-		listener.logger.Error("event [%s]: %s",
+		listener.logger.Error().Msgf("event [%s]: %s",
 			eventResponse.GetEventId(), eventResponse.GetOutcome().Details)
 	}
 	if listener.notifications != nil {
-		listener.logger.Debug("posting notification: %v", eventResponse.GetEventId())
+		listener.logger.Debug().Msgf("posting notification: %v", eventResponse.GetEventId())
 		listener.notifications <- *eventResponse
 	}
-	listener.logger.Debug("Reporting outcome: %v", eventResponse.GetEventId())
+	listener.logger.Debug().Msgf("Reporting outcome: %v", eventResponse.GetEventId())
 	listener.reportOutcome(eventResponse)
 }
 
 func (listener *EventsListener) ListenForMessages() {
-	listener.logger.Info("Events message listener started")
+	listener.logger.Info().Msg("Events message listener started")
 	for request := range listener.events {
-		listener.logger.Debug("Received request %s", request.Event.String())
+		listener.logger.Debug().Msgf("Received request %s", request.Event.String())
 		fsmId := request.GetId()
 		if fsmId == "" {
 			listener.PostNotificationAndReportOutcome(makeResponse(&request,
 				protos.EventOutcome_MissingDestination,
-				fmt.Sprintf("no statemachine ID specified")))
+				"no statemachine ID specified"))
 			continue
 		}
 		cfgName := request.GetConfig()
 		if cfgName == "" {
 			listener.PostNotificationAndReportOutcome(makeResponse(&request,
 				protos.EventOutcome_MissingDestination,
-				fmt.Sprintf("no Configuration name specified")))
+				"no Configuration name specified"))
 			continue
 		}
 		// The event is well-formed, we can store for later retrieval
@@ -69,7 +64,7 @@ func (listener *EventsListener) ListenForMessages() {
 				fmt.Sprintf("could not store event: %v", err)))
 			continue
 		}
-		listener.logger.Debug("preparing to send event `%s` for FSM [%s]",
+		listener.logger.Debug().Msgf("preparing to send event `%s` for FSM [%s]",
 			request.Event.Transition.Event, fsmId)
 		if err := listener.store.TxProcessEvent(fsmId, cfgName, request.Event); err != nil {
 			var errCode protos.EventOutcome_StatusCode
@@ -84,7 +79,7 @@ func (listener *EventsListener) ListenForMessages() {
 					cfgName, fsmId, err)))
 			continue
 		}
-		listener.logger.Debug("Event `%s` successfully changed FSM [%s] state",
+		listener.logger.Debug().Msgf("Event `%s` successfully changed FSM [%s] state",
 			request.Event.Transition.Event, fsmId)
 		listener.reportOutcome(makeResponse(&request, protos.EventOutcome_Ok, ""))
 	}
@@ -93,7 +88,7 @@ func (listener *EventsListener) ListenForMessages() {
 func (listener *EventsListener) reportOutcome(response *protos.EventResponse) {
 	if err := listener.store.AddEventOutcome(response.EventId, response.GetOutcome().GetConfig(),
 		response.Outcome, storage.NeverExpire); err != nil {
-		listener.logger.Error("could not save event outcome: %v", err)
+		listener.logger.Error().Msgf("could not save event outcome: %v", err)
 	}
 }
 
