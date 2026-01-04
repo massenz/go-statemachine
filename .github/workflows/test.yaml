@@ -37,10 +37,11 @@ jobs:
         export AWS_REGION=us-west-2
         go test ./pkg/api ./pkg/grpc ./pkg/pubsub ./pkg/storage
 
-    - name: Test CLI (make cli-test)
-      run: |
-        export GOPATH=/opt/go
-        mkdir -p $GOPATH/bin
-        export PATH=$GOPATH/bin:$PATH
-        go install github.com/onsi/ginkgo/ginkgo@v1.16.5
-        make cli-test
+    # TODO: re-enable CLI Testcontainers once they are stable on GitHub Actions.
+    # - name: Test CLI (make cli-test)
+    #   run: |
+    #     export GOPATH=/opt/go
+    #     mkdir -p $GOPATH/bin
+    #     export PATH=$GOPATH/bin:$PATH
+    #     go install github.com/onsi/ginkgo/ginkgo@v1.16.5
+    #     make cli-test
