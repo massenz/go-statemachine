@@ -174,10 +174,17 @@ cli: fsm-cli/cmd/main.go  ## Builds the CLI client used to connect to the server
 		-ldflags "-X main.Release=$(release)" \
 		-o ../build/bin/$(cli) cmd/main.go
 
+cli_image := $(image):$(release)
+
 .PHONY: cli-test
-cli-test: ## Run tests for the CLI Client
+cli-test: check_certs ## Run tests for the CLI Client (uses Testcontainers and TLS)
+	@if [ -z "$(shell docker images -q $(cli_image))" ]; then \
+		echo "$(YELLOW)[INFO]$(RESET) Building container image $(YELLOW)$(cli_image)$(RESET) for CLI tests"; \
+		$(MAKE) container; \
+	else \
+		echo "$(GREEN)[OK]$(RESET) Using existing container image $(YELLOW)$(cli_image)$(RESET) for CLI tests"; \
+	fi
 	@mkdir -p $(cli_config)/certs
 	@cp certs/ca.pem $(cli_config)/certs || true
 	cd fsm-cli && RELEASE=$(release) BASEDIR=$(shell pwd) \
-		CLI_TEST_COMPOSE=$(shell pwd)/docker/cli-test-compose.yaml \
 		ginkgo test ./client

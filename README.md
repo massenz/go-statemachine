@@ -330,6 +330,31 @@ make cli
 This places the CLI binary under `build/bin/` with a name derived from `settings.yaml`.
 See [the User Guide](docs/cli.md) for detailed CLI usage and YAML examples.
 
+### CLI integration tests (`make cli-test`)
+
+The CLI module has its own integration test suite, which you can run with:
+
+```sh
+make cli-test
+```
+
+Under the hood this target:
+
+- Ensures TLS certificates exist under `./certs` (via `check_certs`).
+- Copies `certs/ca.pem` into the default CLI config directory `~/.fsm/certs/ca.pem` so the client can validate the server certificate.
+- Builds (if needed) the Docker image `massenz/statemachine:<release>` using the `make container` target.
+- Uses [`testcontainers-go`](https://github.com/testcontainers/testcontainers-go) to spin up ephemeral containers for:
+  - Redis (backing store), and
+  - The `fsm-server` image, configured with TLS enabled and pointing at `/etc/statemachine/certs`.
+- Runs the CLI tests in `fsm-cli/client` against that temporary stack.
+
+Requirements for `make cli-test`:
+
+- Docker must be installed and running.
+- `cfssl` / `cfssljson` must be available so `make certs` (invoked by `check_certs`) can generate TLS material.
+
+This approach mirrors the main server tests (which also rely on Testcontainers for Redis and LocalStack) and avoids depending on docker-compose stacks for CLI testing.
+
 
 ## Container Build & Run
 
