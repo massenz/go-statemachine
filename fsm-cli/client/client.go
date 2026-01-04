@@ -19,7 +19,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/ptypes/wrappers"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	"gopkg.in/yaml.v3"
 	"io"
 	"os"
@@ -157,7 +157,7 @@ func (c *CliClient) Get(kind, id string) error {
 
 	switch kind {
 	case KindConfiguration:
-		cfg, err := c.GetConfiguration(ctx, &wrappers.StringValue{Value: id})
+		cfg, err := c.GetConfiguration(ctx, &wrapperspb.StringValue{Value: id})
 		if err != nil {
 			return err
 		}

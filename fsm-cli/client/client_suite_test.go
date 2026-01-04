@@ -3,21 +3,28 @@ package client_test
 import (
 	"context"
 	"fmt"
-	"github.com/massenz/fsm-cli/client"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/docker/docker/api/types/container"
+	"github.com/massenz/fsm-cli/client"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	tc "github.com/testcontainers/testcontainers-go/modules/compose"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 var (
-	svc   *client.CliClient
-	stack tc.ComposeStack
+	insecureClient       *client.CliClient
+	tlsClient            *client.CliClient
+	redisContainer       testcontainers.Container
+	insecureServerContainer testcontainers.Container
+	tlsServerContainer      testcontainers.Container
 )
 
 func TestClient(t *testing.T) {
@@ -29,38 +36,124 @@ func StartServices() {
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
-	composeYaml := os.Getenv("CLI_TEST_COMPOSE")
-	Ω(composeYaml).ShouldNot(BeEmpty())
+	// Start Redis container
+	redisReq := testcontainers.ContainerRequest{
+		Image:        "redis:6.2-alpine",
+		ExposedPorts: []string{"6379/tcp"},
+		WaitingFor:   wait.ForLog("Ready to accept connections"),
+	}
+	var err error
+	redisContainer, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: redisReq,
+		Started:          true,
+	})
+	Ω(err).ShouldNot(HaveOccurred())
 
-	// Define the Docker Compose setup
-	//
-	// If the tests fail because the test server is not coming up, you can
-	// debug (and see logs) using this command:
-	//   RELEASE=$(make version) BASEDIR=$(pwd) docker compose -f docker/cli-test-compose.yaml up
-	compose, err := tc.NewDockerCompose(composeYaml)
-	Ω(err).ToNot(HaveOccurred())
-	stack = compose.WithOsEnv()
+	redisPort, err := redisContainer.MappedPort(ctx, "6379/tcp")
+	Ω(err).ShouldNot(HaveOccurred())
+	// The CLI tests run from the host, while the server and Redis run in
+	// containers. The Redis container publishes 6379 on a random host port;
+	// from inside the server containers we can reach it via the host-mapped
+	// port using the special DNS name `host.docker.internal`.
+	redisAddr := fmt.Sprintf("host.docker.internal:%s", redisPort.Port())
 
-	// Start the Docker Compose setup
-	Ω(stack.Up(ctx)).To(Succeed())
+	// Build the image reference from the same name/tag as `make container`.
+	release := os.Getenv("RELEASE")
+	Ω(release).ShouldNot(BeEmpty())
+	image := fmt.Sprintf("massenz/statemachine:%s", release)
 
-	// Get the container IP address and port
-	smServer, err := stack.ServiceContainer(ctx, "server")
-	Ω(err).ToNot(HaveOccurred())
-	port, err := smServer.MappedPort(ctx, "7398")
-	Ω(err).ToNot(HaveOccurred())
+	baseDir := os.Getenv("BASEDIR")
+	Ω(baseDir).ShouldNot(BeEmpty())
+	certsDir := filepath.Join(baseDir, "certs")
 
-	// It is *important* to use `localhost` here, as Certs are issued with that hostname
-	svc = client.NewClient(fmt.Sprintf("localhost:%s", port.Port()), true)
-	Ω(svc).ToNot(BeNil())
+	// Insecure server (no TLS)
+	insecureReq := testcontainers.ContainerRequest{
+		Image:        image,
+		ExposedPorts: []string{"7399/tcp"},
+		Env: map[string]string{
+			"REDIS":          redisAddr,
+			"GRPC_PORT":      "7399",
+			"INSECURE":       "-insecure",
+			"DEBUG":          "-debug",
+			"EVENTS_Q":       "",
+			"NOTIFICATIONS_Q": "",
+		},
+		WaitingFor: wait.ForListeningPort("7399/tcp").WithStartupTimeout(2 * time.Minute),
+	}
+
+	insecureServerContainer, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: insecureReq,
+		Started:          true,
+	})
+	Ω(err).ShouldNot(HaveOccurred())
+
+	hostInsecure, err := insecureServerContainer.Host(ctx)
+	Ω(err).ShouldNot(HaveOccurred())
+	mappedPortInsecure, err := insecureServerContainer.MappedPort(ctx, "7399/tcp")
+	Ω(err).ShouldNot(HaveOccurred())
+	addressInsecure := fmt.Sprintf("%s:%s", hostInsecure, mappedPortInsecure.Port())
+
+	insecureClient = client.NewClient(addressInsecure, false)
+	Ω(insecureClient).ShouldNot(BeNil())
+
+	// TLS-enabled server
+	tlsReq := testcontainers.ContainerRequest{
+		Image:        image,
+		ExposedPorts: []string{"7398/tcp"},
+		Env: map[string]string{
+			"REDIS":          redisAddr,
+			"GRPC_PORT":      "7398",
+			"DEBUG":          "-debug",
+			"EVENTS_Q":       "",
+			"NOTIFICATIONS_Q": "",
+		},
+		HostConfigModifier: func(hc *container.HostConfig) {
+			hc.Binds = append(hc.Binds, fmt.Sprintf("%s:/etc/statemachine/certs:ro", certsDir))
+		},
+		WaitingFor: wait.ForListeningPort("7398/tcp").WithStartupTimeout(2 * time.Minute),
+	}
+
+	tlsServerContainer, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: tlsReq,
+		Started:          true,
+	})
+	Ω(err).ShouldNot(HaveOccurred())
+
+	hostTLS, err := tlsServerContainer.Host(ctx)
+	Ω(err).ShouldNot(HaveOccurred())
+	mappedPortTLS, err := tlsServerContainer.MappedPort(ctx, "7398/tcp")
+	Ω(err).ShouldNot(HaveOccurred())
+	addressTLS := fmt.Sprintf("%s:%s", hostTLS, mappedPortTLS.Port())
+
+	// Connect to the servers. The insecure client disables TLS, while the TLS
+	// client validates the server certificate using ~/.fsm/certs/ca.pem.
+	tlsClient = client.NewClient(addressTLS, true)
+	Ω(tlsClient).ShouldNot(BeNil())
 }
 
 var _ = BeforeSuite(func() {
 	StartServices()
-	_, err := svc.Health(context.Background(), &emptypb.Empty{})
-	Ω(err).ShouldNot(HaveOccurred())
+	// Server startup can take a moment after the containers are reported as started,
+	// so we poll Health for both insecure and TLS servers until it succeeds or times out.
+	Eventually(func() error {
+		_, err := insecureClient.Health(context.Background(), &emptypb.Empty{})
+		return err
+	}, 30*time.Second, 500*time.Millisecond).Should(Succeed())
+	Eventually(func() error {
+		_, err := tlsClient.Health(context.Background(), &emptypb.Empty{})
+		return err
+	}, 30*time.Second, 500*time.Millisecond).Should(Succeed())
 })
 
 var _ = AfterSuite(func() {
-	Ω(stack.Down(context.Background(), tc.RemoveOrphans(true), tc.RemoveImagesLocal)).To(Succeed())
+	ctx := context.Background()
+	if tlsServerContainer != nil {
+		Ω(tlsServerContainer.Terminate(ctx)).To(Succeed())
+	}
+	if insecureServerContainer != nil {
+		Ω(insecureServerContainer.Terminate(ctx)).To(Succeed())
+	}
+	if redisContainer != nil {
+		Ω(redisContainer.Terminate(ctx)).To(Succeed())
+	}
 })

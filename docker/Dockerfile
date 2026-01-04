@@ -5,7 +5,10 @@ FROM golang:1.24 as builder
 
 WORKDIR /server
 COPY . .
-RUN rm -rf certs data
+# Remove any host-generated artifacts from the build context so that the
+# container image always contains a Linux binary, even when the host is
+# macOS or another architecture.
+RUN rm -rf certs data build/bin
 RUN wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
       -O /usr/bin/yq && chmod +x /usr/bin/yq
 RUN CGO_ENABLED=0 make build

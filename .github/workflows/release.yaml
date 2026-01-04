@@ -19,9 +19,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: build
+
+      - name: Install Go toolchain
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Build server
         run: |
           make build
+
+      - name: Build CLI binaries (Linux and macOS)
+        run: |
+          mkdir -p dist
+          # Linux CLI binary
+          GOOS=linux GOARCH=amd64 make cli
+          cp build/bin/*-cli-*linux* dist/
+          # macOS CLI binary
+          GOOS=darwin GOARCH=arm64 make cli
+          cp build/bin/*-cli-*darwin* dist/
+
+      - name: Upload CLI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-binaries
+          path: dist
 
       - name: Create release tag
         run: |
@@ -52,3 +74,4 @@ jobs:
         with:
           tag: ${{ env.TAG }}
           generateReleaseNotes: true
+          artifacts: "dist/*"

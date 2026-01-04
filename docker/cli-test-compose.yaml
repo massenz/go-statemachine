@@ -19,7 +19,7 @@ services:
     networks:
       - test-net
     ports:
-      - "7398"
+      - "7398:7398"
     image: "massenz/statemachine:${RELEASE}"
     environment:
       DEBUG: -debug

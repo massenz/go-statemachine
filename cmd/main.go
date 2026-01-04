@@ -212,11 +212,11 @@ func startGrpcServer(port int, disableTls bool, events chan<- protos.EventReques
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-			err = grpcServer.Serve(l)
-			if err != nil {
-				logger.Fatal().Err(err).Msg("gRPC server exited with error")
-			}
-			logger.Info().Msg("gRPC Server exited")
+		err = grpcServer.Serve(l)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("gRPC server exited with error")
+		}
+		logger.Info().Msg("gRPC Server exited")
 	}()
 	return grpcServer
 }
