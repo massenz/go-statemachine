@@ -5,32 +5,37 @@
 #
 # See: https://github.com/fluxninja/openai-pr-reviewer
 
-name: Code Review
-
-permissions:
-  contents: read
-  pull-requests: write
+name: "LLM Code Review"
 
 on:
   pull_request:
-  pull_request_review_comment:
-    types: [created]
+    types: [opened, reopened, synchronize]
 
-concurrency:
-  group:
-    ${{ github.repository }}-${{ github.event.number || github.head_ref ||
-    github.sha }}-${{ github.workflow }}-${{ github.event_name ==
-    'pull_request_review_comment' && 'pr_comment' || 'pr' }}
-  cancel-in-progress: ${{ github.event_name != 'pull_request_review_comment' }}
+permissions:
+  pull-requests: write
+  contents: read
+env:
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - uses: fluxninja/openai-pr-reviewer@main
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run OpenAI PR Reviewer
+        uses: coderabbitai/openai-pr-reviewer@v1
         with:
+          language: en
           debug: false
+          max_files: 20
           review_comment_lgtm: false
+          review_simple_changes: false
+
+      - name: Handle failure
+        if: ${{ failure() }}
+        run: |
+          echo "### OpenAI PR Reviewer failed ❌"
+          exit 1
