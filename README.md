@@ -110,7 +110,7 @@ An [`Event`](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-be
 
 An event is uniquely identified by its `event_id` and has a `timestamp` for when it was generated/sent - if not set by the client sending them to the server, they will be set when processing the event.
 
-Optionally, an Event can have an `Originator` (for example, a URI identifying the system that generated the event) and `Details` that further describe it (this could be a JSON-encoded body, or a string-encoded Protocol Buffer): see an example in [the gRPC Client](client/grpc_client.go).
+Optionally, an Event can have an `Originator` (for example, a URI identifying the system that generated the event) and `Details` that further describe it (this could be a JSON-encoded body, or a string-encoded Protocol Buffer): see the [`fsm-cli` client](fsm-cli/client/client.go) for an example.
 
 Events have [outcomes](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L141-L164) which can be retrieved individually (see below in the [gRPC API](#grpc-api)): these describe whether the event caused a successful transition (with an `Ok` `code`) or there was an error (and if so, further `details`).
 
@@ -124,11 +124,25 @@ The `event_id` can be used for such reconciliation: it is either provided by the
 
 ## gRPC API
 
-For a full description and documentation of the gRPC API, please see the [Protocol Buffer definition](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto).
+For the full Protocol Buffer definitions, see the [statemachine-proto repository](https://github.com/massenz/statemachine-proto).
 
-The [gRPC API and examples](https://github.com/massenz/statemachine-proto) are described there too.
+The server implements the `StatemachineService` gRPC service, exposing the following RPC methods:
 
-An example usage in Go is in the [gRPC Client](client/grpc_client.go).
+| Method | Request | Response | Description |
+|--------|---------|----------|-------------|
+| `Health` | `google.protobuf.Empty` | `HealthResponse` | Returns server readiness, release version, and TLS status. |
+| `PutConfiguration` | `Configuration` | `PutResponse` | Creates an immutable, versioned configuration. Returns `AlreadyExists` if the same `name:version` already exists. |
+| `GetConfiguration` | `google.protobuf.StringValue` | `Configuration` | Retrieves a configuration by its `name:version` ID (e.g. `"orders:v3"`). |
+| `GetAllConfigurations` | `google.protobuf.StringValue` | `ListResponse` | If the value is empty, returns all configuration names. If a name is supplied, returns all `name:version` IDs for that name. |
+| `StreamAllConfigurations` | `google.protobuf.StringValue` | `stream Configuration` | Streams the full `Configuration` objects for all versions matching the given name. |
+| `PutFiniteStateMachine` | `PutFsmRequest` | `PutResponse` | Creates a new FSM. The `id` is optional; if omitted the server generates a UUID. The FSM's initial state defaults to the configuration's `starting_state`. |
+| `GetFiniteStateMachine` | `GetFsmRequest` | `FiniteStateMachine` | Retrieves an FSM by configuration name and FSM ID. Both `config` and `id` must be provided. |
+| `GetAllInState` | `GetFsmRequest` | `ListResponse` | Returns the IDs of all FSMs (for a given configuration name) currently in the specified state. Both `config` and `state` must be provided. |
+| `StreamAllInstate` | `GetFsmRequest` | `stream PutResponse` | Streams the full `FiniteStateMachine` objects (including their IDs) for all FSMs matching configuration name and state. |
+| `SendEvent` | `EventRequest` | `EventResponse` | Queues an event for asynchronous processing. Returns the `event_id` immediately; the actual transition outcome is available later via `GetEventOutcome`. Both `id` (FSM ID) and `event.transition.event` must be provided. |
+| `GetEventOutcome` | `EventRequest` | `EventResponse` | Retrieves the stored `EventOutcome` for a previously sent event, identified by its `event_id`. |
+
+> **Note**: `config_id` used inside a `FiniteStateMachine` is a composite key in the form `name:version` (e.g. `"orders:v3"`). The `config` field in `GetFsmRequest` and `EventRequest` refers only to the configuration **name** (without version).
 
 
 ## Events Listener
@@ -165,10 +179,11 @@ msg := &protos.EventRequest{
         Details:    order.String(),
     },
 
-    // This is the unique ID for the entity you are sending the event to; MUST
-    // match the `id` of an existing `statemachine` (see the REST API).
-    // NOTE -- the ID is prefixed by the configuration name.
-    Dest: "devices#6b5af0e8-9033-47e2-97db-337476f1402a",
+    // The configuration name (not version) that the target FSM belongs to.
+    Config: "devices",
+
+    // The unique ID of the target FSM (without configuration prefix).
+    Id: "6b5af0e8-9033-47e2-97db-337476f1402a",
 }
 
 _, err = queue.SendMessage(&sqs.SendMessageInput{
@@ -178,23 +193,21 @@ _, err = queue.SendMessage(&sqs.SendMessageInput{
 })
 ```
 
-This will cause a `backorder` event to be sent to our FSM whose `id` matches the UUID in `Dest`; if there are errors (eg, the FSM does not exist, or the event is not allowed for the machine's configuration and current state) errors may be optionally sent to the SQS queue configured via the `-notifications` option (see [Running the Server](#running-the-server)): see the [`pubsub` code](pkg/pubsub/sqs_pub.go) code for details as to how we encode the error message as an SQS message.
+This will cause a `backorder` event to be sent to our FSM whose `Id` matches the UUID above, under the `devices` configuration; if there are errors (eg, the FSM does not exist, or the event is not allowed for the machine's configuration and current state) errors may be optionally sent to the SQS queue configured via the `--notifications` option (see [Running the Server](#running-the-server)): see the [`pubsub` code](pkg/pubsub/sqs_pub.go) code for details as to how we encode the error message as an SQS message.
 
-See [`EventRequest` in `statemachine-proto`](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L86) for details on the event being sent.
-
-See the example in the [`SQS Client`](client/sqs_client.go).
+See [`EventRequest` in `statemachine-proto`](https://github.com/massenz/statemachine-proto) for details on the event being sent.
 
 
 #### SQS Notifications
 
-Event processing outcomes are returned in [`EventResponse` protocol buffers](https://github.com/massenz/statemachine-proto/blob/golang/v1.1.0-beta-g1fc5dd8/api/statemachine.proto#L112), which are then serialized inside the `body` of the SQS message; to retrieve the actual Go struct, you can use code such as this (see [test code](pkg/pubsub/sqs_pub_test.go#L148) for actual working code):
+Event processing outcomes are returned in `EventResponse` protocol buffers, which are then serialized inside the `body` of the SQS message; to retrieve the actual Go struct, you can use code such as this:
 
 ```
 // `res` is what AWS SQS Client will return to the Messages slice
 var res *sqs.Message = getSqsMessage(getQueueName(notificationsQueue))
 var receivedEvt protos.EventResponse
 err := proto.UnmarshalText(*res.Body, &receivedEvt)
-if err == nill {
+if err == nil {
     // you know what to do
 }
 
@@ -202,8 +215,8 @@ receivedEvt.EventId --> is the ID of the Event that failed
 if receivedEvt.Outcome.Code == protos.EventOutcome_InternalError {
     // whatever...
 }
-return fmt.Errorf("cannot process event to statemachine [%s]: %s,
-    receivedEvt.Outcome.Dest, receivedEvt.Outcome.Details)
+return fmt.Errorf("cannot process event to statemachine [%s/%s]: %s",
+    receivedEvt.Outcome.Config, receivedEvt.Outcome.Id, receivedEvt.Outcome.Details)
 
 ```
 
@@ -292,11 +305,25 @@ To create the necessary SQS Queues in AWS, please see the `aws` CLI command in `
 
 ## Running the Server
 
-The `fsm-server` accepts a number of configuration options (some of them are **required**); please use the `-help` option to view the most up-to-date definitions.
+The `fsm-server` accepts a number of configuration options (some of them are **required**); use `-help` to view the most up-to-date definitions:
 
 ```
-└─( build/bin/fsm-server -help
+build/bin/fsm-server -help
 ```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-redis` | *(required)* | `host:port` for a single-node Redis instance, or a comma-separated list of nodes for a cluster. Also accepts an ElastiCache configuration endpoint when used with `-cluster`. |
+| `-grpc-port` | `7398` | Port for the gRPC server. |
+| `-insecure` | `false` | Disable TLS (not recommended for production). |
+| `-events` | *(optional)* | SQS queue name from which to receive incoming events. |
+| `-notifications` | *(optional)* | SQS queue name to which event processing outcomes are published. |
+| `-endpoint-url` | *(optional)* | Override the AWS SQS endpoint URL (e.g. `http://localhost:4566` for LocalStack). |
+| `-cluster` | `false` | Connect to Redis in cluster mode. |
+| `-timeout` | `500ms` | Redis operation timeout (Go duration string, e.g. `1s`, `200ms`). |
+| `-max-retries` | `3` | Maximum retry attempts for recoverable Redis errors. |
+| `-debug` | `false` | Enable verbose (debug-level) logging. |
+| `-trace` | `false` | Enable trace-level logging (overrides `-debug`; do not use in production). |
 
 The easiest way is to run it [as a container](#container-build--run) (see also **Supporting Services** in [Prerequisites]](#prerequisites)):
 
@@ -376,11 +403,13 @@ docker run --rm  -p 7398:7398 --name sm_server --network sm_sm-net \
 These are the environment variables whose values can be modified as necessary (see also the `Dockerfile`):
 
 ```
-ENV SERVER_PORT=7399
+ENV GRPC_PORT=7398
 ENV EVENTS_Q=events
-ENV ERRORS_Q=notifications
-ENV REDIS=redis
-ENV REDIS_PORT=6379
+ENV NOTIFICATIONS_Q=notifications
+ENV REDIS=redis:6379
+ENV TIMEOUT=500ms
+ENV CLUSTER=""
+ENV INSECURE=""
 ENV DEBUG=""
 ```
 
