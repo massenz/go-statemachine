@@ -73,7 +73,7 @@ dev: build ## Runs the server binary in development mode (no TLS)
 		exit 1; \
 	fi
 	@echo "$(GREEN)Running server against Redis at $(YELLOW)$(REDIS_ADDR)$(RESET) (TLS disabled)"
-	build/bin/$(bin) -debug -grpc-port $(PORT) -redis $(REDIS_ADDR) -insecure
+	build/bin/$(bin) --debug --grpc-port $(PORT) --redis $(REDIS_ADDR) --insecure
 
 .PHONY: dev-tls
 dev-tls: build check_certs ## Runs the server binary in development mode with TLS (using ./certs)
@@ -84,7 +84,7 @@ dev-tls: build check_certs ## Runs the server binary in development mode with TL
 		exit 1; \
 	fi
 	@echo "$(GREEN)Running server against Redis at $(YELLOW)$(REDIS_ADDR)$(RESET) with TLS from $(YELLOW)$(shell pwd)/certs$(RESET)"
-	TLS_CONFIG_DIR=$(shell pwd)/certs build/bin/$(bin) -debug -grpc-port $(PORT) -redis $(REDIS_ADDR)
+	TLS_CONFIG_DIR=$(shell pwd)/certs build/bin/$(bin) --debug --grpc-port $(PORT) --redis $(REDIS_ADDR)
 
 ##@ Container Management
 # Convenience targets to run locally containers and
