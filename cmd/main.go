@@ -11,24 +11,24 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
+	"net"
+	"os"
+	"os/signal"
 	"strconv"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 
 	"github.com/massenz/go-statemachine/pkg/api"
 	"github.com/massenz/go-statemachine/pkg/grpc"
 	"github.com/massenz/go-statemachine/pkg/pubsub"
 	"github.com/massenz/go-statemachine/pkg/storage"
 	g "google.golang.org/grpc"
-	"net"
-	"os"
-	"os/signal"
-	"sync"
-	"syscall"
 
 	protos "github.com/massenz/statemachine-proto/golang/api"
 )
@@ -59,6 +59,19 @@ var (
 	// Currently, this is a blocking channel (capacity for one item), but once we
 	// parallelize events processing we can make it deeper.
 	eventsCh = make(chan protos.EventRequest)
+
+	// Flag variables bound by Cobra.
+	awsEndpoint        string
+	cluster            bool
+	debug              bool
+	eventsTopic        string
+	grpcPort           int
+	noTls              bool
+	maxRetries         int
+	notificationsTopic string
+	redisUrl           string
+	timeout            time.Duration
+	trace              bool
 )
 
 func main() {
@@ -67,74 +80,91 @@ func main() {
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	zlog.Logger = zlog.Output(os.Stderr)
 
-	var awsEndpoint = flag.String("endpoint-url", "",
+	rootCmd := newRootCmd()
+	if err := rootCmd.Execute(); err != nil {
+		logger.Fatal().Err(err).Msg("command failed")
+	}
+}
+
+func newRootCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "fsm-server",
+		Short: "gRPC-based finite state machine server backed by Redis",
+		RunE:  runServer,
+	}
+
+	cmd.Flags().StringVar(&awsEndpoint, "endpoint-url", "",
 		"HTTP URL for AWS SQS to connect to; usually best left undefined, "+
 			"unless required for local testing purposes (LocalStack uses http://localhost:4566)")
-	var cluster = flag.Bool("cluster", false,
+	cmd.Flags().BoolVar(&cluster, "cluster", false,
 		"If set, connects to Redis with cluster-mode enabled")
-	var debug = flag.Bool("debug", false,
+	cmd.Flags().BoolVar(&debug, "debug", false,
 		"Verbose logs; better to avoid on Production services")
-	var eventsTopic = flag.String("events", "", "Topic name to receive events from")
-	var grpcPort = flag.Int("grpc-port", 7398, "The port for the gRPC Server")
-	var noTls = flag.Bool("insecure", false, "If set, TLS will be disabled (NOT recommended)")
-	var maxRetries = flag.Int("max-retries", storage.DefaultMaxRetries,
+	cmd.Flags().StringVar(&eventsTopic, "events", "", "Topic name to receive events from")
+	cmd.Flags().IntVar(&grpcPort, "grpc-port", 7398, "The port for the gRPC Server")
+	cmd.Flags().BoolVar(&noTls, "insecure", false, "If set, TLS will be disabled (NOT recommended)")
+	cmd.Flags().IntVar(&maxRetries, "max-retries", storage.DefaultMaxRetries,
 		"Max number of attempts for a recoverable error to be retried against the Redis cluster")
-	var notificationsTopic = flag.String("notifications", "",
+	cmd.Flags().StringVar(&notificationsTopic, "notifications", "",
 		"(optional) The name of the topic to publish events' outcomes to; if not "+
 			"specified, no outcomes will be published")
-	var redisUrl = flag.String("redis", "", "For single node Redis instances: host:port "+
+	cmd.Flags().StringVar(&redisUrl, "redis", "", "For single node Redis instances: host:port "+
 		"for the Redis instance. For redis clusters: a comma-separated list of redis nodes. "+
 		"If using an ElastiCache Redis cluster with cluster mode enabled, this can also be the configuration endpoint.")
-	var timeout = flag.Duration("timeout", storage.DefaultTimeout,
+	cmd.Flags().DurationVar(&timeout, "timeout", storage.DefaultTimeout,
 		"Timeout for Redis (as a Duration string, e.g. 1s, 20ms, etc.)")
-	var trace = flag.Bool("trace", false,
+	cmd.Flags().BoolVar(&trace, "trace", false,
 		"Extremely verbose logs for every API request and Pub/Sub event; it may impact"+
-			" performance, do not use in production or on heavily loaded systems (will override the -debug option)")
-	flag.Parse()
+			" performance, do not use in production or on heavily loaded systems (will override the --debug option)")
 
+	return cmd
+}
+
+func runServer(cmd *cobra.Command, args []string) error {
 	logger.Info().Str("release", api.Release).Msg("starting State Machine Server")
 
-	if *redisUrl == "" {
-		logger.Fatal().Err(errors.New("in-memory store deprecated, a Redis server must be configured")).Msg("fatal configuration error")
-	} else {
-		logger.Info().
-			Str("redis_addr", *redisUrl).
-			Str("redis_cluster", strconv.FormatBool(*cluster)).
-			Str("redis_timeout", timeout.String()).
-			Str("redis_max_retries", strconv.Itoa(*maxRetries)).
-			Msg("connecting to Redis server")
-		store = storage.NewRedisStore(*redisUrl, *cluster, 1, *timeout, *maxRetries)
+	if redisUrl == "" {
+		return errors.New("a Redis server must be configured (--redis flag is required)")
 	}
+
+	logger.Info().
+		Str("redis_addr", redisUrl).
+		Str("redis_cluster", strconv.FormatBool(cluster)).
+		Str("redis_timeout", timeout.String()).
+		Str("redis_max_retries", strconv.Itoa(maxRetries)).
+		Msg("connecting to Redis server")
+	store = storage.NewRedisStore(redisUrl, cluster, 1, timeout, maxRetries)
+
 	done := make(chan interface{})
-	if *eventsTopic != "" {
+	if eventsTopic != "" {
 		logger.Info().
-			Str("sqs_topic", *eventsTopic).
-			Str("sqs_endpoint", *awsEndpoint).
+			Str("sqs_topic", eventsTopic).
+			Str("sqs_endpoint", awsEndpoint).
 			Msg("connecting to SQS topic for incoming events")
-		sub = pubsub.NewSqsSubscriber(eventsCh, awsEndpoint)
+		sub = pubsub.NewSqsSubscriber(eventsCh, &awsEndpoint)
 		if sub == nil {
 			logger.Fatal().Err(errors.New("cannot create a valid SQS Subscriber")).Msg("fatal error creating SQS subscriber")
 		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			logger.Info().Msgf("subscribing to events on topic [%s]", *eventsTopic)
-			sub.Subscribe(*eventsTopic, done)
+			logger.Info().Msgf("subscribing to events on topic [%s]", eventsTopic)
+			sub.Subscribe(eventsTopic, done)
 		}()
 	}
 
-	if *notificationsTopic != "" {
+	if notificationsTopic != "" {
 		logger.Info().
-			Str("sqs_dlq_topic", *notificationsTopic).
-			Str("sqs_endpoint", *awsEndpoint).
+			Str("sqs_dlq_topic", notificationsTopic).
+			Str("sqs_endpoint", awsEndpoint).
 			Msg("sending error notifications to DLQ topic")
 		notificationsCh = make(chan protos.EventResponse)
 		defer close(notificationsCh)
-		pub = pubsub.NewSqsPublisher(notificationsCh, awsEndpoint)
+		pub = pubsub.NewSqsPublisher(notificationsCh, &awsEndpoint)
 		if pub == nil {
 			logger.Fatal().Err(errors.New("cannot create a valid SQS Publisher")).Msg("fatal error creating SQS publisher")
 		}
-		go pub.Publish(*notificationsTopic)
+		go pub.Publish(notificationsTopic)
 	}
 
 	listener = pubsub.NewEventsListener(&pubsub.ListenerOptions{
@@ -151,14 +181,15 @@ func main() {
 		listener.ListenForMessages()
 	}()
 
-	logger.Info().Str("grpc_port", strconv.Itoa(*grpcPort)).Msg("gRPC server starting")
-	svr := startGrpcServer(*grpcPort, *noTls, eventsCh)
+	logger.Info().Str("grpc_port", strconv.Itoa(grpcPort)).Msg("gRPC server starting")
+	svr := startGrpcServer(grpcPort, noTls, eventsCh)
 
 	// This should not be invoked until we have initialized all the services.
-	setLogLevel(*debug, *trace)
+	setLogLevel(debug, trace)
 	logger.Info().Msg("statemachine server ready for processing events...")
 	RunUntilStopped(done, svr)
 	logger.Info().Msg("...done. Goodbye.")
+	return nil
 }
 
 func RunUntilStopped(done chan interface{}, svr *g.Server) {
@@ -176,8 +207,8 @@ func RunUntilStopped(done chan interface{}, svr *g.Server) {
 	wg.Wait()
 }
 
-// setLogLevel sets the global logging level depending on -debug / -trace.
-// If both are set, then -trace takes priority.
+// setLogLevel sets the global logging level depending on --debug / --trace.
+// If both are set, then --trace takes priority.
 func setLogLevel(debug bool, trace bool) {
 	level := zerolog.InfoLevel
 	if debug && !trace {

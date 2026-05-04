@@ -42,13 +42,14 @@ services:
       - sm-net
     ports:
       - '7398:7398'
-    image: "massenz/fsm-server:${RELEASE}"
+    image: "massenz/statemachine:${RELEASE}"
     environment:
       AWS_ENDPOINT: "http://awslocal:4566"
       AWS_REGION: us-west-2
       AWS_PROFILE: sm-bot
       TIMEOUT: 200ms
-      DEBUG: -debug
+      DEBUG: --debug
+      INSECURE: --insecure
       EVENTS_Q: "events"
       NOTIFICATIONS_Q: "notifications"
     volumes:

@@ -25,9 +25,9 @@ The general syntax for invoking the FSM CLI Client is as follows:
 ### Options
 The following options are available:
 
-- `-insecure`: If set, TLS will be disabled (NOT recommended).
-- `-addr`: The address (host:port) for the GRPC server. Default is `localhost:7398`.
-- `-log-level`: Log level for CLI output. One of `trace`, `debug`, `info`, `warn`, `error`. Default is `info`.
+- `--insecure`: If set, TLS will be disabled (NOT recommended).
+- `--addr`: The address (host:port) for the gRPC server. Default is `localhost:7398`.
+- `--log-level`: Log level for CLI output. One of `trace`, `debug`, `info`, `warn`, `error`. Default is `info`.
 
 ### Available Commands
 The FSM CLI Client supports the following commands:
