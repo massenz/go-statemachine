@@ -17,30 +17,30 @@ declare timeout=""
 
 if [[ -n ${AWS_ENDPOINT:-} ]]
 then
-  endpoint="-endpoint-url ${AWS_ENDPOINT}"
+  endpoint="--endpoint-url ${AWS_ENDPOINT}"
 fi
 
 if [[ -n ${EVENTS_Q:-} ]]
 then
-  events="-events ${EVENTS_Q}"
+  events="--events ${EVENTS_Q}"
 fi
 
 if [[ -n ${NOTIFICATIONS_Q:-} ]]
 then
-  notifications="-notifications ${NOTIFICATIONS_Q}"
+  notifications="--notifications ${NOTIFICATIONS_Q}"
 fi
 
 if [[ -n ${TIMEOUT:-} ]]
 then
-  timeout="-timeout ${TIMEOUT}"
+  timeout="--timeout ${TIMEOUT}"
 fi
 
 if [[ -n ${RETRIES:-} ]]
 then
-  retries="-max-retries ${RETRIES}"
+  retries="--max-retries ${RETRIES}"
 fi
 
-cmd="./fsm-server -grpc-port ${GRPC_PORT} -redis ${REDIS:-} ${DEBUG:-} ${INSECURE:-}
+cmd="./fsm-server --grpc-port ${GRPC_PORT} --redis ${REDIS:-} ${DEBUG:-} ${INSECURE:-}
 ${endpoint} ${timeout} ${retries} ${events} ${notifications} $@"
 
 echo $cmd
