@@ -16,6 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    - name: Install Go toolchain
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        cache-dependency-path: |
+          go.sum
+          fsm-cli/go.sum
     - name: Install YQ
       run: |
         sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq &&\
@@ -36,6 +43,12 @@ jobs:
         mkdir -p ${HOME}/.aws && cp data/credentials ${HOME}/.aws/
         export AWS_REGION=us-west-2
         go test ./pkg/api ./pkg/grpc ./pkg/pubsub ./pkg/storage
+    - name: Build and check CLI
+      run: |
+        make cli
+        cd fsm-cli
+        go test ./... -run '^$'
+        go vet ./...
 
     # TODO: re-enable CLI Testcontainers once they are stable on GitHub Actions.
     # - name: Test CLI (make cli-test)

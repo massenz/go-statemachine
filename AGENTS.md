@@ -7,7 +7,7 @@ This file provides guidance to AI agents (Warp, Claude, Copilot, and others) whe
 This repository implements a gRPC-based finite state machine (FSM) server (`fsm-server`) backed by Redis, with asynchronous event processing via AWS SQS (or LocalStack) and a separate CLI client (`fsm-cli`) for sending configurations, FSMs, and events using YAML.
 
 Key external dependencies and assumptions:
-- Go 1.24.x
+- Go 1.27.4 (keep both Go modules, Docker, and CI aligned)
 - Redis (single-node or cluster)
 - AWS SQS or LocalStack for queueing events and error notifications
 - Docker / Docker Compose for local stacks and many integration tests

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
 	"github.com/massenz/fsm-cli/client"
+	"github.com/moby/moby/api/types/container"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	. "github.com/onsi/ginkgo"
@@ -20,9 +20,9 @@ import (
 )
 
 var (
-	insecureClient       *client.CliClient
-	tlsClient            *client.CliClient
-	redisContainer       testcontainers.Container
+	insecureClient          *client.CliClient
+	tlsClient               *client.CliClient
+	redisContainer          testcontainers.Container
 	insecureServerContainer testcontainers.Container
 	tlsServerContainer      testcontainers.Container
 )
@@ -71,11 +71,11 @@ func StartServices() {
 		Image:        image,
 		ExposedPorts: []string{"7399/tcp"},
 		Env: map[string]string{
-			"REDIS":          redisAddr,
-			"GRPC_PORT":      "7399",
-			"INSECURE":       "-insecure",
-			"DEBUG":          "-debug",
-			"EVENTS_Q":       "",
+			"REDIS":           redisAddr,
+			"GRPC_PORT":       "7399",
+			"INSECURE":        "--insecure",
+			"DEBUG":           "--debug",
+			"EVENTS_Q":        "",
 			"NOTIFICATIONS_Q": "",
 		},
 		WaitingFor: wait.ForListeningPort("7399/tcp").WithStartupTimeout(2 * time.Minute),
@@ -101,10 +101,10 @@ func StartServices() {
 		Image:        image,
 		ExposedPorts: []string{"7398/tcp"},
 		Env: map[string]string{
-			"REDIS":          redisAddr,
-			"GRPC_PORT":      "7398",
-			"DEBUG":          "-debug",
-			"EVENTS_Q":       "",
+			"REDIS":           redisAddr,
+			"GRPC_PORT":       "7398",
+			"DEBUG":           "--debug",
+			"EVENTS_Q":        "",
 			"NOTIFICATIONS_Q": "",
 		},
 		HostConfigModifier: func(hc *container.HostConfig) {

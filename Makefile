@@ -165,7 +165,7 @@ clean-cert:
 # TODO: move to a separate Makefile in the subdirectory
 # See: https://www.gnu.org/software/make/manual/html_node/Recursion.html
 # CLI Configuration
-cli := out/bin/$(appname)-cli-$(version)_$(GOOS)-$(GOARCH)
+cli := $(appname)-cli-$(version)_$(GOOS)-$(GOARCH)
 cli_config := ${HOME}/.fsm
 .PHONY: cli
 cli: fsm-cli/cmd/main.go  ## Builds the CLI client used to connect to the server

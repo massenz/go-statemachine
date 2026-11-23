@@ -1,7 +1,7 @@
 # Copyright AlertAvert.com (c) 2023
 # Created by M. Massenzio, 2022-04-28
 
-FROM golang:1.24 as builder
+FROM golang:1.27.4 AS builder
 
 WORKDIR /server
 COPY . .
