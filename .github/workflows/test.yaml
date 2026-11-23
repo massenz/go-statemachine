@@ -29,12 +29,18 @@ jobs:
           sudo chmod +x /usr/bin/yq
     - name: Generate Certs
       run: |
-        export GOPATH=/opt/go
-        mkdir -p $GOPATH/bin
-        export PATH=$GOPATH/bin:$PATH
-        go install -mod=readonly github.com/cloudflare/cfssl/cmd/cfssl@v1.6.3
-        go install -mod=readonly github.com/cloudflare/cfssl/cmd/cfssljson@v1.6.3
-        make certs
+        tool_dir="$RUNNER_TEMP/cfssl-tools"
+        mkdir -p "$tool_dir/bin"
+        for tool in cfssl cfssljson; do
+          curl --fail --location --proto '=https' --proto-redir '=https' \
+            "https://github.com/cloudflare/cfssl/releases/download/v1.7.2/${tool}_1.7.2_linux_amd64" \
+            --output "$tool_dir/${tool}_1.7.2_linux_amd64"
+        done
+        (cd "$tool_dir" && sha256sum --check "$GITHUB_WORKSPACE/.github/cfssl-checksums.txt")
+        for tool in cfssl cfssljson; do
+          install -m 755 "$tool_dir/${tool}_1.7.2_linux_amd64" "$tool_dir/bin/$tool"
+        done
+        PATH="$tool_dir/bin:$PATH" make certs
     - name: Build Container
       run: |
         make container

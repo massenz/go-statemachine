@@ -26,8 +26,8 @@ LABEL org.opencontainers.image.description="Statemachine gRPC Server"
 LABEL org.opencontainers.image.licenses=Apache-2.0
 
 RUN apt-get update && apt-get install --no-install-recommends ca-certificates -y \
-      && rm -rf /var/lib/apt/lists/*
-RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
+      && rm -rf /var/lib/apt/lists/* \
+      && groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
 
 # Sensible defaults for the server, for reference
 # we list all the environment variables used by the
