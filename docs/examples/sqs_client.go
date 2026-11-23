@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"os"
 	"time"
@@ -135,7 +135,7 @@ func main() {
 	}
 
 	_, err = queue.SendMessage(&sqs.SendMessageInput{
-		MessageBody: aws.String(proto.MarshalTextString(msg)),
+		MessageBody: aws.String(prototext.Format(msg)),
 		QueueUrl:    queueUrl.QueueUrl,
 	})
 	if err != nil {
