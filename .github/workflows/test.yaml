@@ -32,8 +32,8 @@ jobs:
         export GOPATH=/opt/go
         mkdir -p $GOPATH/bin
         export PATH=$GOPATH/bin:$PATH
-        go install github.com/cloudflare/cfssl/cmd/cfssl@v1.6.3
-        go install github.com/cloudflare/cfssl/cmd/cfssljson@v1.6.3
+        go install -mod=readonly github.com/cloudflare/cfssl/cmd/cfssl@v1.6.3
+        go install -mod=readonly github.com/cloudflare/cfssl/cmd/cfssljson@v1.6.3
         make certs
     - name: Build Container
       run: |

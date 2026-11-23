@@ -3,14 +3,15 @@
 
 FROM golang:1.27.4 AS builder
 
+ARG TARGETARCH
+ADD --chmod=755 https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_${TARGETARCH} /usr/bin/yq
+
 WORKDIR /server
 COPY . .
 # Remove any host-generated artifacts from the build context so that the
 # container image always contains a Linux binary, even when the host is
 # macOS or another architecture.
 RUN rm -rf certs data build/bin
-RUN wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
-      -O /usr/bin/yq && chmod +x /usr/bin/yq
 RUN CGO_ENABLED=0 make build
 RUN CGO_ENABLED=0 go build -o build/bin/hc docker/grpc_health.go
 
@@ -24,7 +25,8 @@ LABEL org.opencontainers.image.source=https://github.com/massenz/go-statemachine
 LABEL org.opencontainers.image.description="Statemachine gRPC Server"
 LABEL org.opencontainers.image.licenses=Apache-2.0
 
-RUN apt-get update && apt-get install ca-certificates -y
+RUN apt-get update && apt-get install --no-install-recommends ca-certificates -y \
+      && rm -rf /var/lib/apt/lists/*
 RUN groupadd -r sm-bot && useradd -r -g sm-bot sm-bot
 
 # Sensible defaults for the server, for reference
@@ -47,4 +49,4 @@ ADD docker/entrypoint.sh ./
 EXPOSE ${SERVER_PORT}
 ENTRYPOINT ["./entrypoint.sh"]
 HEALTHCHECK --start-period=5s --interval=30s --timeout=200ms --retries=5 \
-  CMD ./hc -host localhost:$GRPC_PORT -timeout $TIMEOUT $INSECURE
+  CMD ./hc -host "localhost:$GRPC_PORT" -timeout "$TIMEOUT" "$INSECURE"
